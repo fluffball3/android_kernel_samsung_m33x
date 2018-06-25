@@ -813,6 +813,11 @@ static inline u32 tcp_skb_timestamp(const struct sk_buff *skb)
 	return tcp_ns_to_ts(skb->skb_mstamp_ns);
 }
 
+static inline u32 tcp_stamp32_us_delta(u32 t1, u32 t0)
+{
+	return max_t(s32, t1 - t0, 0);
+}
+
 /* provide the departure time in us unit */
 static inline u64 tcp_skb_timestamp_us(const struct sk_buff *skb)
 {
@@ -882,9 +887,9 @@ struct tcp_skb_cb {
 			/* pkts S/ACKed so far upon tx of skb, incl retrans: */
 			__u32 delivered;
 			/* start of send pipeline phase */
-			u64 first_tx_mstamp;
+			u32 first_tx_mstamp;
 			/* when we reached the "delivered" count */
-			u64 delivered_mstamp;
+			u32 delivered_mstamp;
 		} tx;   /* only used for outgoing skbs */
 		union {
 			struct inet_skb_parm	h4;
