@@ -1083,9 +1083,11 @@ struct rate_sample {
 };
 
 struct tcp_congestion_ops {
+
 	struct list_head	list;
 	u32 key;
 	u32 flags;
+/* fast path fields are put first to fill one cache line */
 
 	/* initialize private data (optional) */
 	void (*init)(struct sock *sk);
@@ -1094,32 +1096,46 @@ struct tcp_congestion_ops {
 
 	/* return slow start threshold (required) */
 	u32 (*ssthresh)(struct sock *sk);
+
 	/* do new cwnd calculation (required) */
 	void (*cong_avoid)(struct sock *sk, u32 ack, u32 acked);
+
 	/* call before changing ca_state (optional) */
 	void (*set_state)(struct sock *sk, u8 new_state);
+
 	/* call when cwnd event occurs (optional) */
 	void (*cwnd_event)(struct sock *sk, enum tcp_ca_event ev);
+
 	/* call when ack arrives (optional) */
 	void (*in_ack_event)(struct sock *sk, u32 flags);
-	/* new value of cwnd after loss (required) */
-	u32  (*undo_cwnd)(struct sock *sk);
+
 	/* hook for packet ack accounting (optional) */
 	void (*pkts_acked)(struct sock *sk, const struct ack_sample *sample);
+
 	/* override sysctl_tcp_min_tso_segs */
 	u32 (*min_tso_segs)(struct sock *sk);
-	/* returns the multiplier used in tcp_sndbuf_expand (optional) */
-	u32 (*sndbuf_expand)(struct sock *sk);
+
+	/* react to a specific lost skb (optional) */
+	void (*skb_marked_lost)(struct sock *sk, const struct sk_buff *skb);
+
 	/* call when packets are delivered to update cwnd and pacing rate,
 	 * after all the ca_state processing. (optional)
 	 */
-	void (*cong_control)(struct sock *sk, const struct rate_sample *rs);
+	void (*cong_control)(struct sock *sk, u32 ack, int flag, const struct rate_sample *rs);
+
+
+	/* new value of cwnd after loss (required) */
+	u32  (*undo_cwnd)(struct sock *sk);
+	/* returns the multiplier used in tcp_sndbuf_expand (optional) */
+	u32 (*sndbuf_expand)(struct sock *sk);
+
+/* control/slow paths put last */
 	/* get info for inet_diag (optional) */
 	size_t (*get_info)(struct sock *sk, u32 ext, int *attr,
 			   union tcp_cc_info *info);
 
-	char 		name[TCP_CA_NAME_MAX];
-	struct module 	*owner;
+	char 			name[TCP_CA_NAME_MAX];
+	struct module		*owner;
 };
 
 int tcp_register_congestion_control(struct tcp_congestion_ops *type);
@@ -1230,6 +1246,17 @@ static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 }
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
+
+static inline u32 tcp_snd_cwnd(const struct tcp_sock *tp)
+{
+	return tp->snd_cwnd;
+}
+
+static inline void tcp_snd_cwnd_set(struct tcp_sock *tp, u32 val)
+{
+	WARN_ON_ONCE((int)val <= 0);
+	tp->snd_cwnd = val;
+}
 
 static inline bool tcp_in_slow_start(const struct tcp_sock *tp)
 {
