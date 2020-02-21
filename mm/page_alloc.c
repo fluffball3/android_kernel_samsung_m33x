@@ -4862,9 +4862,12 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	u64 utime, stime_s, stime_e, stime_d;
 	unsigned long vh_record;
 	bool should_alloc_retry = false;
+	pg_data_t *pgdat = ac->preferred_zoneref->zone->zone_pgdat;
+	bool woke_kswapd = false;
 
 	trace_android_vh_alloc_pages_slowpath_begin(gfp_mask, order, &vh_record);
 	task_cputime(current, &utime, &stime_s);
+
 	/*
 	 * We also sanity check to catch abuse of atomic reserves being used by
 	 * callers that are not in atomic context.
@@ -4912,8 +4915,13 @@ restart:
 			goto nopage;
 	}
 
-	if (alloc_flags & ALLOC_KSWAPD)
+	if (alloc_flags & ALLOC_KSWAPD) {
+		if (!woke_kswapd) {
+			atomic_inc(&pgdat->kswapd_waiters);
+			woke_kswapd = true;
+		}
 		wake_all_kswapds(order, gfp_mask, ac);
+	}
 
 	/*
 	 * The adjusted alloc_flags might result in immediate success, so try
@@ -5154,9 +5162,6 @@ fail:
 		alloc_flags, ac->migratetype, &page);
 	if (page)
 		goto got_pg;
-
-	warn_alloc(gfp_mask, ac->nodemask,
-			"page allocation failure: order:%u", order);
 got_pg:
 	trace_android_vh_alloc_pages_slowpath_end(gfp_mask, order, vh_record);
 	task_cputime(current, &utime, &stime_e);
@@ -5183,6 +5188,12 @@ got_pg:
 			a_anon << (PAGE_SHIFT-10), in_anon << (PAGE_SHIFT-10),
 			a_file << (PAGE_SHIFT-10), in_file << (PAGE_SHIFT-10));
 	}
+
+	if (woke_kswapd)
+		atomic_dec(&pgdat->kswapd_waiters);
+	if (!page)
+		warn_alloc(gfp_mask, ac->nodemask,
+				"page allocation failure: order:%u", order);
 	return page;
 }
 
@@ -7257,6 +7268,7 @@ static void __meminit pgdat_init_internals(struct pglist_data *pgdat)
 	pgdat_page_ext_init(pgdat);
 	spin_lock_init(&pgdat->lru_lock);
 	lruvec_init(&pgdat->__lruvec);
+	pgdat->kswapd_waiters = (atomic_t)ATOMIC_INIT(0);
 }
 
 static void __meminit zone_init_internals(struct zone *zone, enum zone_type idx, int nid,
