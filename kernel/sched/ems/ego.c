@@ -530,13 +530,10 @@ static void ego_update_next_freq(struct ego_policy *egp, u64 time,
 static void ego_fast_switch(struct ego_policy *egp, u64 time,
 			      unsigned int next_freq)
 {
-	struct cpufreq_policy *policy = egp->policy;
-
-	if (!ego_request_freq_change(egp, time, next_freq))
-		return;
-
-	ego_update_next_freq(egp, time, next_freq);
-	cpufreq_driver_fast_switch(policy, next_freq);
+	if (ego_request_freq_change(egp, time, next_freq)) {
+		ego_update_next_freq(egp, time, next_freq);
+		cpufreq_driver_fast_switch(egp->policy, next_freq);
+	}
 }
 
 
