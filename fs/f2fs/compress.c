@@ -775,9 +775,34 @@ void f2fs_decompress_cluster(struct decompress_io_ctx *dic, bool in_task)
 
 	ret = cops->decompress_pages(dic);
 
-	if (!ret && (fi->i_compress_flag & 1 << COMPRESS_CHKSUM)) {
+	if (!ret && fi->i_compress_flag & 1 << COMPRESS_CHKSUM) {
 		u32 provided = le32_to_cpu(dic->cbuf->chksum);
 		u32 calculated = f2fs_crc32(sbi, dic->cbuf->cdata, dic->clen);
+
+		if (provided != calculated) {
+			if (!is_inode_flag_set(dic->inode, FI_COMPRESS_CORRUPT)) {
+				set_inode_flag(dic->inode, FI_COMPRESS_CORRUPT);
+				printk_ratelimited(
+					"%sF2FS-fs (%s): checksum invalid, nid = %lu, %x vs %x",
+					KERN_INFO, sbi->sb->s_id, dic->inode->i_ino,
+					provided, calculated);
+			}
+			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			WARN_ON_ONCE(1);
+		}
+	}
+
+out_vunmap_cbuf:
+	vm_unmap_ram(dic->cbuf, dic->nr_cpages);
+out_vunmap_rbuf:
+	vm_unmap_ram(dic->rbuf, dic->cluster_size);
+destroy_decompress_ctx:
+	if (cops->destroy_decompress_ctx)
+		cops->destroy_decompress_ctx(dic);
+out_free_dic:
+	if (!verity)
+		f2fs_decompress_end_io(dic->rpages, dic->cluster_size,
+								ret, false);
 
 		if (provided != calculated) {
 			if (!is_inode_flag_set(dic->inode, FI_COMPRESS_CORRUPT)) {
