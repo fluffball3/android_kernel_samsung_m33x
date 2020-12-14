@@ -85,6 +85,7 @@ struct ego_cpu {
 	unsigned int		iowait_boost;
 	u64			last_update;
 
+	unsigned long		util;
 	unsigned long		bw_dl;
 	unsigned long		max;
 
@@ -754,16 +755,16 @@ out:
 	return min(max, util);
 }
 
-static unsigned long ego_get_util(struct ego_cpu *egc)
+static void ego_get_util(struct ego_cpu *egc)
 {
 	struct rq *rq = cpu_rq(egc->cpu);
-	unsigned long util = ml_cpu_util(egc->cpu);
 	unsigned long max = arch_scale_cpu_capacity(egc->cpu);
 
 	egc->max = max;
 	egc->bw_dl = cpu_bw_dl(rq);
 
-	return ego_cpu_util(egc->cpu, util, max, FREQUENCY_UTIL, NULL);
+	egc->util = ego_cpu_util(egc->cpu, ml_cpu_util(egc->cpu), max,
+					  FREQUENCY_UTIL, NULL);
 }
 
 /**
@@ -840,8 +841,6 @@ static void ego_iowait_boost(struct ego_cpu *egc, u64 time,
  * ego_iowait_apply() - Apply the IO boost to a CPU.
  * @egc: the ego data for the cpu to boost
  * @time: the update time from the caller
- * @util: the utilization to (eventually) boost
- * @max: the maximum value the utilization can be boosted to
  *
  * A CPU running a task which woken up after an IO operation can have its
  * utilization boosted to speed up the completion of those IO operations.
@@ -855,18 +854,17 @@ static void ego_iowait_boost(struct ego_cpu *egc, u64 time,
  * This mechanism is designed to boost high frequently IO waiting tasks, while
  * being more conservative on tasks which does sporadic IO operations.
  */
-static unsigned long ego_iowait_apply(struct ego_cpu *egc, u64 time,
-					unsigned long util, unsigned long max)
+static void ego_iowait_apply(struct ego_cpu *egc, u64 time)
 {
 	unsigned long boost;
 
 	/* No boost currently required */
 	if (!egc->iowait_boost)
-		return 0;
+		return;
 
 	/* Reset boost if the CPU appears to have been idle enough */
 	if (ego_iowait_reset(egc, time, false))
-		return 0;
+		return;
 
 	if (!egc->iowait_boost_pending) {
 		/*
@@ -875,18 +873,19 @@ static unsigned long ego_iowait_apply(struct ego_cpu *egc, u64 time,
 		egc->iowait_boost >>= 1;
 		if (egc->iowait_boost < IOWAIT_BOOST_MIN) {
 			egc->iowait_boost = 0;
-			return 0;
+			return;
 		}
 	}
 
 	egc->iowait_boost_pending = false;
 
 	/*
-	 * @util is already in capacity scale; convert iowait_boost
+	 * egc->util is already in capacity scale; convert iowait_boost
 	 * into the same scale so we can compare.
 	 */
-	boost = (egc->iowait_boost * max) >> SCHED_CAPACITY_SHIFT;
-	return boost;
+	boost = (egc->iowait_boost * egc->max) >> SCHED_CAPACITY_SHIFT;
+	if (egc->util < boost)
+		egc->util = boost;
 }
 
 /*
@@ -928,19 +927,21 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 
 	for_each_cpu(cpu, policy->cpus) {
 		struct ego_cpu *egc = &per_cpu(ego_cpu, cpu);
-		unsigned long cpu_util, cpu_io_util, cpu_max;
+		unsigned long cpu_util, cpu_max;
 		unsigned long cpu_boosted_util;
 
-		egc->pelt_util = cpu_util = ego_get_util(egc);
+		ego_get_util(egc);
+		ego_iowait_apply(egc, time);
+		egc->pelt_util = cpu_util = egc->util;
+
 		cpu_boosted_util = freqboost_cpu_boost(cpu, cpu_util);
 		cpu_boosted_util = max(cpu_boosted_util,
 					heavytask_cpu_boost(cpu, cpu_util, egp->htask_boost));
 		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
 					cpu_boosted_util, egp->pelt_boost);
 		egc->boosted_util = cpu_boosted_util;
-		cpu_max = egc->max;
 
-		cpu_io_util = ego_iowait_apply(egc, time, cpu_util, cpu_max);
+		cpu_max = egc->max;
 
 		/* find heaviest util and cpu */
 		if (util < cpu_boosted_util) {
@@ -948,7 +949,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 			egp->heaviest_cpu = cpu;
 		}
 		/* find heaviest io util */
-		io_util = max(io_util, cpu_io_util);
+		io_util = max(io_util, egc->util);
 		/* find heaviest max */
 		max = max(max, cpu_max);
 
@@ -1226,6 +1227,7 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->iowait_boost_pending = false;
 		egc->iowait_boost = 0;
 		egc->last_update = 0;
+		egc->util = 0;
 		egc->bw_dl = 0;
 		egc->max = 0;
 		egc->pelt_util = 0;
