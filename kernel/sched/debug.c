@@ -182,6 +182,9 @@ static __init int sched_init_debug(void)
 	debugfs_create_u32("idle_min_granularity_ns", 0644, NULL,
 			&sysctl_sched_idle_min_granularity);
 
+	debugfs_create_u32("latency_warn_ms", 0644, NULL, &sysctl_resched_latency_warn_ms);
+	debugfs_create_u32("latency_warn_once", 0644, NULL, &sysctl_resched_latency_warn_once);
+
 	return 0;
 }
 late_initcall(sched_init_debug);
@@ -1049,4 +1052,14 @@ void proc_sched_set_task(struct task_struct *p)
 #ifdef CONFIG_SCHEDSTATS
 	memset(&p->se.statistics, 0, sizeof(p->se.statistics));
 #endif
+}
+
+void resched_latency_warn(int cpu, u64 latency)
+{
+	static DEFINE_RATELIMIT_STATE(latency_check_ratelimit, 60 * 60 * HZ, 1);
+
+	WARN(__ratelimit(&latency_check_ratelimit),
+	     "sched: CPU %d need_resched set for > %llu ns (%d ticks) "
+	     "without schedule\n",
+	     cpu, latency, cpu_rq(cpu)->ticks_without_resched);
 }
