@@ -151,8 +151,6 @@ void vma_set_page_prot(struct vm_area_struct *vma)
 static void __remove_shared_vm_struct(struct vm_area_struct *vma,
 		struct file *file, struct address_space *mapping)
 {
-	if (vma->vm_flags & VM_DENYWRITE)
-		allow_write_access(file);
 	if (vma_is_shared_maywrite(vma))
 		mapping_unmap_writable(mapping);
 
@@ -706,8 +704,6 @@ static void __vma_link_file(struct vm_area_struct *vma)
 	if (file) {
 		struct address_space *mapping = file->f_mapping;
 
-		if (vma->vm_flags & VM_DENYWRITE)
-			put_write_access(file_inode(file));
 		if (vma_is_shared_maywrite(vma))
 			mapping_allow_writable(mapping);
 
@@ -1872,17 +1868,6 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	vma->vm_pgoff = pgoff;
 
 	if (file) {
-		if (vm_flags & VM_DENYWRITE) {
-			error = deny_write_access(file);
-			if (error)
-				goto free_vma;
-		}
-
-		/* ->mmap() can change vma->vm_file, but must guarantee that
-		 * vma_link() below can deny write-access if VM_DENYWRITE is set
-		 * and map writably if VM_SHARED is set. This usually means the
-		 * new file must not have been exposed to user-space, yet.
-		 */
 		vma->vm_file = get_file(file);
 		error = mmap_file(file, vma);
 		if (error)
@@ -1943,11 +1928,8 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 #endif
 
 	vma_link(mm, vma, prev, rb_link, rb_parent);
-	if (file) {
+	/* Once vma denies write, undo our temporary denial count */
 unmap_writable:
-		if (vm_flags & VM_DENYWRITE)
-			allow_write_access(file);
-	}
 	file = vma->vm_file;
 out:
 	perf_event_mmap(vma);
@@ -1989,8 +1971,7 @@ unmap_and_free_file_vma:
 
 	/* Undo any partial mapping done by a device driver. */
 	unmap_region(mm, vma, prev, vma->vm_start, vma->vm_end);
-	if (vm_flags & VM_DENYWRITE)
-		allow_write_access(file);
+
 free_vma:
 	vm_area_free(vma);
 unacct_error:
