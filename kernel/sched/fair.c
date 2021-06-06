@@ -11034,13 +11034,16 @@ static inline int on_null_domain(struct rq *rq)
 static inline int find_new_ilb(void)
 {
 	int ilb = -1;
+	const struct cpumask *hk_mask;
 
 	trace_android_rvh_find_new_ilb(nohz.idle_cpus_mask, &ilb);
 	if (ilb >= 0)
 		return ilb;
 
-	for_each_cpu_and(ilb, nohz.idle_cpus_mask,
-			      housekeeping_cpumask(HK_FLAG_MISC)) {
+	hk_mask = housekeeping_cpumask(HK_FLAG_MISC);
+
+	for_each_cpu_and(ilb, nohz.idle_cpus_mask, hk_mask) {
+
 		if (idle_cpu(ilb))
 			return ilb;
 	}
