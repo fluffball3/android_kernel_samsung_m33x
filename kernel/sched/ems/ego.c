@@ -556,10 +556,17 @@ static void ego_deferred_update(struct ego_policy *egp, u64 time,
 }
 
 static inline unsigned long
-ego_map_util_freq(struct ego_policy *egp, unsigned long util,
+ego_map_util_freq(unsigned long util,
 		  unsigned long freq, unsigned long cap)
 {
-	return ((freq * (100 + egp->pelt_margin)) / 100) * util / cap;
+	return freq * util / cap;
+}
+
+static inline unsigned long ego_map_util_perf(unsigned long util)
+{
+	struct ego_cpu *egc = &per_cpu(ego_cpu, cpu);
+	struct ego_policy *egp = egc->egp;
+	return ((util * (100 + egp->pelt_margin)) / 100);
 }
 
 /**
@@ -607,7 +614,8 @@ static unsigned int get_next_freq(struct ego_policy *egp,
 	unsigned int freq, org_freq, eng_freq = 0;
 
 	/* compute pure frequency base on util */
-	org_freq = ego_map_util_freq(egp, util, policy->cpuinfo.max_freq, max);
+	util = ego_map_util_perf(util);
+	org_freq = ego_map_util_freq(util, policy->cpuinfo.max_freq, max);
 	if ((org_freq == egp->cached_raw_freq || egp->work_in_progress)
 					&& !egp->need_freq_update) {
 		freq = max(egp->org_freq, egp->next_freq);
