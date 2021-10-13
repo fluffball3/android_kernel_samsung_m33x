@@ -899,9 +899,8 @@ nfs3svc_decode_commitargs(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 
 /* GETATTR */
 int
-nfs3svc_encode_getattrres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_getattrres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_attrstat *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -919,9 +918,8 @@ nfs3svc_encode_getattrres(struct svc_rqst *rqstp, __be32 *p)
 
 /* SETATTR, REMOVE, RMDIR */
 int
-nfs3svc_encode_wccstat(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_wccstat(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_attrstat *resp = rqstp->rq_resp;
 
 	return svcxdr_encode_nfsstat3(xdr, resp->status) &&
@@ -929,9 +927,9 @@ nfs3svc_encode_wccstat(struct svc_rqst *rqstp, __be32 *p)
 }
 
 /* LOOKUP */
-int nfs3svc_encode_lookupres(struct svc_rqst *rqstp, __be32 *p)
+int
+nfs3svc_encode_lookupres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_diropres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -955,9 +953,8 @@ int nfs3svc_encode_lookupres(struct svc_rqst *rqstp, __be32 *p)
 
 /* ACCESS */
 int
-nfs3svc_encode_accessres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_accessres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_accessres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -979,9 +976,8 @@ nfs3svc_encode_accessres(struct svc_rqst *rqstp, __be32 *p)
 
 /* READLINK */
 int
-nfs3svc_encode_readlinkres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_readlinkres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_readlinkres *resp = rqstp->rq_resp;
 	struct kvec *head = rqstp->rq_res.head;
 
@@ -1007,9 +1003,8 @@ nfs3svc_encode_readlinkres(struct svc_rqst *rqstp, __be32 *p)
 
 /* READ */
 int
-nfs3svc_encode_readres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_readres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_readres *resp = rqstp->rq_resp;
 	struct kvec *head = rqstp->rq_res.head;
 
@@ -1040,9 +1035,8 @@ nfs3svc_encode_readres(struct svc_rqst *rqstp, __be32 *p)
 
 /* WRITE */
 int
-nfs3svc_encode_writeres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_writeres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_writeres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -1068,9 +1062,8 @@ nfs3svc_encode_writeres(struct svc_rqst *rqstp, __be32 *p)
 
 /* CREATE, MKDIR, SYMLINK, MKNOD */
 int
-nfs3svc_encode_createres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_createres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_diropres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -1094,9 +1087,8 @@ nfs3svc_encode_createres(struct svc_rqst *rqstp, __be32 *p)
 
 /* RENAME */
 int
-nfs3svc_encode_renameres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_renameres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_renameres *resp = rqstp->rq_resp;
 
 	return svcxdr_encode_nfsstat3(xdr, resp->status) &&
@@ -1106,9 +1098,8 @@ nfs3svc_encode_renameres(struct svc_rqst *rqstp, __be32 *p)
 
 /* LINK */
 int
-nfs3svc_encode_linkres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_linkres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_linkres *resp = rqstp->rq_resp;
 
 	return svcxdr_encode_nfsstat3(xdr, resp->status) &&
@@ -1118,9 +1109,8 @@ nfs3svc_encode_linkres(struct svc_rqst *rqstp, __be32 *p)
 
 /* READDIR */
 int
-nfs3svc_encode_readdirres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_readdirres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_readdirres *resp = rqstp->rq_resp;
 	struct xdr_buf *dirlist = &resp->dirlist;
 
@@ -1372,9 +1362,8 @@ svcxdr_encode_fsstat3resok(struct xdr_stream *xdr,
 
 /* FSSTAT */
 int
-nfs3svc_encode_fsstatres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_fsstatres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_fsstatres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -1419,9 +1408,8 @@ svcxdr_encode_fsinfo3resok(struct xdr_stream *xdr,
 
 /* FSINFO */
 int
-nfs3svc_encode_fsinfores(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_fsinfores(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_fsinfores *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -1462,9 +1450,8 @@ svcxdr_encode_pathconf3resok(struct xdr_stream *xdr,
 
 /* PATHCONF */
 int
-nfs3svc_encode_pathconfres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_pathconfres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_pathconfres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
@@ -1486,9 +1473,8 @@ nfs3svc_encode_pathconfres(struct svc_rqst *rqstp, __be32 *p)
 
 /* COMMIT */
 int
-nfs3svc_encode_commitres(struct svc_rqst *rqstp, __be32 *p)
+nfs3svc_encode_commitres(struct svc_rqst *rqstp, struct xdr_stream *xdr)
 {
-	struct xdr_stream *xdr = &rqstp->rq_res_stream;
 	struct nfsd3_commitres *resp = rqstp->rq_resp;
 
 	if (!svcxdr_encode_nfsstat3(xdr, resp->status))
