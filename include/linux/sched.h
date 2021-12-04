@@ -1386,8 +1386,10 @@ struct task_struct {
 	ANDROID_KABI_USE(1, void *pf_io_worker);
 
 	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
-	ANDROID_KABI_RESERVE(4);
+
+	ANDROID_KABI_USE(3, int latency_nice);
+
+ 	ANDROID_KABI_RESERVE(4);
 	ANDROID_KABI_RESERVE(5);
 
 #if defined(CONFIG_SYSVIPC)
