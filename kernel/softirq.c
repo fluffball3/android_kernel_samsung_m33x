@@ -372,6 +372,10 @@ void irq_enter_rcu(void)
 		_local_bh_enable();
 	}
 	__irq_enter();
+
+	if (tick_nohz_full_cpu(smp_processor_id()) ||
+           (is_idle_task(current) && (irq_count() == HARDIRQ_OFFSET)))
+                tick_irq_enter();
 }
 
 /**
