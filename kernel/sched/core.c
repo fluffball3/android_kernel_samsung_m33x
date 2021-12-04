@@ -94,7 +94,7 @@ __read_mostly int scheduler_running;
  * part of the period that we allow rt tasks to run in us.
  * default: 0.95s
  */
-int sysctl_sched_rt_runtime = 950000;
+int sysctl_sched_rt_runtime = 980000;;
 
 
 /*
@@ -3482,6 +3482,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	 * Make sure we do not leak PI boosting priority to the child.
 	 */
 	p->prio = current->normal_prio;
+	/* Propagate the parent's latency requirements to the child as well */
+	p->latency_nice = current->latency_nice;
 	trace_android_rvh_prepare_prio_fork(p);
 
 	uclamp_fork(p);
@@ -3499,6 +3501,8 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 
 		p->prio = p->normal_prio = p->static_prio;
 		set_load_weight(p);
+
+		p->latency_nice = DEFAULT_LATENCY_NICE;
 
 		/*
 		 * We don't need the reset flag anymore after the fork. It has
@@ -5450,6 +5454,9 @@ static void __setscheduler_params(struct task_struct *p,
 	p->rt_priority = attr->sched_priority;
 	p->normal_prio = normal_prio(p);
 	set_load_weight(p);
+
+       if (attr->sched_flags & SCHED_FLAG_LATENCY_NICE)
+               p->latency_nice = attr->sched_latency_nice;
 }
 
 /*
@@ -5574,6 +5581,17 @@ recheck:
 			return retval;
 	}
 
+	 if (attr->sched_flags & SCHED_FLAG_LATENCY_NICE) {
+               if (attr->sched_latency_nice > MAX_LATENCY_NICE)
+                       return -EINVAL;
+               if (attr->sched_latency_nice < MIN_LATENCY_NICE)
+                       return -EINVAL;
+               /* Use the same security checks as NICE */
+               if (attr->sched_latency_nice < p->latency_nice &&
+                   !capable(CAP_SYS_NICE))
+                       return -EPERM;
+       }
+
 	/* Update task specific "requested" clamps */
 	if (attr->sched_flags & SCHED_FLAG_UTIL_CLAMP) {
 		retval = uclamp_validate(p, attr);
@@ -5621,6 +5639,9 @@ recheck:
 			goto change;
 		if (attr->sched_flags & SCHED_FLAG_UTIL_CLAMP)
 			goto change;
+		if (attr->sched_flags & SCHED_FLAG_LATENCY_NICE &&
+                   attr->sched_latency_nice != p->latency_nice)
+                       goto change;
 
 		p->sched_reset_on_fork = reset_on_fork;
 		retval = 0;
@@ -5918,6 +5939,10 @@ static int sched_copy_attr(struct sched_attr __user *uattr, struct sched_attr *a
 	    size < SCHED_ATTR_SIZE_VER1)
 		return -EINVAL;
 
+	if ((attr->sched_flags & SCHED_FLAG_LATENCY_NICE) &&
+           size < SCHED_ATTR_SIZE_VER2)
+               return -EINVAL;
+
 	/*
 	 * XXX: Do we want to be lenient like existing syscalls; or do we want
 	 * to be strict and return an error on out-of-bounds values?
@@ -6154,6 +6179,7 @@ SYSCALL_DEFINE4(sched_getattr, pid_t, pid, struct sched_attr __user *, uattr,
 		kattr.sched_flags |= SCHED_FLAG_RESET_ON_FORK;
 	get_params(p, &kattr);
 	kattr.sched_flags &= SCHED_FLAG_ALL;
+	kattr.sched_latency_nice = p->latency_nice;
 
 #ifdef CONFIG_UCLAMP_TASK
 	/*
