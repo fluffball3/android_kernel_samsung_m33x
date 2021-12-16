@@ -892,6 +892,7 @@ static void ego_iowait_apply(struct ego_cpu *egc, u64 time)
 	 * into the same scale so we can compare.
 	 */
 	boost = (egc->iowait_boost * egc->max) >> SCHED_CAPACITY_SHIFT;
+	boost = uclamp_rq_util_with(cpu_rq(ego->cpu), boost, NULL);
 	if (egc->util < boost)
 		egc->util = boost;
 }
