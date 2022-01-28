@@ -32,9 +32,23 @@ struct dtpm_ops {
 	void (*release)(struct dtpm *);
 };
 
+struct device_node;
+
 struct dtpm_subsys_ops {
 	const char *name;
 	int (*init)(void);
+	int (*setup)(struct dtpm *, struct device_node *);
+};
+
+enum DTPM_NODE_TYPE {
+	DTPM_NODE_VIRTUAL = 0,
+	DTPM_NODE_DT,
+};
+
+struct dtpm_node {
+	enum DTPM_NODE_TYPE type;
+	const char *name;
+	struct dtpm_node *parent;
 };
 
 static inline struct dtpm *to_dtpm(struct powercap_zone *zone)
@@ -54,4 +68,5 @@ int dtpm_register(const char *name, struct dtpm *dtpm, struct dtpm *parent);
 
 int dtpm_register_cpu(struct dtpm *parent);
 
+int dtpm_create_hierarchy(struct of_device_id *dtpm_match_table);
 #endif
