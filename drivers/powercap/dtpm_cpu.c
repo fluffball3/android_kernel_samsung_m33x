@@ -294,5 +294,4 @@ static int dtpm_cpu_init(void)
 struct dtpm_subsys_ops dtpm_cpu_ops = {
 	.name = KBUILD_MODNAME,
 	.init = dtpm_cpu_init,
-	.setup = dtpm_cpu_setup,
 };
