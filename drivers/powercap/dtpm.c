@@ -594,7 +594,7 @@ int dtpm_create_hierarchy(struct of_device_id *dtpm_match_table)
 
 		ret = dtpm_subsys[i]->init();
 		if (ret)
-			pr_info("Failed to initialze '%s': %d",
+			pr_info("Failed to initialize '%s': %d",
 				dtpm_subsys[i]->name, ret);
 	}
 
