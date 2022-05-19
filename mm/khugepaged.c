@@ -364,7 +364,7 @@ int hugepage_madvise(struct vm_area_struct *vma,
 		 * may not happen any time soon.
 		 */
 		if (!(*vm_flags & VM_NO_KHUGEPAGED) &&
-				khugepaged_enter_vma_merge(vma, *vm_flags))
+				khugepaged_enter_vma(vma, *vm_flags))
 			return -ENOMEM;
 		break;
 	case MADV_NOHUGEPAGE:
@@ -504,8 +504,8 @@ int __khugepaged_enter(struct mm_struct *mm)
 	return 0;
 }
 
-int khugepaged_enter_vma_merge(struct vm_area_struct *vma,
-			       unsigned long vm_flags)
+int khugepaged_enter_vma(struct vm_area_struct *vma,
+			  unsigned long vm_flags)
 {
 	unsigned long hstart, hend;
 
