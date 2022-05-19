@@ -14,8 +14,8 @@ extern void khugepaged_destroy(void);
 extern int start_stop_khugepaged(void);
 extern int __khugepaged_enter(struct mm_struct *mm);
 extern void __khugepaged_exit(struct mm_struct *mm);
-extern int khugepaged_enter_vma_merge(struct vm_area_struct *vma,
-				      unsigned long vm_flags);
+extern int khugepaged_enter_vma(struct vm_area_struct *vma,
+				 unsigned long vm_flags);
 extern void khugepaged_min_free_kbytes_update(void);
 #ifdef CONFIG_SHMEM
 extern void collapse_pte_mapped_thp(struct mm_struct *mm, unsigned long addr);
@@ -83,8 +83,8 @@ static inline int khugepaged_enter(struct vm_area_struct *vma,
 {
 	return 0;
 }
-static inline int khugepaged_enter_vma_merge(struct vm_area_struct *vma,
-					     unsigned long vm_flags)
+static inline int khugepaged_enter_vma(struct vm_area_struct *vma,
+					unsigned long vm_flags)
 {
 	return 0;
 }
