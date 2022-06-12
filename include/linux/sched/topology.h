@@ -76,8 +76,8 @@ struct sched_domain_shared {
 	atomic_t	ref;
 	atomic_t	nr_busy_cpus;
 	int		has_idle_cores;
-
-	ANDROID_VENDOR_DATA(1);
+	int		nr_idle_scan;
+	//ANDROID_VENDOR_DATA(1);	//remove till needed
 };
 
 struct sched_domain {
