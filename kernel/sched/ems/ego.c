@@ -675,11 +675,13 @@ skip_find_next_freq:
  * required to meet deadlines.
  */
 unsigned long ego_cpu_util(int cpu, unsigned long util_cfs,
-				 unsigned long max, enum schedutil_type type,
+				 enum schedutil_type type,
 				 struct task_struct *p)
 {
-	unsigned long dl_util, util, irq;
+	unsigned long dl_util, util, irq, max;
 	struct rq *rq = cpu_rq(cpu);
+
+	max = arch_scale_cpu_capacity(cpu);
 
 	/*
 	 * Early check to see if IRQ/steal time saturates the CPU, can be
@@ -766,12 +768,11 @@ out:
 static void ego_get_util(struct ego_cpu *egc)
 {
 	struct rq *rq = cpu_rq(egc->cpu);
-	unsigned long max = arch_scale_cpu_capacity(egc->cpu);
 
-	egc->max = max;
+	egc->max = arch_scale_cpu_capacity(egc->cpu);
 	egc->bw_dl = cpu_bw_dl(rq);
 
-	egc->util = ego_cpu_util(egc->cpu, ml_cpu_util(egc->cpu), max,
+	egc->util = ego_cpu_util(egc->cpu, ml_cpu_util(egc->cpu),
 					  FREQUENCY_UTIL, NULL);
 }
 
