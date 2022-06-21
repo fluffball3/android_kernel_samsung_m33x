@@ -7201,9 +7201,8 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 	unsigned long max_spare_cap_ls = 0, target_cap;
 	bool boosted, latency_sensitive = false;
 	unsigned int min_exit_lat = UINT_MAX;
-	int cpu, best_energy_cpu = prev_cpu;
 	struct root_domain *rd = this_rq()->rd;
-	unsigned long base_energy = 0;
+	int cpu, best_energy_cpu;
 	struct cpuidle_state *idle;
 	struct sched_domain *sd;
 	struct perf_domain *pd;
@@ -7252,13 +7251,12 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 		unsigned long cur_delta, max_spare_cap = 0;
 		unsigned long rq_util_min, rq_util_max;
 		unsigned long util_min, util_max;
-		unsigned long base_energy_pd;
 		int max_spare_cap_cpu = -1;
+		unsigned long base_energy;
 
 		eenv_pd_busy_time(&eenv, cpus, p);
 		/* Compute the 'base' energy of the pd, without @p */
-		base_energy_pd = compute_energy(&eenv, pd, cpus, p, -1);
-		base_energy += base_energy_pd;
+		base_energy = compute_energy(&eenv, pd, cpus, p, -1);
 
 		cpumask_and(cpus, perf_domain_span(pd), cpu_online_mask);
 
@@ -7327,9 +7325,9 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 				prev_delta = compute_energy(&eenv, pd, cpus, p,
 						    prev_cpu);
 				/* CPU utilization has changed */
-				if (prev_delta < base_energy_pd)
+				if (prev_delta < base_energy)
 					goto fail;
-				prev_delta -= base_energy_pd;
+				prev_delta -= base_energy;
 				best_delta = min(best_delta, prev_delta);
 			}
 
@@ -7372,9 +7370,9 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 			cur_delta = compute_energy(&eenv, pd, cpus, p,
 						   max_spare_cap_cpu);
 			/* CPU utilization has changed */
-			if (cur_delta < base_energy_pd)
+			if (cur_delta < base_energy)
 				goto fail;
-			cur_delta -= base_energy_pd;
+			cur_delta -= base_energy;
 			if (cur_delta < best_delta) {
 				best_delta = cur_delta;
 				best_energy_cpu = max_spare_cap_cpu;
@@ -7387,14 +7385,7 @@ unlock:
 	if (latency_sensitive)
 		return best_idle_cpu >= 0 ? best_idle_cpu : max_spare_cap_cpu_ls;
 
-	/*
-	 * Pick the best CPU if prev_cpu cannot be used, or if it saves at
-	 * least 6% of the energy used by prev_cpu.
-	 */
-	if (prev_delta == ULONG_MAX)
-		return best_energy_cpu;
-
-	if ((prev_delta - best_delta) > ((prev_delta + base_energy) >> 4))
+	if (best_delta < prev_delta)
 		return best_energy_cpu;
 
 	return prev_cpu;
