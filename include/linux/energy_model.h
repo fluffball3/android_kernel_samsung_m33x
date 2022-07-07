@@ -63,7 +63,7 @@ struct em_perf_domain {
 /*
  *  em_perf_domain flags:
  *
- *  EM_PERF_DOMAIN_MILLIWATTS: The power values are in milli-Watts or some
+ *  EM_PERF_DOMAIN_MICROWATTS: The power values are in micro-Watts or some
  *  other scale.
  *
  *  EM_PERF_DOMAIN_SKIP_INEFFICIENCIES: Skip inefficient states when estimating
@@ -72,7 +72,7 @@ struct em_perf_domain {
  *  EM_PERF_DOMAIN_ARTIFICIAL: The power values are artificial and might be
  *  created by platform missing real power information
  */
-#define EM_PERF_DOMAIN_MILLIWATTS BIT(0)
+#define EM_PERF_DOMAIN_MICROWATTS BIT(0)
 #define EM_PERF_DOMAIN_SKIP_INEFFICIENCIES BIT(1)
 #define EM_PERF_DOMAIN_ARTIFICIAL BIT(2)
 
@@ -80,22 +80,44 @@ struct em_perf_domain {
 #define em_is_artificial(em) ((em)->flags & EM_PERF_DOMAIN_ARTIFICIAL)
 
 #ifdef CONFIG_ENERGY_MODEL
-#define EM_MAX_POWER 0xFFFF
+/*
+ * The max power value in micro-Watts. The limit of 64 Watts is set as
+ * a safety net to not overflow multiplications on 32bit platforms. The
+ * 32bit value limit for total Perf Domain power implies a limit of
+ * maximum CPUs in such domain to 64.
+ */
+#define EM_MAX_POWER (64000000) /* 64 Watts */
 
 /*
- * Increase resolution of energy estimation calculations for 64-bit
- * architectures. The extra resolution improves decision made by EAS for the
- * task placement when two Performance Domains might provide similar energy
- * estimation values (w/o better resolution the values could be equal).
- *
- * We increase resolution only if we have enough bits to allow this increased
- * resolution (i.e. 64-bit). The costs for increasing resolution when 32-bit
- * are pretty high and the returns do not justify the increased costs.
+ * To avoid possible energy estimation overflow on 32bit machines add
+ * limits to number of CPUs in the Perf. Domain.
+ * We are safe on 64bit machine, thus some big number.
  */
 #ifdef CONFIG_64BIT
-#define em_scale_power(p) ((p) * 1000)
+#define EM_MAX_NUM_CPUS 4096
 #else
-#define em_scale_power(p) (p)
+#define EM_MAX_NUM_CPUS 16
+#endif
+
+/*
+ * To avoid an overflow on 32bit machines while calculating the energy
+ * use a different order in the operation. First divide by the 'cpu_scale'
+ * which would reduce big value stored in the 'cost' field, then multiply by
+ * the 'sum_util'. This would allow to handle existing platforms, which have
+ * e.g. power ~1.3 Watt at max freq, so the 'cost' value > 1mln micro-Watts.
+ * In such scenario, where there are 4 CPUs in the Perf. Domain the 'sum_util'
+ * could be 4096, then multiplication: 'cost' * 'sum_util'  would overflow.
+ * This reordering of operations has some limitations, we lose small
+ * precision in the estimation (comparing to 64bit platform w/o reordering).
+ *
+ * We are safe on 64bit machine.
+ */
+#ifdef CONFIG_64BIT
+#define em_estimate_energy(cost, sum_util, scale_cpu) \
+	(((cost) * (sum_util)) / (scale_cpu))
+#else
+#define em_estimate_energy(cost, sum_util, scale_cpu) \
+	(((cost) / (scale_cpu)) * (sum_util))
 #endif
 
 struct em_data_callback {
@@ -113,8 +135,8 @@ struct em_data_callback {
 	 * and frequency.
 	 *
 	 * In case of CPUs, the power is the one of a single CPU in the domain,
-	 * expressed in milli-watts. It is expected to fit in the
-	 * [0, EM_MAX_POWER] range.
+	 * expressed in micro-Watts or an abstract scale. It is expected to
+	 * fit in the [0, EM_MAX_POWER] range.
 	 *
 	 * Return 0 on success.
 	 */
@@ -149,7 +171,7 @@ struct em_perf_domain *em_cpu_get(int cpu);
 struct em_perf_domain *em_pd_get(struct device *dev);
 int em_dev_register_perf_domain(struct device *dev, unsigned int nr_states,
 				struct em_data_callback *cb, cpumask_t *span,
-				bool milliwatts);
+				bool microwatts);
 void em_dev_unregister_perf_domain(struct device *dev);
 
 /**
@@ -274,7 +296,7 @@ static inline unsigned long em_cpu_energy(struct em_perf_domain *pd,
 	 *   pd_nrg = ------------------------                       (4)
 	 *                  scale_cpu
 	 */
-	return ps->cost * sum_util / scale_cpu;
+	return em_estimate_energy(ps->cost, sum_util, scale_cpu);
 }
 
 /**
@@ -298,7 +320,7 @@ struct em_data_callback {};
 static inline
 int em_dev_register_perf_domain(struct device *dev, unsigned int nr_states,
 				struct em_data_callback *cb, cpumask_t *span,
-				bool milliwatts)
+				bool microwatts)
 {
 	return -EINVAL;
 }
