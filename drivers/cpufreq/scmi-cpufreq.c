@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/scmi_protocol.h>
 #include <linux/types.h>
+#include <linux/units.h>
 
 struct scmi_data {
 	int domain_id;
@@ -103,6 +104,7 @@ static int __maybe_unused
 scmi_get_cpu_power(unsigned long *power, unsigned long *KHz,
 		   struct device *cpu_dev)
 {
+	bool power_scale_mw = perf_ops->power_scale_mw_get(ph);
 	unsigned long Hz;
 	int ret, domain;
 
@@ -115,6 +117,10 @@ scmi_get_cpu_power(unsigned long *power, unsigned long *KHz,
 	ret = perf_ops->est_power_get(ph, domain, &Hz, power);
 	if (ret)
 		return ret;
+
+	/* Provide bigger resolution power to the Energy Model */
+	if (power_scale_mw)
+		*power *= MICROWATT_PER_MILLIWATT;
 
 	/* The EM framework specifies the frequency in KHz. */
 	*KHz = Hz / 1000;
