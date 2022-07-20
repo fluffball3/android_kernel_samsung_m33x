@@ -422,7 +422,8 @@ struct tcp_sock {
 	struct request_sock __rcu *fastopen_rsk;
 	struct saved_syn *saved_syn;
 
-	ANDROID_KABI_RESERVE(1);
+	/* Rerouting information */
+	ANDROID_KABI_USE(1, u16 ecn_rehash);
 };
 
 enum tsq_enum {
