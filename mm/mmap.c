@@ -2578,8 +2578,8 @@ EXPORT_SYMBOL(get_unmapped_area);
 static struct vm_area_struct *__find_vma(struct mm_struct *mm,
 					 unsigned long addr)
 {
-	struct rb_node *rb_node;
 	struct vm_area_struct *vma = NULL;
+	unsigned long index = addr;
 
 	mmap_assert_locked(mm);
 	/* Check the cache first. */
@@ -2587,22 +2587,7 @@ static struct vm_area_struct *__find_vma(struct mm_struct *mm,
 	if (likely(vma))
 		return vma;
 
-	rb_node = mm->mm_rb.rb_node;
-
-	while (rb_node) {
-		struct vm_area_struct *tmp;
-
-		tmp = rb_entry(rb_node, struct vm_area_struct, vm_rb);
-
-		if (tmp->vm_end > addr) {
-			vma = tmp;
-			if (tmp->vm_start <= addr)
-				break;
-			rb_node = rb_node->rb_left;
-		} else
-			rb_node = rb_node->rb_right;
-	}
-
+	vma = mt_find(&mm->mm_mt, &index, ULONG_MAX);
 	return vma;
 }
 
