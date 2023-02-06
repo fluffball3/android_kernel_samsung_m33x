@@ -117,7 +117,7 @@ dtbo-y += samsung/m33x/m33x_swa_ins_w00_r00.dtbo
 
 targets += dtbs
 DTB_LIST  := $(dtb-y) $(dtbo-y)
-always    := $(DTB_LIST)
+always-y  := $(DTB_LIST)
 
 dtbs: $(addprefix $(obj)/, $(DTB_LIST))
 
