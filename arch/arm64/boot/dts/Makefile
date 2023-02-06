@@ -117,7 +117,7 @@ dtb-y += sprd/sp9860g-1h10.dtb
 
 targets += dtbs
 DTB_LIST  := $(dtb-y) $(dtbo-y)
-always    := $(DTB_LIST)
+always-y  := $(DTB_LIST)
 
 dtbs: $(addprefix $(obj)/, $(DTB_LIST))
 
