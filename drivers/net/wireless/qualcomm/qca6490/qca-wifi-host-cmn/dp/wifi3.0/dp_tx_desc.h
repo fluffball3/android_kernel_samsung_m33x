@@ -220,6 +220,61 @@ dp_tx_is_threshold_reached(struct dp_tx_desc_pool_s *pool, uint16_t avail_desc)
 }
 
 /**
+ * dp_tx_adjust_flow_pool_state() - Adjust flow pool state
+ *
+ * @soc: dp soc
+ * @pool: flow pool
+ */
+static inline void
+dp_tx_adjust_flow_pool_state(struct dp_soc *soc,
+			     struct dp_tx_desc_pool_s *pool)
+{
+	if (pool->avail_desc > pool->stop_th[DP_TH_BE_BK]) {
+		pool->status = FLOW_POOL_ACTIVE_UNPAUSED;
+		return;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_BE_BK] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_VI]) {
+		pool->status = FLOW_POOL_BE_BK_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_VI] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_VO]) {
+		pool->status = FLOW_POOL_VI_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_VO] &&
+		   pool->avail_desc > pool->stop_th[DP_TH_HI]) {
+		pool->status = FLOW_POOL_VO_PAUSED;
+	} else if (pool->avail_desc <= pool->stop_th[DP_TH_HI]) {
+		pool->status = FLOW_POOL_ACTIVE_PAUSED;
+	}
+
+	switch (pool->status) {
+	case FLOW_POOL_ACTIVE_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_PRIORITY_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_PRI);
+		fallthrough;
+
+	case FLOW_POOL_VO_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_VO_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_VO);
+		fallthrough;
+
+	case FLOW_POOL_VI_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_VI_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_VI);
+		fallthrough;
+
+	case FLOW_POOL_BE_BK_PAUSED:
+		soc->pause_cb(pool->flow_pool_id,
+			      WLAN_NETIF_BE_BK_QUEUE_OFF,
+			      WLAN_DATA_FLOW_CTRL_BE_BK);
+		break;
+	default:
+		dp_err("Invalid pool staus:%u to adjust", pool->status);
+	}
+}
+
+/**
  * dp_tx_desc_alloc() - Allocate a Software Tx descriptor from given pool
  *
  * @soc: Handle to DP SoC structure
