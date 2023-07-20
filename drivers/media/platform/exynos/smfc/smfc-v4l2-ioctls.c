@@ -303,9 +303,8 @@ static int smfc_s_ctrl(struct v4l2_ctrl *ctrl)
 			ctx->chroma_vfactor = 0;
 			break;
 		case V4L2_JPEG_CHROMA_SUBSAMPLING_410:
-			dev_info(ctx->smfc->dev,
-				"Compression to YUV410 is not supported\n");
-			/* pass through to 422 */
+			dev_info(ctx->smfc->dev, "Compression to YUV410 is not supported\n");
+			fallthrough;
 		case V4L2_JPEG_CHROMA_SUBSAMPLING_422:
 		default:
 			ctx->chroma_hfactor = 2;
