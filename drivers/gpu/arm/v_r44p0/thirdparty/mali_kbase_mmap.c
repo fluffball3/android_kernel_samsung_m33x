@@ -93,6 +93,7 @@ static bool align_and_check(unsigned long *gap_end, unsigned long gap_start,
 
 	return true;
 }
+#endif
 
 /**
  * kbase_unmapped_area_topdown() - allocates new areas top-down from
