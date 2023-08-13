@@ -464,6 +464,10 @@ static bool ego_should_update_freq(struct ego_policy *egp, u64 time)
 		return true;
 	}
 
+	/* If the last frequency wasn't set yet then we can still amend it */
+	if (egp->work_in_progress)
+		return true;
+
 	delta_ns = time - egp->last_freq_update_time;
 
 	/*
