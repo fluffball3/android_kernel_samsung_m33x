@@ -289,6 +289,9 @@ int freqboost_can_attach(struct cgroup_taskset *tset)
 
 		src_bg = cpuctl_task_group_idx(task);
 
+		// Halium: prevent kernel panic due to hardcoded CGROUP_COUNT value
+		dst_bg = CGROUP_ROOT;
+
 		/*
 		 * Current task is not changing boostgroup, which can
 		 * happen when the new hierarchy is in use.
