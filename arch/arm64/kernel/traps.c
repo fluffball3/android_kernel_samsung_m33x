@@ -594,25 +594,18 @@ static __always_inline void __call_expire_watchdog(void)
 static inline void __call_expire_watchdog(void) { }
 #endif /* CONFIG_S3C2410_BUILTIN_WATCHDOG */
 
-void do_ptrauth_fault(struct pt_regs *regs, unsigned int esr)
+void do_el0_fpac(struct pt_regs *regs, unsigned long esr)
+{
+	force_signal_inject(SIGILL, ILL_ILLOPN, regs->pc, esr);
+}
+
+void do_el1_fpac(struct pt_regs *regs, unsigned long esr)
 {
 	/*
-	 * Unexpected FPAC exception or pointer authentication failure in
-	 * the kernel: kill the task before it does any more harm.
+	 * Unexpected FPAC exception in the kernel: kill the task before it
+	 * does any more harm.
 	 */
-	trace_android_rvh_do_ptrauth_fault(regs, esr, user_mode(regs));
-	if (user_mode(regs)) {
-		force_signal_inject(SIGILL, ILL_ILLOPN, regs->pc, esr);
-		return;
-	}
-
-	trace_android_rvh_bad_mode(regs, esr, 0xFA017);
-
-	console_verbose();
-
-	pr_auto(ASL1, "Wrong PAC detected on CPU%d, LR 0x%010lx, code 0x%08x -- %s\n",
-		smp_processor_id(), regs->regs[30], esr, esr_get_class_string(esr));
-#ifdef CONFIG_ARM64_PTR_AUTH
+	#ifdef CONFIG_ARM64_PTR_AUTH
 	show_pac_keys(&current->thread.keys_user, &current->thread.keys_kernel);
 #endif
 
@@ -625,9 +618,9 @@ void do_ptrauth_fault(struct pt_regs *regs, unsigned int esr)
 
 	__call_expire_watchdog();
 
-	panic("ptrauth fault");
+	die("Oops - FPAC", regs, esr);
 }
-NOKPROBE_SYMBOL(do_ptrauth_fault);
+NOKPROBE_SYMBOL(do_el1_fpac);
 
 #define __user_cache_maint(insn, address, res)			\
 	if (address >= user_addr_max()) {			\
