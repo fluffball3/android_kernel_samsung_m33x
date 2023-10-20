@@ -5036,7 +5036,7 @@ EXPORT_SYMBOL_GPL(set_next_entity);
  * 4) do not run the "skip" process, if something else is available
  */
 static struct sched_entity *
-pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
+pick_next_entity(struct cfs_rq *cfs_rq)
 {
 	/*
 	 * Enabling NEXT_BUDDY will affect latency but not fairness.
@@ -7868,7 +7868,7 @@ again:
 			}
 		}
 
-		se = pick_next_entity(cfs_rq, curr);
+		se = pick_next_entity(cfs_rq);
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
 
@@ -7914,7 +7914,7 @@ simple:
 	}
 
 	do {
-		se = pick_next_entity(cfs_rq, NULL);
+		se = pick_next_entity(cfs_rq);
 		set_next_entity(cfs_rq, se);
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
