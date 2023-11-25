@@ -36,7 +36,7 @@ struct platform_device {
 	 * frees it.  Use driver_set_override() to set or clear it.
 	 */
 
-	const char *driver_override;
+	char *driver_override;
 
 	/* MFD cell pointer */
 	struct mfd_cell *mfd_cell;
