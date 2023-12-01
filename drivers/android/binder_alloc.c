@@ -369,8 +369,7 @@ static bool debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 			continue;
 		if (!buffer->async_transaction)
 			continue;
-		total_alloc_size += binder_alloc_buffer_size(alloc, buffer)
-			+ sizeof(struct binder_buffer);
+		total_alloc_size += binder_alloc_buffer_size(alloc, buffer);
 		num_buffers++;
 	}
 
@@ -451,7 +450,7 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 	if (is_async &&
 	    alloc->free_async_space < size + sizeof(struct binder_buffer)) {
         pr_info("%d: binder_alloc_buf size %zd(%zd) failed, no async space left\n",
-                alloc->pid, size, alloc->free_async_space);
+                alloc->pid, size);
         return ERR_PTR(-ENOSPC);
     }
 
@@ -573,11 +572,11 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 		alloc->free_async_space -= size + sizeof(struct binder_buffer);
         if ((system_server_pid == alloc->pid) && (alloc->free_async_space <= 153600)) { // 150K
             pr_info("%d: [free_size<150K] binder_alloc_buf size %zd async free %zd\n",
-                    alloc->pid, size, alloc->free_async_space);
+                    alloc->pid, size);
         }
         if ((system_server_pid == alloc->pid) && (size >= 122880)) { // 120K
             pr_info("%d: [alloc_size>120K] binder_alloc_buf size %zd async free %zd\n",
-                    alloc->pid, size, alloc->free_async_space);
+                    alloc->pid, size);
         }
 		binder_alloc_debug(BINDER_DEBUG_BUFFER_ALLOC_ASYNC,
 			     "%d: binder_alloc_buf size %zd async free %zd\n",
@@ -716,8 +715,7 @@ static void binder_free_buf_locked(struct binder_alloc *alloc,
 	BUG_ON(buffer->user_data > alloc->buffer + alloc->buffer_size);
 
 	if (buffer->async_transaction) {
-		alloc->free_async_space += buffer_size + sizeof(struct binder_buffer);
-
+		alloc->free_async_space += buffer_size;
 		binder_alloc_debug(BINDER_DEBUG_BUFFER_ALLOC_ASYNC,
 			     "%d: binder_free_buf size %zd async free %zd\n",
 			      alloc->pid, size, alloc->free_async_space);
