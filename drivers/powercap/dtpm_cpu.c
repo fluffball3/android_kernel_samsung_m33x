@@ -155,6 +155,8 @@ static void pd_release(struct dtpm *dtpm)
 	if (policy) {
 		for_each_cpu(dtpm_cpu->cpu, policy->related_cpus)
 			per_cpu(dtpm_per_cpu, dtpm_cpu->cpu) = NULL;
+
+		cpufreq_cpu_put(policy);
 	}
 	
 	kfree(dtpm_cpu);
@@ -206,12 +208,16 @@ static int __dtpm_cpu_setup(int cpu, struct dtpm *parent)
 		return 0;
 
 	pd = em_cpu_get(cpu);
-	if (!pd || em_is_artificial(pd))
-		return -EINVAL;
+	if (!pd || em_is_artificial(pd)) {
+		ret = -EINVAL;
+		goto release_policy;
+	}
 
 	dtpm_cpu = kzalloc(sizeof(*dtpm_cpu), GFP_KERNEL);
-	if (!dtpm_cpu)
-		return -ENOMEM;
+	if (!dtpm_cpu) {
+		ret = -ENOMEM;
+		goto release_policy;
+	}
 
 	dtpm_init(&dtpm_cpu->dtpm, &dtpm_ops);
 	dtpm_cpu->cpu = cpu;
@@ -231,6 +237,7 @@ static int __dtpm_cpu_setup(int cpu, struct dtpm *parent)
 	if (ret < 0)
 		goto out_dtpm_unregister;
 
+	cpufreq_cpu_put(policy);
 	return 0;
 
 out_dtpm_unregister:
@@ -242,6 +249,8 @@ out_kfree_dtpm_cpu:
 		per_cpu(dtpm_per_cpu, cpu) = NULL;
 	kfree(dtpm_cpu);
 
+release_policy:
+	cpufreq_cpu_put(policy);
 	return ret;
 }
 
