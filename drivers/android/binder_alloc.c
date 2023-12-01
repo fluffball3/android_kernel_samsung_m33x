@@ -446,6 +446,9 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
 	}
 #endif
 
+	/* Pad 0-size buffers so they get assigned unique addresses */
+	size = max(size, sizeof(void *));
+
 	if (is_async &&
 	    alloc->free_async_space < size + sizeof(struct binder_buffer)) {
         pr_info("%d: binder_alloc_buf size %zd(%zd) failed, no async space left\n",
@@ -466,9 +469,6 @@ static struct binder_buffer *binder_alloc_new_buf_locked(
                 alloc->pid, size, alloc->free_async_space);
         return ERR_PTR(-ENOSPC);
 	}
-
-	/* Pad 0-size buffers so they get assigned unique addresses */
-	size = max(size, sizeof(void *));
 
 	while (n) {
 		buffer = rb_entry(n, struct binder_buffer, rb_node);
