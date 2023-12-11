@@ -31,6 +31,7 @@ void topology_scale_freq_tick(void);
 #define arch_scale_freq_invariant topology_scale_freq_invariant
 #define arch_set_min_freq_scale topology_set_min_freq_scale
 #define arch_scale_min_freq_capacity topology_get_min_freq_scale
+#define arch_scale_freq_ref topology_get_freq_ref
 
 /* Replace task scheduler's default cpu-invariant accounting */
 #define arch_scale_cpu_capacity topology_get_cpu_scale
