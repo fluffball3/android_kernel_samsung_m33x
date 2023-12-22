@@ -276,49 +276,12 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 	for (i = 0; i < 3; i++) {
 		pr_info("%s +++\n", __func__);
 		/*
-		 * We're resetting only the device side because, if we're in host mode,
-		 * XHCI driver will reset the host block. If dwc3 was configured for
-		 * host-only mode or current role is host, then we can return early.
-		 */
-		if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST)
-			return 0;
-
-		/*
-		* If the dr_mode is host and the dwc->current_dr_role is not the
-		* corresponding DWC3_GCTL_PRTCAP_HOST, then the dwc3_core_init_mode
-		* isn't executed yet. Ensure the phy is ready before the controller
-		* updates the GCTL.PRTCAPDIR or other settings by soft-resetting
-		* the phy.
-		*
-		* Note: GUSB3PIPECTL[n] and GUSB2PHYCFG[n] are port settings where n
-		* is port index. If this is a multiport host, then we need to reset
-		* all active ports.
+		* We're resetting only the device side because, if we're in host mode,
+		* XHCI driver will reset the host block. If dwc3 was configured for
+		* host-only mode or current role is host, then we can return early.
 		*/
-		if (dwc->dr_mode == USB_DR_MODE_HOST) {
-			u32 usb3_port;
-			u32 usb2_port;
-
-			usb3_port = dwc3_readl(dwc->regs, DWC3_GUSB3PIPECTL(0));
-			usb3_port |= DWC3_GUSB3PIPECTL_PHYSOFTRST;
-			dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), usb3_port);
-
-			usb2_port = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
-			usb2_port |= DWC3_GUSB2PHYCFG_PHYSOFTRST;
-			dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), usb2_port);
-
-			/* Small delay for phy reset assertion */
-			usleep_range(1000, 2000);
-
-			usb3_port &= ~DWC3_GUSB3PIPECTL_PHYSOFTRST;
-			dwc3_writel(dwc->regs, DWC3_GUSB3PIPECTL(0), usb3_port);
-
-			usb2_port &= ~DWC3_GUSB2PHYCFG_PHYSOFTRST;
-			dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), usb2_port);
-
-			/* Wait for clock synchronization */
-			msleep(50);
+		if (dwc->dr_mode == USB_DR_MODE_HOST || dwc->current_dr_role == DWC3_GCTL_PRTCAP_HOST)
 			return 0;
-		}
 
 		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
 		reg |= DWC3_DCTL_CSFTRST;
@@ -326,11 +289,11 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 		dwc3_gadget_dctl_write_safe(dwc, reg);
 
 		/*
-		 * For DWC_usb31 controller 1.90a and later, the DCTL.CSFRST bit
-		 * is cleared only after all the clocks are synchronized. This can
-		 * take a little more than 50ms. Set the polling rate at 20ms
-		 * for 10 times instead.
-		 */
+		* For DWC_usb31 controller 1.90a and later, the DCTL.CSFRST bit
+		* is cleared only after all the clocks are synchronized. This can
+		* take a little more than 50ms. Set the polling rate at 20ms
+		* for 10 times instead.
+		*/
 		if (DWC3_VER_IS_WITHIN(DWC31, 190A, ANY) || DWC3_IP_IS(DWC32))
 			retries = 10;
 
@@ -349,6 +312,7 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 	}
 
 	dev_warn(dwc->dev, "DWC3 controller soft reset failed.\n");
+
 	return -ETIMEDOUT;
 
 done:
