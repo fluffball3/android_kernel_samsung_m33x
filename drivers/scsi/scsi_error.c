@@ -1071,7 +1071,7 @@ retry:
 	shost->eh_action = &done;
 
 	scsi_log_send(scmd);
-	scmd->submitter = SUBMITTED_BY_SCSI_ERROR_HANDLER;
+	scmd->scsi_done = scsi_eh_done;
 
 	/*
 	 * Lock sdev->state_mutex to avoid that scsi_device_quiesce() can
@@ -2365,7 +2365,7 @@ scsi_ioctl_reset(struct scsi_device *dev, int __user *arg)
 	scmd->request = rq;
 	scmd->cmnd = scsi_req(rq)->cmd;
 
-	scmd->submitter = SUBMITTED_BY_SCSI_RESET_IOCTL;
+	scmd->scsi_done		= scsi_reset_provider_done_command;
 	memset(&scmd->sdb, 0, sizeof(scmd->sdb));
 
 	scmd->cmd_len			= 0;
