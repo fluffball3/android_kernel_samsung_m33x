@@ -66,12 +66,6 @@ struct scsi_pointer {
 #define SCMD_STATE_COMPLETE	0
 #define SCMD_STATE_INFLIGHT	1
 
-enum scsi_cmnd_submitter {
-	SUBMITTED_BY_BLOCK_LAYER = 0,
-	SUBMITTED_BY_SCSI_ERROR_HANDLER = 1,
-	SUBMITTED_BY_SCSI_RESET_IOCTL = 2,
-} __packed;
-
 struct scsi_cmnd {
 	struct scsi_request req;
 	struct scsi_device *device;
