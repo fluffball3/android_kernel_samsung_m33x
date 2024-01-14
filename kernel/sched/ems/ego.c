@@ -608,9 +608,19 @@ static unsigned int get_next_freq(struct ego_policy *egp,
 {
 	struct cpufreq_policy *policy = egp->policy;
 	unsigned int freq, org_freq, eng_freq = 0;
+	extern bool func_arch_scale_freq_invariant(void);
+
+	if (func_arch_scale_freq_invariant())
+		freq = policy->cpuinfo.max_freq;
+	else
+		/*
+		 * Apply a 25% margin so that we select a higher frequency than
+		 * the current one before the CPU is fully busy:
+		 */
+		freq = policy->cur + (policy->cur >> 2);
 
 	/* compute pure frequency base on util */
-	org_freq = ego_map_util_freq(util, policy->cpuinfo.max_freq, max);
+	org_freq = ego_map_util_freq(util, freq, max);
 	if ((org_freq == egp->cached_raw_freq || egp->work_in_progress)
 					&& !egp->need_freq_update) {
 		freq = max(egp->org_freq, egp->next_freq);
