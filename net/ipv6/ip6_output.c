@@ -251,7 +251,7 @@ int ip6_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb_tracer_func_trace(sk, skb, STL_IP6_OUTPUT);
 #endif
 
-	if (unlikely(idev->cnf.disable_ipv6)) {
+	if (unlikely(READ_ONCE(idev->cnf.disable_ipv6))) {
 		IP6_INC_STATS(net, idev, IPSTATS_MIB_OUTDISCARDS);
 		kfree_skb(skb);
 		return 0;
