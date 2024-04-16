@@ -423,10 +423,6 @@ static int generic_rs485_config(struct uart_port *port,
 	return 0;
 }
 
-static const struct serial_rs485 generic_rs485_supported = {
-	.flags = SER_RS485_ENABLED,
-};
-
 static const struct exar8250_platform exar8250_default_platform = {
 	.register_gpio = xr17v35x_register_gpio,
 	.rs485_config = generic_rs485_config,
@@ -464,10 +460,6 @@ static int iot2040_rs485_config(struct uart_port *port,
 
 	return generic_rs485_config(port, rs485);
 }
-
-static const struct serial_rs485 iot2040_rs485_supported = {
-	.flags = SER_RS485_ENABLED | SER_RS485_RX_DURING_TX | SER_RS485_TERMINATE_BUS,
-};
 
 static const struct property_entry iot2040_gpio_properties[] = {
 	PROPERTY_ENTRY_U32("exar,first-pin", 10),
