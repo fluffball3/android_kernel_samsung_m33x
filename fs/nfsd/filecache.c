@@ -1095,6 +1095,7 @@ wait_for_construction:
 			status = nfserr_jukebox;
 			goto out;
 		}
+		nfsd_file_put(nf);
 		open_retry = false;
 		nfsd_file_put_noref(nf);
 		goto retry;
