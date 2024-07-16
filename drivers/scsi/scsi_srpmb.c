@@ -28,7 +28,7 @@
 #include <scsi/scsi_proto.h>
 
 #include "ufs/ufshcd.h"
-#include "ufs-cal-if.h"
+#include "ufs/s5e8825/ufs-cal-if.h"
 #include "ufs/ufs-exynos.h"
 
 #include "scsi_srpmb.h"
