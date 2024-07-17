@@ -20,13 +20,11 @@ __all:
 
 TARGET_SOC ?= s5e8825
 ARCH := arm64
-CROSS_COMPILE := aarch64-linux-gnu-
 PLATFORM_VERSION ?= 13
 ANDROID_MAJOR_VERSION ?= s
 
 # Export them
 export ARCH
-export CROSS_COMPILE
 export PLATFORM_VERSION
 export ANDROID_MAJOR_VERSION
 export TARGET_SOC
