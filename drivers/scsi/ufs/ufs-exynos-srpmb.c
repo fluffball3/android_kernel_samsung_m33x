@@ -10,7 +10,7 @@
  */
 
 #include "ufshcd.h"
-#include "ufs-cal-if.h"
+#include "s5e8825/ufs-cal-if.h"
 #include "ufs-exynos.h"
 
 struct ufs_hba *hba_srpmb;

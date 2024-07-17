@@ -17,8 +17,8 @@
 
 #include "ufshcd.h"
 #include "ufshcd-crypto.h"
-#include "ufs-vs-mmio.h"
-#include "ufs-cal-if.h"
+#include "s5e8825/ufs-vs-mmio.h"
+#include "s5e8825/ufs-cal-if.h"
 #include "ufs-exynos.h"
 #include "ufs-exynos-fmp.h"
 #include <trace/hooks/ufshcd.h>
