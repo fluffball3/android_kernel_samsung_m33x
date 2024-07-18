@@ -30,6 +30,8 @@ export ARCH
 export PLATFORM_VERSION
 export ANDROID_MAJOR_VERSION
 export TARGET_SOC
+export MODULES_OUTDIR
+export OUTDIR
 
 # We are using a recursive build, so we need to do a little thinking
 # to get the ordering right.
