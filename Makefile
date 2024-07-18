@@ -22,6 +22,8 @@ TARGET_SOC ?= s5e8825
 ARCH := arm64
 PLATFORM_VERSION ?= 13
 ANDROID_MAJOR_VERSION ?= s
+OUTDIR="$(pwd)/out"
+MODULES_OUTDIR="$(pwd)/modules_out"
 
 # Export them
 export ARCH
