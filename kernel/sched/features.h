@@ -19,7 +19,7 @@ SCHED_FEAT(NEXT_BUDDY, true)
  * Consider buddies to be cache hot, decreases the likelyness of a
  * cache buddy being migrated away, increases cache locality.
  */
-SCHED_FEAT(CACHE_HOT_BUDDY, true)
+SCHED_FEAT(CACHE_HOT_BUDDY, false)
 
 /*
  * Allow wakeup-time preemption of the current task:
