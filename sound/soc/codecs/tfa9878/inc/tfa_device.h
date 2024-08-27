@@ -266,9 +266,9 @@ int tfa_dev_probe(int resp_addr, struct tfa_device *tfa);
  *  @param vstep the selected vstep to use
  *  @return tfa_error enum
  */
-enum tfa_error tfa_dev_start(struct tfa_device *tfa, int profile, int vstep);
+enum tfa98xx_error tfa_dev_start(struct tfa_device *tfa, int profile, int vstep);
 
-enum tfa_error tfa_dev_switch_profile(struct tfa_device *tfa,
+enum tfa98xx_error tfa_dev_switch_profile(struct tfa_device *tfa,
 	int profile, int vstep);
 
 /*
@@ -282,7 +282,7 @@ enum tfa_error tfa_dev_switch_profile(struct tfa_device *tfa,
  *  @param tfa struct = pointer to context of this device instance
  *  @return tfa_error enum
  */
-enum tfa_error tfa_dev_stop(struct tfa_device *tfa);
+enum tfa98xx_error tfa_dev_stop(struct tfa_device *tfa);
 
 /*
  * This interface allows a device/type independent fine grained control of
@@ -334,7 +334,7 @@ enum tfa_mtp {
 };
 
 int tfa_dev_mtp_get(struct tfa_device *tfa, enum tfa_mtp item);
-enum tfa_error tfa_dev_mtp_set(struct tfa_device *tfa,
+enum tfa98xx_error tfa_dev_mtp_set(struct tfa_device *tfa,
 	enum tfa_mtp item, int value);
 
 /*
