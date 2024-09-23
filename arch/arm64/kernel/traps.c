@@ -461,7 +461,6 @@ void arm64_notify_segfault(unsigned long addr)
 	force_signal_inject(SIGSEGV, code, addr, 0);
 }
 
-<<<<<<< HEAD
 #ifdef CONFIG_S3C2410_BUILTIN_WATCHDOG
 extern int s3c2410wdt_builtin_expire_watchdog(void);
 static __always_inline void do_s3c2410wdt_builtin_expire_watchdog(void)

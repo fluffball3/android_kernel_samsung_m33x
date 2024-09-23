@@ -273,7 +273,6 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 	int		retries = 1000;
 	int		i;
 
-<<<<<<< HEAD
 	for (i = 0; i < 3; i++) {
 		pr_info("%s +++\n", __func__);
 		/*
