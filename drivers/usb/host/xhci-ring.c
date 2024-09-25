@@ -1092,58 +1092,6 @@ static struct xhci_td *find_halted_td(struct xhci_virt_ep *ep)
 }
 
 /*
- * Fix up the ep ring first, so HW stops executing cancelled TDs.
- * We have the xHCI lock, so nothing can modify this list until we drop it.
- * We're also in the event handler, so we can't get re-interrupted if another
- * Stop Endpoint command completes.
- */
-
-static int xhci_invalidate_cancelled_tds(struct xhci_virt_ep *ep,
-					 struct xhci_dequeue_state *deq_state)
-{
-	struct xhci_hcd		*xhci;
-	struct xhci_td		*td = NULL;
-	struct xhci_td		*tmp_td = NULL;
-	struct xhci_ring	*ring;
-	u64			hw_deq;
-
-	xhci = ep->xhci;
-
-	list_for_each_entry_safe(td, tmp_td, &ep->cancelled_td_list, cancelled_td_list) {
-		xhci_dbg_trace(xhci, trace_xhci_dbg_cancel_urb,
-				"Removing canceled TD starting at 0x%llx (dma).",
-				(unsigned long long)xhci_trb_virt_to_dma(
-					td->start_seg, td->first_trb));
-		list_del_init(&td->td_list);
-		ring = xhci_urb_to_transfer_ring(xhci, td->urb);
-		if (!ring) {
-			xhci_warn(xhci, "WARN Cancelled URB %p has invalid stream ID %u.\n",
-				  td->urb, td->urb->stream_id);
-			continue;
-		}
-		/*
-		 * If ring stopped on the TD we need to cancel, then we have to
-		 * move the xHC endpoint ring dequeue pointer past this TD.
-		 */
-		hw_deq = xhci_get_hw_deq(xhci, ep->vdev, ep->ep_index,
-					 td->urb->stream_id);
-		hw_deq &= ~0xf;
-
-		if (trb_in_td(xhci, td->start_seg, td->first_trb,
-			      td->last_trb, hw_deq, false)) {
-			xhci_find_new_dequeue_state(xhci, ep->vdev->slot_id,
-						    ep->ep_index,
-						    td->urb->stream_id,
-						    td, deq_state);
-		} else {
-			td_to_noop(xhci, ring, td, false);
-		}
-
-	}
-	return 0;
-}
-
-/*
  * When we get a command completion for a Stop Endpoint Command, we need to
  * unlink any cancelled TDs from the ring.  There are two ways to do that:
  *
@@ -1159,8 +1107,10 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 	unsigned int ep_index;
 	struct xhci_virt_ep *ep;
 	struct xhci_ep_ctx *ep_ctx;
-	struct xhci_virt_device *vdev;
-	struct xhci_dequeue_state deq_state;
+	struct xhci_td *td = NULL;
+	enum xhci_ep_reset_type reset_type;
+	struct xhci_command *command;
+	int err;
 
 	if (unlikely(TRB_TO_SUSPEND_PORT(le32_to_cpu(trb->generic.field[3])))) {
 		if (!xhci->devs[slot_id])
@@ -1178,17 +1128,59 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 
 	trace_xhci_handle_cmd_stop_ep(ep_ctx);
 
-	last_unlinked_td = list_last_entry(&ep->cancelled_td_list,
-			struct xhci_td, cancelled_td_list);
+	if (comp_code == COMP_CONTEXT_STATE_ERROR) {
+	/*
+	 * If stop endpoint command raced with a halting endpoint we need to
+	 * reset the host side endpoint first.
+	 * If the TD we halted on isn't cancelled the TD should be given back
+	 * with a proper error code, and the ring dequeue moved past the TD.
+	 * If streams case we can't find hw_deq, or the TD we halted on so do a
+	 * soft reset.
+	 *
+	 * Proper error code is unknown here, it would be -EPIPE if device side
+	 * of enadpoit halted (aka STALL), and -EPROTO if not (transaction error)
+	 * We use -EPROTO, if device is stalled it should return a stall error on
+	 * next transfer, which then will return -EPIPE, and device side stall is
+	 * noted and cleared by class driver.
+	 */
+		switch (GET_EP_CTX_STATE(ep_ctx)) {
+		case EP_STATE_HALTED:
+			xhci_dbg(xhci, "Stop ep completion raced with stall, reset ep\n");
+			if (ep->ep_state & EP_HAS_STREAMS) {
+				reset_type = EP_SOFT_RESET;
+			} else {
+				reset_type = EP_HARD_RESET;
+				td = find_halted_td(ep);
+				if (td)
+					td->status = -EPROTO;
+			}
+			/* reset ep, reset handler cleans up cancelled tds */
+			err = xhci_handle_halted_endpoint(xhci, ep, 0, td,
+							  reset_type);
+			if (err)
+				break;
+			xhci_stop_watchdog_timer_in_irq(xhci, ep);
+			return;
+		case EP_STATE_RUNNING:
+			/* Race, HW handled stop ep cmd before ep was running */
+			xhci_dbg(xhci, "Stop ep completion ctx error, ep is running\n");
 
-	if (list_empty(&ep->cancelled_td_list)) {
-		xhci_stop_watchdog_timer_in_irq(xhci, ep);
-		ring_doorbell_for_active_rings(xhci, slot_id, ep_index);
-		return;
+			command = xhci_alloc_command(xhci, false, GFP_ATOMIC);
+			if (!command)
+				xhci_stop_watchdog_timer_in_irq(xhci, ep);
+
+			mod_timer(&ep->stop_cmd_timer,
+				  jiffies + XHCI_STOP_EP_CMD_TIMEOUT * HZ);
+			xhci_queue_stop_endpoint(xhci, command, slot_id, ep_index, 0);
+			xhci_ring_cmd_db(xhci);
+
+			return;
+		default:
+			break;
+		}
 	}
-
-	xhci_invalidate_cancelled_tds(ep, &deq_state);
-
+	/* will queue a set TR deq if stopped on a cancelled, uncleared TD */
+	xhci_invalidate_cancelled_tds(ep);
 	xhci_stop_watchdog_timer_in_irq(xhci, ep);
 
 	/* Otherwise ring the doorbell(s) to restart queued transfers */
