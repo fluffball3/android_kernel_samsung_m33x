@@ -159,7 +159,11 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
 
+/*permissive*/
 	new_value = 0;
+/*enforcing
+	new_value = !!new_value;*/
+
 
 	old_value = enforcing_enabled(state);
 	if (new_value != old_value) {
