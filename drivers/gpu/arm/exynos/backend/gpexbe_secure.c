@@ -20,6 +20,9 @@
 
 /* Implements */
 #include <gpexbe_secure.h>
+#ifdef CONFIG_MALI_DDK_VALHALL_R51P0
+#include "../../bv_r51p0/backend/gpu/mali_kbase_pm_driver.c"
+#endif
 
 /* Uses */
 #include <mali_kbase.h>

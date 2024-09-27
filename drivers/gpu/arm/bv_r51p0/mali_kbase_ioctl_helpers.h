@@ -22,7 +22,7 @@
 #ifndef _KBASE_IOCTL_HELPERS_H_
 #define _KBASE_IOCTL_HELPERS_H_
 
-#include <uapi/gpu/arm/midgard/mali_kbase_ioctl.h>
+#include <uapi/gpu/arm/bv_r51p0/mali_kbase_ioctl.h>
 
 /* Macro for IOCTLs that don't have IOCTL struct */
 #define KBASE_HANDLE_IOCTL(cmd, function, arg)                                         \

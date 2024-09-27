@@ -22,7 +22,7 @@
 #ifndef _KBASE_JM_MEM_FLAGS_H_
 #define _KBASE_JM_MEM_FLAGS_H_
 
-#include <uapi/gpu/arm/midgard/jm/mali_kbase_jm_mem_flags.h>
+#include <uapi/gpu/arm/bv_r51p0/jm/mali_kbase_jm_mem_flags.h>
 
 /* Kernel-side only flags allocated from 63 bit downwards */
 

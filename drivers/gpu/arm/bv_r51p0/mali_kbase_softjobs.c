@@ -27,7 +27,7 @@
 #include <mali_kbase_sync.h>
 #endif
 #include <linux/dma-mapping.h>
-#include <uapi/gpu/arm/midgard/mali_base_kernel.h>
+#include <uapi/gpu/arm/bv_r51p0/mali_base_kernel.h>
 #include <mali_kbase_hwaccess_time.h>
 #include <mali_kbase_kinstr_jm.h>
 #include <mali_kbase_mem_linux.h>

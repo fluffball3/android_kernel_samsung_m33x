@@ -22,7 +22,7 @@
 #ifndef _MALI_KBASE_GPUPROPS_PRIVATE_TYPES_H_
 #define _MALI_KBASE_GPUPROPS_PRIVATE_TYPES_H_
 
-#include <uapi/gpu/arm/midgard/mali_base_kernel.h>
+#include <uapi/gpu/arm/bv_r51p0/mali_base_kernel.h>
 
 /**
  * struct kbasep_gpuprops_regdump - structure containing raw GPU register values.

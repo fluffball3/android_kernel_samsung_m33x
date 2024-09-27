@@ -41,7 +41,7 @@
 #include <mmu/mali_kbase_mmu.h>
 #include <mmu/mali_kbase_mmu_internal.h>
 #include <device/mali_kbase_device.h>
-#include <uapi/gpu/arm/midgard/gpu/mali_kbase_gpu_id.h>
+#include <uapi/gpu/arm/bv_r51p0/gpu/mali_kbase_gpu_id.h>
 #if !MALI_USE_CSF
 #include <mali_kbase_hwaccess_jm.h>
 #endif
