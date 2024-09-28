@@ -95,9 +95,6 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev, struct kbasep_gpuprop
 				kbase_reg_read32(kbdev, GPU_TEXTURE_FEATURES_OFFSET(i));
 	}
 
-	/* EXYNOS TODO: determine if needed by userspace */
-	mali_exynos_coherency_set_coherency_feature();
-
 	if (kbase_is_gpu_removed(kbdev))
 		return -EIO;
 	return 0;
