@@ -36,7 +36,7 @@
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 #include "tl/mali_kbase_timeline_priv.h"
 #include <linux/debugfs.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 #endif
 
 /* Name of the timeline header metatadata */

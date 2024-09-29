@@ -38,7 +38,7 @@
 #include <mali_kbase_hwaccess_time.h>
 #include <mali_kbase_hw.h>
 #include <mali_kbase_config_defaults.h>
-#include <linux/priority_control_manager.h>
+#include <linux/mali_drivers/bv_r51p0/priority_control_manager.h>
 
 #include <tl/mali_kbase_timeline.h>
 #include "mali_kbase_kinstr_prfcnt.h"

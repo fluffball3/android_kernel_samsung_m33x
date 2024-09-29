@@ -29,9 +29,9 @@
 #include <hw_access/mali_kbase_hw_access.h>
 #include "mali_kbase_csf_firmware.h"
 #include "mali_kbase_csf_event.h"
-#include <uapi/gpu/arm/midgard/csf/mali_kbase_csf_errors_dumpfault.h>
+#include <uapi/gpu/arm/bv_r49p1/csf/mali_kbase_csf_errors_dumpfault.h>
 
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 
 #include <linux/types.h>
 #include <linux/wait.h>

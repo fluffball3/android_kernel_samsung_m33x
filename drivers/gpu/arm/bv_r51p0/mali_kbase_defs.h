@@ -49,7 +49,7 @@
 #include "debug/mali_kbase_debug_ktrace_defs.h"
 
 #include <protected_mode_switcher.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 
 
 #ifdef CONFIG_MALI_DEVFREQ
@@ -58,7 +58,7 @@
 
 #include <arbiter/mali_kbase_arbiter_defs.h>
 
-#include <linux/memory_group_manager.h>
+#include <linux/mali_drivers/bv_r51p0/memory_group_manager.h>
 
 #include <linux/atomic.h>
 #include <linux/mempool.h>

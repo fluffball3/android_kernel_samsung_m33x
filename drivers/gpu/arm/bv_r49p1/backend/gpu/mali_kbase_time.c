@@ -28,9 +28,9 @@
 #include <device/mali_kbase_device.h>
 #include <backend/gpu/mali_kbase_pm_internal.h>
 #include <mali_kbase_config_defaults.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 #include <asm/arch_timer.h>
-#include <linux/mali_hw_access.h>
+#include <linux/mali_drivers/bv_r49p1/mali_hw_access.h>
 
 struct kbase_timeout_info {
 	char *selector_str;

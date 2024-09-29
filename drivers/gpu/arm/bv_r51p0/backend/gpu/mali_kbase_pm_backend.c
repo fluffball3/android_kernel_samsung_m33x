@@ -33,7 +33,7 @@
 #include <backend/gpu/mali_kbase_js_internal.h>
 #include <backend/gpu/mali_kbase_jm_internal.h>
 #else
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 #include <linux/pm_runtime.h>
 #include <mali_kbase_reset_gpu.h>
 #include <csf/mali_kbase_csf_scheduler.h>

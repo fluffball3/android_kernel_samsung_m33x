@@ -25,7 +25,7 @@
 #include <mali_kbase_fence.h>
 #include <mali_kbase_sync.h>
 
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 
 /* The maximum number of KCPU commands in flight, enqueueing more commands
  * than this value shall block.

@@ -20,7 +20,7 @@
  */
 
 #include "mali_kbase_csf_protected_memory.h"
-#include <linux/protected_memory_allocator.h>
+#include <linux/mali_drivers/bv_r49p1/protected_memory_allocator.h>
 
 #if IS_ENABLED(CONFIG_OF)
 #include <linux/of_platform.h>

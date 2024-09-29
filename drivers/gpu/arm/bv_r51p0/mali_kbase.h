@@ -28,7 +28,7 @@
 
 #include <uapi/gpu/arm/bv_r51p0/mali_base_kernel.h>
 #include <mali_kbase_linux.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 
 /*
  * Include mali_kbase_defs.h first as this provides types needed by other local

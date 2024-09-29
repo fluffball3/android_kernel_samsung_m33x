@@ -27,7 +27,7 @@
 #include <device/mali_kbase_device.h>
 
 #include <linux/poll.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 #include <linux/anon_inodes.h>
 #include <linux/overflow.h>
 

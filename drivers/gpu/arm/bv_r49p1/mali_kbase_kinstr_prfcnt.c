@@ -36,7 +36,7 @@
 #include <linux/mutex.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 #include <linux/workqueue.h>
 
 /* Explicitly include epoll header for old kernels. Not required from 4.16. */

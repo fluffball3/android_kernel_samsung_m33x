@@ -21,7 +21,7 @@
 
 #include <linux/gfp.h>
 #include <linux/mm.h>
-#include <linux/memory_group_manager.h>
+#include <linux/mali_drivers/bv_r49p1/memory_group_manager.h>
 
 #include <mali_kbase.h>
 #include <mali_kbase_native_mgm.h>

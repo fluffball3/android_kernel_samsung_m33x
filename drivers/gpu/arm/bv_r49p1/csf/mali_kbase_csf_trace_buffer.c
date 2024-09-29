@@ -28,7 +28,7 @@
 
 #include <linux/list.h>
 #include <linux/mman.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 
 /**
  * struct firmware_trace_buffer - Trace Buffer within the MCU firmware

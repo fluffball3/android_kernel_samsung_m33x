@@ -39,7 +39,7 @@
 #include <linux/sched.h>
 #include <linux/kernel.h>
 #include <linux/cache.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 
 #include <mali_exynos_kbase_entrypoint.h>
 

@@ -20,13 +20,24 @@
 
 /* Implements */
 #include <gpexbe_secure.h>
+
 #ifdef CONFIG_MALI_DDK_VALHALL_R51P0
-#include "../../bv_r51p0/backend/gpu/mali_kbase_pm_driver.c"
+#include "../../bv_r51p0/mali_kbase_hwaccess_pm.h"
+#endif
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P1
+#include "../../bv_r49p1/mali_kbase_hwaccess_pm.h"
 #endif
 
 /* Uses */
 #include <mali_kbase.h>
+
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P1
+#include <linux/mali_drivers/bv_r49p1/protected_mode_switcher.h>
+#elseif CONFIG_MALI_DDK_VALHALL_R51P0
+#include <linux/mali_drivers/bv_r51p0/protected_mode_switcher.h>
+#else
 #include <linux/protected_mode_switcher.h>
+#endif
 
 #include <gpex_utils.h>
 #include <gpexbe_smc.h>

@@ -22,7 +22,7 @@
 #ifndef _KBASE_CSF_MEM_FLAGS_H_
 #define _KBASE_CSF_MEM_FLAGS_H_
 
-#include <uapi/gpu/arm/midgard/csf/mali_kbase_csf_mem_flags.h>
+#include <uapi/gpu/arm/bv_r51p0/csf/mali_kbase_csf_mem_flags.h>
 
 /* Kernel-side only flags allocated from 63 bit downwards */
 

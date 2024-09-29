@@ -40,7 +40,7 @@
 #include "mali_kbase_reg_track.h"
 #include "mali_kbase_mem_migrate.h"
 
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 #include <linux/sched/mm.h>
 #include <linux/kref.h>
 

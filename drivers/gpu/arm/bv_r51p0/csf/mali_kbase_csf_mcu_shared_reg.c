@@ -19,7 +19,7 @@
  *
  */
 
-#include <linux/protected_memory_allocator.h>
+#include <linux/mali_drivers/bv_r51p0/protected_memory_allocator.h>
 #include <mali_kbase.h>
 #include <mali_kbase_reg_track.h>
 #include "mali_kbase_csf.h"

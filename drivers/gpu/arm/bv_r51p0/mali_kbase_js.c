@@ -35,7 +35,7 @@
 #include "mali_kbase_jm.h"
 #include "mali_kbase_hwaccess_jm.h"
 #include <mali_kbase_hwaccess_time.h>
-#include <linux/priority_control_manager.h>
+#include <linux/mali_drivers/bv_r51p0/priority_control_manager.h>
 #if IS_ENABLED(CONFIG_MALI_TRACE_POWER_GPU_WORK_PERIOD)
 #include <mali_kbase_gpu_metrics.h>
 #endif

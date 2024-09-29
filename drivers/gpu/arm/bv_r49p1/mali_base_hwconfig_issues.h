@@ -27,7 +27,7 @@
 #ifndef _BASE_HWCONFIG_ISSUES_H_
 #define _BASE_HWCONFIG_ISSUES_H_
 
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r49p1/version_compat_defs.h>
 
 enum base_hw_issue {
 	BASE_HW_ISSUE_5736,

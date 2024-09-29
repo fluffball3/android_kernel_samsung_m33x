@@ -24,7 +24,7 @@
 
 #include <mali_kbase.h>
 #include <hw_access/mali_kbase_hw_access.h>
-#include <linux/mali_hw_access.h>
+#include <linux/mali_drivers/bv_r49p1/mali_hw_access.h>
 
 u64 kbase_reg_get_gpu_id(struct kbase_device *kbdev)
 {

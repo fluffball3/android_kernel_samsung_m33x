@@ -26,7 +26,7 @@
 #include "mali_kbase_csf_util.h"
 #include <mali_kbase.h>
 #include <linux/seq_file.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 
 /**
  * kbasep_csf_sync_debugfs_show() - Print CSF queue sync information

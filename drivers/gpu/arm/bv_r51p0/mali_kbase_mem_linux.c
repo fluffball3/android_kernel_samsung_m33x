@@ -34,7 +34,7 @@
 #include <linux/dma-buf.h>
 #include <linux/shrinker.h>
 #include <linux/cache.h>
-#include <linux/memory_group_manager.h>
+#include <linux/mali_drivers/bv_r51p0/memory_group_manager.h>
 #include <linux/math64.h>
 #include <linux/migrate.h>
 #include <linux/version.h>
@@ -47,7 +47,7 @@
 #include <mali_kbase_caps.h>
 #include <mali_kbase_trace_gpu_mem.h>
 #include <mali_kbase_reset_gpu.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 
 #include <mali_exynos_kbase_entrypoint.h>
 

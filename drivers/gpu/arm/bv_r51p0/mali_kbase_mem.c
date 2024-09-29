@@ -44,7 +44,7 @@
 #include <mali_kbase_mem_pool_group.h>
 #include <mmu/mali_kbase_mmu.h>
 #include <mali_kbase_trace_gpu_mem.h>
-#include <linux/version_compat_defs.h>
+#include <linux/mali_drivers/bv_r51p0/version_compat_defs.h>
 #include <mali_kbase_mem_flags.h>
 
 /* Static key used to determine if large pages are enabled or not */
