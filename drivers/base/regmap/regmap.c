@@ -1778,7 +1778,7 @@ static int _regmap_raw_write_impl(struct regmap *map, unsigned int reg,
 	 * write.
 	 */
 	if (val == work_val)
-		ret = map->write(map->bus_context, map->work_buf,
+		ret = map->bus->write(map->bus_context, map->work_buf,
 				 map->format.reg_bytes +
 				 map->format.pad_bytes +
 				 val_len);
