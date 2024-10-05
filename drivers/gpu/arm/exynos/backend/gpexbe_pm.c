@@ -65,7 +65,7 @@ static struct exynos_pm_domain *gpu_get_pm_domain(const char *g3d_genpd_name)
 	return pd;
 }
 
-int gpexbe_pm_get_status()
+int gpexbe_pm_get_status(void)
 {
 	int ret = 0;
 	unsigned int val = 0xf;
@@ -135,7 +135,7 @@ int gpexbe_pm_pd_control_up(void)
 	return gpexbe_pm_pd_control(1);
 }
 
-int gpexbe_pm_pd_control_down()
+int gpexbe_pm_pd_control_down(void)
 {
 	return gpexbe_pm_pd_control(0);
 }
