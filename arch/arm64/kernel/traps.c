@@ -580,6 +580,16 @@ static inline void __call_expire_watchdog(void) { }
 
 void do_el0_fpac(struct pt_regs *regs, unsigned long esr)
 {
+#ifdef CONFIG_ARM64_PTR_AUTH
+	show_pac_keys(&current->thread.keys_user, &current->thread.keys_kernel);
+#endif
+
+#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
+	show_regs_auto_comment(regs, 1);
+#else
+	__show_regs(regs);
+#endif
+
 	force_signal_inject(SIGILL, ILL_ILLOPN, regs->pc, esr);
 }
 
@@ -589,18 +599,6 @@ void do_el1_fpac(struct pt_regs *regs, unsigned long esr)
 	 * Unexpected FPAC exception in the kernel: kill the task before it
 	 * does any more harm.
 	 */
-	#ifdef CONFIG_ARM64_PTR_AUTH
-	show_pac_keys(&current->thread.keys_user, &current->thread.keys_kernel);
-#endif
-
-#ifdef CONFIG_SEC_DEBUG_AUTO_COMMENT
-	show_regs_auto_comment(regs, 1);
-#else
-	__show_regs(regs);
-#endif
-	local_daif_mask();
-
-	__call_expire_watchdog();
 
 	die("Oops - FPAC", regs, esr);
 }
