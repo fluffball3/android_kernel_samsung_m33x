@@ -282,7 +282,6 @@ static void uart_shutdown(struct tty_struct *tty, struct uart_state *state)
 		/*
 		 * Turn off DTR and RTS early.
 		 */
-<<<<<<< HEAD
 		if (uport) {
 			if (uart_console(uport) && tty) {
 				uport->cons->cflag = tty->termios.c_cflag;
