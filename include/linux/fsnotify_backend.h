@@ -44,12 +44,6 @@
 
 #define FS_UNMOUNT		0x00002000	/* inode on umount fs */
 #define FS_Q_OVERFLOW		0x00004000	/* Event queued overflowed */
-#define FS_ERROR		0x00008000	/* Filesystem Error (fanotify) */
-
-/*
- * FS_IN_IGNORED overloads FS_ERROR.  It is only used internally by inotify
- * which does not support FS_ERROR.
- */
 #define FS_IN_IGNORED		0x00008000	/* last inotify event here */
 
 #define FS_OPEN_PERM		0x00010000	/* open event in an permission hook */
@@ -63,7 +57,7 @@
  */
 #define FS_EVENT_ON_CHILD	0x08000000
 
-#define FS_RENAME		0x10000000	/* File was renamed */
+#define FS_DN_RENAME		0x10000000	/* file renamed */
 #define FS_DN_MULTISHOT		0x20000000	/* dnotify multishot */
 #define FS_ISDIR		0x40000000	/* event occurred against dir */
 
@@ -75,7 +69,7 @@
  * The watching parent may get an FS_ATTRIB|FS_EVENT_ON_CHILD event
  * when a directory entry inside a child subdir changes.
  */
-#define ALL_FSNOTIFY_DIRENT_EVENTS (FS_CREATE | FS_DELETE | FS_MOVE | FS_RENAME)
+#define ALL_FSNOTIFY_DIRENT_EVENTS	(FS_CREATE | FS_DELETE | FS_MOVE)
 
 #define ALL_FSNOTIFY_PERM_EVENTS (FS_OPEN_PERM | FS_ACCESS_PERM | \
 				  FS_OPEN_EXEC_PERM)
@@ -100,9 +94,8 @@
 /* Events that can be reported to backends */
 #define ALL_FSNOTIFY_EVENTS (ALL_FSNOTIFY_DIRENT_EVENTS | \
 			     FS_EVENTS_POSS_ON_CHILD | \
-			     FS_DELETE_SELF | FS_MOVE_SELF | \
-			     FS_UNMOUNT | FS_Q_OVERFLOW | FS_IN_IGNORED | \
-			     FS_ERROR)
+			     FS_DELETE_SELF | FS_MOVE_SELF | FS_DN_RENAME | \
+			     FS_UNMOUNT | FS_Q_OVERFLOW | FS_IN_IGNORED)
 
 /* Extra flags that may be reported with event or control handling of events */
 #define ALL_FSNOTIFY_FLAGS  (FS_ISDIR | FS_EVENT_ON_CHILD | FS_DN_MULTISHOT)
@@ -287,14 +280,6 @@ enum fsnotify_data_type {
 	FSNOTIFY_EVENT_NONE,
 	FSNOTIFY_EVENT_PATH,
 	FSNOTIFY_EVENT_INODE,
-	FSNOTIFY_EVENT_DENTRY,
-	FSNOTIFY_EVENT_ERROR,
-};
-
-struct fs_error_report {
-	int error;
-	struct inode *inode;
-	struct super_block *sb;
 };
 
 static inline struct inode *fsnotify_data_inode(const void *data, int data_type)
@@ -302,25 +287,8 @@ static inline struct inode *fsnotify_data_inode(const void *data, int data_type)
 	switch (data_type) {
 	case FSNOTIFY_EVENT_INODE:
 		return (struct inode *)data;
-	case FSNOTIFY_EVENT_DENTRY:
-		return d_inode(data);
 	case FSNOTIFY_EVENT_PATH:
 		return d_inode(((const struct path *)data)->dentry);
-	case FSNOTIFY_EVENT_ERROR:
-		return ((struct fs_error_report *)data)->inode;
-	default:
-		return NULL;
-	}
-}
-
-static inline struct dentry *fsnotify_data_dentry(const void *data, int data_type)
-{
-	switch (data_type) {
-	case FSNOTIFY_EVENT_DENTRY:
-		/* Non const is needed for dget() */
-		return (struct dentry *)data;
-	case FSNOTIFY_EVENT_PATH:
-		return ((const struct path *)data)->dentry;
 	default:
 		return NULL;
 	}
@@ -347,20 +315,6 @@ static inline struct super_block *fsnotify_data_sb(const void *data,
 		return ((struct dentry *)data)->d_sb;
 	case FSNOTIFY_EVENT_PATH:
 		return ((const struct path *)data)->dentry->d_sb;
-	case FSNOTIFY_EVENT_ERROR:
-		return ((struct fs_error_report *) data)->sb;
-	default:
-		return NULL;
-	}
-}
-
-static inline struct fs_error_report *fsnotify_data_error_report(
-							const void *data,
-							int data_type)
-{
-	switch (data_type) {
-	case FSNOTIFY_EVENT_ERROR:
-		return (struct fs_error_report *) data;
 	default:
 		return NULL;
 	}
@@ -378,7 +332,6 @@ enum fsnotify_iter_type {
 	FSNOTIFY_ITER_TYPE_VFSMOUNT,
 	FSNOTIFY_ITER_TYPE_SB,
 	FSNOTIFY_ITER_TYPE_PARENT,
-	FSNOTIFY_ITER_TYPE_INODE2,
 	FSNOTIFY_ITER_TYPE_COUNT
 };
 
@@ -473,7 +426,6 @@ struct fsnotify_mark_connector {
 	spinlock_t lock;
 	unsigned short type;	/* Type of object [lock] */
 #define FSNOTIFY_CONN_FLAG_HAS_FSID	0x01
-#define FSNOTIFY_CONN_FLAG_HAS_IREF	0x02
 	unsigned short flags;	/* flags [lock] */
 	__kernel_fsid_t fsid;	/* fsid of filesystem containing object */
 	union {
@@ -518,8 +470,8 @@ struct fsnotify_mark {
 	struct hlist_node obj_list;
 	/* Head of list of marks for an object [mark ref] */
 	struct fsnotify_mark_connector *connector;
-	/* Events types and flags to ignore [mark->lock, group->mark_mutex] */
-	__u32 ignore_mask;
+	/* Events types to ignore [mark->lock, group->mark_mutex] */
+	__u32 ignored_mask;
 	/* General fsnotify mark flags */
 #define FSNOTIFY_MARK_FLAG_ALIVE		0x0001
 #define FSNOTIFY_MARK_FLAG_ATTACHED		0x0002
@@ -528,8 +480,6 @@ struct fsnotify_mark {
 #define FSNOTIFY_MARK_FLAG_IN_ONESHOT		0x0020
 	/* fanotify mark flags */
 #define FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY	0x0100
-#define FSNOTIFY_MARK_FLAG_NO_IREF		0x0200
-#define FSNOTIFY_MARK_FLAG_HAS_IGNORE_FLAGS	0x0400
 	unsigned int flags;		/* flags [mark->lock] */
 };
 
@@ -656,91 +606,15 @@ extern void fsnotify_remove_queued_event(struct fsnotify_group *group,
 
 /* functions used to manipulate the marks attached to inodes */
 
-/*
- * Canonical "ignore mask" including event flags.
- *
- * Note the subtle semantic difference from the legacy ->ignored_mask.
- * ->ignored_mask traditionally only meant which events should be ignored,
- * while ->ignore_mask also includes flags regarding the type of objects on
- * which events should be ignored.
- */
-static inline __u32 fsnotify_ignore_mask(struct fsnotify_mark *mark)
-{
-	__u32 ignore_mask = mark->ignore_mask;
-
-	/* The event flags in ignore mask take effect */
-	if (mark->flags & FSNOTIFY_MARK_FLAG_HAS_IGNORE_FLAGS)
-		return ignore_mask;
-
-	/*
-	 * Legacy behavior:
-	 * - Always ignore events on dir
-	 * - Ignore events on child if parent is watching children
-	 */
-	ignore_mask |= FS_ISDIR;
-	ignore_mask &= ~FS_EVENT_ON_CHILD;
-	ignore_mask |= mark->mask & FS_EVENT_ON_CHILD;
-
-	return ignore_mask;
-}
-
-/* Legacy ignored_mask - only event types to ignore */
-static inline __u32 fsnotify_ignored_events(struct fsnotify_mark *mark)
-{
-	return mark->ignore_mask & ALL_FSNOTIFY_EVENTS;
-}
-
-/*
- * Check if mask (or ignore mask) should be applied depending if victim is a
- * directory and whether it is reported to a watching parent.
- */
-static inline bool fsnotify_mask_applicable(__u32 mask, bool is_dir,
-					    int iter_type)
-{
-	/* Should mask be applied to a directory? */
-	if (is_dir && !(mask & FS_ISDIR))
-		return false;
-
-	/* Should mask be applied to a child? */
-	if (iter_type == FSNOTIFY_ITER_TYPE_PARENT &&
-	    !(mask & FS_EVENT_ON_CHILD))
-		return false;
-
-	return true;
-}
-
-/*
- * Effective ignore mask taking into account if event victim is a
- * directory and whether it is reported to a watching parent.
- */
-static inline __u32 fsnotify_effective_ignore_mask(struct fsnotify_mark *mark,
-						   bool is_dir, int iter_type)
-{
-	__u32 ignore_mask = fsnotify_ignored_events(mark);
-
-	if (!ignore_mask)
-		return 0;
-
-	/* For non-dir and non-child, no need to consult the event flags */
-	if (!is_dir && iter_type != FSNOTIFY_ITER_TYPE_PARENT)
-		return ignore_mask;
-
-	ignore_mask = fsnotify_ignore_mask(mark);
-	if (!fsnotify_mask_applicable(ignore_mask, is_dir, iter_type))
-		return 0;
-
-	return ignore_mask & ALL_FSNOTIFY_EVENTS;
-}
-
-/* Get mask for calculating object interest taking ignore mask into account */
+/* Get mask for calculating object interest taking ignored mask into account */
 static inline __u32 fsnotify_calc_mask(struct fsnotify_mark *mark)
 {
 	__u32 mask = mark->mask;
 
-	if (!fsnotify_ignored_events(mark))
+	if (!mark->ignored_mask)
 		return mask;
 
-	/* Interest in FS_MODIFY may be needed for clearing ignore mask */
+	/* Interest in FS_MODIFY may be needed for clearing ignored mask */
 	if (!(mark->flags & FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY))
 		mask |= FS_MODIFY;
 
@@ -748,7 +622,7 @@ static inline __u32 fsnotify_calc_mask(struct fsnotify_mark *mark)
 	 * If mark is interested in ignoring events on children, the object must
 	 * show interest in those events for fsnotify_parent() to notice it.
 	 */
-	return mask | mark->ignore_mask;
+	return mask | (mark->ignored_mask & ALL_FSNOTIFY_EVENTS);
 }
 
 /* Get mask of events for a list of marks */

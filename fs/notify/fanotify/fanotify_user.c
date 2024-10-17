@@ -997,10 +997,10 @@ static __u32 fanotify_mark_remove_from_mask(struct fsnotify_mark *fsn_mark,
 	mask &= ~umask;
 	spin_lock(&fsn_mark->lock);
 	oldmask = fsnotify_calc_mask(fsn_mark);
-	if (!(flags & FANOTIFY_MARK_IGNORE_BITS)) {
+	if (!(flags & FAN_MARK_IGNORED_MASK)) {
 		fsn_mark->mask &= ~mask;
 	} else {
-		fsn_mark->ignore_mask &= ~mask;
+		fsn_mark->ignored_mask &= ~mask;
 	}
 	newmask = fsnotify_calc_mask(fsn_mark);
 	/*
@@ -1009,7 +1009,7 @@ static __u32 fanotify_mark_remove_from_mask(struct fsnotify_mark *fsn_mark,
 	 * changes to the mask.
 	 * Destroy mark when only umask bits remain.
 	 */
-	*destroy = !((fsn_mark->mask | fsn_mark->ignore_mask) & ~umask);
+	*destroy = !((fsn_mark->mask | fsn_mark->ignored_mask) & ~umask);
 	spin_unlock(&fsn_mark->lock);
 
 	return oldmask & ~newmask;
@@ -1073,24 +1073,15 @@ static bool fanotify_mark_update_flags(struct fsnotify_mark *fsn_mark,
 				       unsigned int fan_flags)
 {
 	bool want_iref = !(fan_flags & FAN_MARK_EVICTABLE);
-	unsigned int ignore = fan_flags & FANOTIFY_MARK_IGNORE_BITS;
 	bool recalc = false;
-
-	/*
-	 * When using FAN_MARK_IGNORE for the first time, mark starts using
-	 * independent event flags in ignore mask.  After that, trying to
-	 * update the ignore mask with the old FAN_MARK_IGNORED_MASK API
-	 * will result in EEXIST error.
-	 */
-	if (ignore == FAN_MARK_IGNORE)
-		fsn_mark->flags |= FSNOTIFY_MARK_FLAG_HAS_IGNORE_FLAGS;
 
 	/*
 	 * Setting FAN_MARK_IGNORED_SURV_MODIFY for the first time may lead to
 	 * the removal of the FS_MODIFY bit in calculated mask if it was set
-	 * because of an ignore mask that is now going to survive FS_MODIFY.
+	 * because of an ignored mask that is now going to survive FS_MODIFY.
 	 */
-	if (ignore && (fan_flags & FAN_MARK_IGNORED_SURV_MODIFY) &&
+	if ((fan_flags & FAN_MARK_IGNORED_MASK) &&
+	    (fan_flags & FAN_MARK_IGNORED_SURV_MODIFY) &&
 	    !(fsn_mark->flags & FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY)) {
 		fsn_mark->flags |= FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY;
 		if (!(fsn_mark->mask & FS_MODIFY))
@@ -1117,10 +1108,10 @@ static bool fanotify_mark_add_to_mask(struct fsnotify_mark *fsn_mark,
 	bool recalc;
 
 	spin_lock(&fsn_mark->lock);
-	if (!(fan_flags & FANOTIFY_MARK_IGNORE_BITS))
+	if (!(fan_flags & FAN_MARK_IGNORED_MASK))
 		fsn_mark->mask |= mask;
 	else
-		fsn_mark->ignore_mask |= mask;
+		fsn_mark->ignored_mask |= mask;
 
 	recalc = fsnotify_calc_mask(fsn_mark) &
 		~fsnotify_conn_mask(fsn_mark->connector);
@@ -1184,37 +1175,6 @@ static int fanotify_group_init_error_pool(struct fsnotify_group *group)
 					 sizeof(struct fanotify_error_event));
 }
 
-static int fanotify_may_update_existing_mark(struct fsnotify_mark *fsn_mark,
-					      unsigned int fan_flags)
-{
-	/*
-	 * Non evictable mark cannot be downgraded to evictable mark.
-	 */
-	if (fan_flags & FAN_MARK_EVICTABLE &&
-	    !(fsn_mark->flags & FSNOTIFY_MARK_FLAG_NO_IREF))
-		return -EEXIST;
-
-	/*
-	 * New ignore mask semantics cannot be downgraded to old semantics.
-	 */
-	if (fan_flags & FAN_MARK_IGNORED_MASK &&
-	    fsn_mark->flags & FSNOTIFY_MARK_FLAG_HAS_IGNORE_FLAGS)
-		return -EEXIST;
-
-	/*
-	 * An ignore mask that survives modify could never be downgraded to not
-	 * survive modify.  With new FAN_MARK_IGNORE semantics we make that rule
-	 * explicit and return an error when trying to update the ignore mask
-	 * without the original FAN_MARK_IGNORED_SURV_MODIFY value.
-	 */
-	if (fan_flags & FAN_MARK_IGNORE &&
-	    !(fan_flags & FAN_MARK_IGNORED_SURV_MODIFY) &&
-	    fsn_mark->flags & FSNOTIFY_MARK_FLAG_IGNORED_SURV_MODIFY)
-		return -EEXIST;
-
-	return 0;
-}
-
 static int fanotify_add_mark(struct fsnotify_group *group,
 			     fsnotify_connp_t *connp, unsigned int obj_type,
 			     __u32 mask, unsigned int fan_flags,
@@ -1236,18 +1196,19 @@ static int fanotify_add_mark(struct fsnotify_group *group,
 	}
 
 	/*
-	 * Check if requested mark flags conflict with an existing mark flags.
+	 * Non evictable mark cannot be downgraded to evictable mark.
 	 */
-	ret = fanotify_may_update_existing_mark(fsn_mark, fan_flags);
-	if (ret)
+	if (fan_flags & FAN_MARK_EVICTABLE &&
+	    !(fsn_mark->flags & FSNOTIFY_MARK_FLAG_NO_IREF)) {
+		ret = -EEXIST;
 		goto out;
+	}
 
 	/*
 	 * Error events are pre-allocated per group, only if strictly
 	 * needed (i.e. FAN_FS_ERROR was requested).
 	 */
-	if (!(fan_flags & FANOTIFY_MARK_IGNORE_BITS) &&
-	    (mask & FAN_FS_ERROR)) {
+	if (!(fan_flags & FAN_MARK_IGNORED_MASK) && (mask & FAN_FS_ERROR)) {
 		ret = fanotify_group_init_error_pool(group);
 		if (ret)
 			goto out;
@@ -1288,10 +1249,10 @@ static int fanotify_add_inode_mark(struct fsnotify_group *group,
 
 	/*
 	 * If some other task has this inode open for write we should not add
-	 * an ignore mask, unless that ignore mask is supposed to survive
+	 * an ignored mark, unless that ignored mark is supposed to survive
 	 * modification changes anyway.
 	 */
-	if ((flags & FANOTIFY_MARK_IGNORE_BITS) &&
+	if ((flags & FAN_MARK_IGNORED_MASK) &&
 	    !(flags & FAN_MARK_IGNORED_SURV_MODIFY) &&
 	    inode_is_open_for_write(inode))
 		return 0;
@@ -1547,8 +1508,7 @@ static int fanotify_events_supported(struct fsnotify_group *group,
 	unsigned int mark_type = flags & FANOTIFY_MARK_TYPE_BITS;
 	/* Strict validation of events in non-dir inode mask with v5.17+ APIs */
 	bool strict_dir_events = FAN_GROUP_FLAG(group, FAN_REPORT_TARGET_FID) ||
-				 (mask & FAN_RENAME) ||
-				 (flags & FAN_MARK_IGNORE);
+				 (mask & FAN_RENAME);
 
 	/*
 	 * Some filesystems such as 'proc' acquire unusual locks when opening
@@ -1599,8 +1559,7 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 	__kernel_fsid_t __fsid, *fsid = NULL;
 	u32 valid_mask = FANOTIFY_EVENTS | FANOTIFY_EVENT_FLAGS;
 	unsigned int mark_type = flags & FANOTIFY_MARK_TYPE_BITS;
-	unsigned int mark_cmd = flags & FANOTIFY_MARK_CMD_BITS;
-	unsigned int ignore = flags & FANOTIFY_MARK_IGNORE_BITS;
+	bool ignored = flags & FAN_MARK_IGNORED_MASK;
 	unsigned int obj_type, fid_mode;
 	u32 umask = 0;
 	int ret;
@@ -1629,7 +1588,7 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 		return -EINVAL;
 	}
 
-	switch (mark_cmd) {
+	switch (flags & (FAN_MARK_ADD | FAN_MARK_REMOVE | FAN_MARK_FLUSH)) {
 	case FAN_MARK_ADD:
 	case FAN_MARK_REMOVE:
 		if (!mask)
@@ -1649,19 +1608,9 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 	if (mask & ~valid_mask)
 		return -EINVAL;
 
-
-	/* We don't allow FAN_MARK_IGNORE & FAN_MARK_IGNORED_MASK together */
-	if (ignore == (FAN_MARK_IGNORE | FAN_MARK_IGNORED_MASK))
-		return -EINVAL;
-
-	/*
-	 * Event flags (FAN_ONDIR, FAN_EVENT_ON_CHILD) have no effect with
-	 * FAN_MARK_IGNORED_MASK.
-	 */
-	if (ignore == FAN_MARK_IGNORED_MASK) {
+	/* Event flags (ONDIR, ON_CHILD) are meaningless in ignored mask */
+	if (ignored)
 		mask &= ~FANOTIFY_EVENT_FLAGS;
-		umask = FANOTIFY_EVENT_FLAGS;
-	}
 
 	f = fdget(fanotify_fd);
 	if (unlikely(!f.file))
@@ -1725,7 +1674,7 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 	if (mask & FAN_RENAME && !(fid_mode & FAN_REPORT_NAME))
 		goto fput_and_out;
 
-	if (mark_cmd == FAN_MARK_FLUSH) {
+	if (flags & FAN_MARK_FLUSH) {
 		ret = 0;
 		if (mark_type == FAN_MARK_MOUNT)
 			fsnotify_clear_vfsmount_marks_by_group(group);
@@ -1741,7 +1690,7 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 	if (ret)
 		goto fput_and_out;
 
-	if (mark_cmd == FAN_MARK_ADD) {
+	if (flags & FAN_MARK_ADD) {
 		ret = fanotify_events_supported(group, &path, mask, flags);
 		if (ret)
 			goto path_put_and_out;
@@ -1765,13 +1714,6 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 	else
 		mnt = path.mnt;
 
-	ret = mnt ? -EINVAL : -EISDIR;
-	/* FAN_MARK_IGNORE requires SURV_MODIFY for sb/mount/dir marks */
-	if (mark_cmd == FAN_MARK_ADD && ignore == FAN_MARK_IGNORE &&
-	    (mnt || S_ISDIR(inode->i_mode)) &&
-	    !(flags & FAN_MARK_IGNORED_SURV_MODIFY))
-		goto path_put_and_out;
-
 	/* Mask out FAN_EVENT_ON_CHILD flag for sb/mount/non-dir marks */
 	if (mnt || !S_ISDIR(inode->i_mode)) {
 		mask &= ~FAN_EVENT_ON_CHILD;
@@ -1781,12 +1723,12 @@ static int do_fanotify_mark(int fanotify_fd, unsigned int flags, __u64 mask,
 		 * events with parent/name info for non-directory.
 		 */
 		if ((fid_mode & FAN_REPORT_DIR_FID) &&
-		    (flags & FAN_MARK_ADD) && !ignore)
+		    (flags & FAN_MARK_ADD) && !ignored)
 			mask |= FAN_EVENT_ON_CHILD;
 	}
 
 	/* create/update an inode mark */
-	switch (mark_cmd) {
+	switch (flags & (FAN_MARK_ADD | FAN_MARK_REMOVE)) {
 	case FAN_MARK_ADD:
 		if (mark_type == FAN_MARK_MOUNT)
 			ret = fanotify_add_vfsmount_mark(group, mnt, mask,
@@ -1864,7 +1806,7 @@ static int __init fanotify_user_setup(void)
 
 	BUILD_BUG_ON(FANOTIFY_INIT_FLAGS & FANOTIFY_INTERNAL_GROUP_FLAGS);
 	BUILD_BUG_ON(HWEIGHT32(FANOTIFY_INIT_FLAGS) != 12);
-	BUILD_BUG_ON(HWEIGHT32(FANOTIFY_MARK_FLAGS) != 11);
+	BUILD_BUG_ON(HWEIGHT32(FANOTIFY_MARK_FLAGS) != 10);
 
 	fanotify_mark_cache = KMEM_CACHE(fsnotify_mark,
 					 SLAB_PANIC|SLAB_ACCOUNT);
