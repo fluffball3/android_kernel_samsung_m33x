@@ -319,8 +319,12 @@ static u32 fanotify_group_event_mask(struct fsnotify_group *group,
 			return 0;
 	}
 
-	fsnotify_foreach_iter_mark_type(iter_info, mark, type) {
-		/* Apply ignore mask regardless of mark's ISDIR flag */
+	fsnotify_foreach_obj_type(type) {
+		if (!fsnotify_iter_should_report_type(iter_info, type))
+			continue;
+		mark = iter_info->marks[type];
+
+		/* Apply ignore mask regardless of ISDIR and ON_CHILD flags */
 		marks_ignored_mask |= mark->ignored_mask;
 
 		/*
@@ -328,6 +332,14 @@ static u32 fanotify_group_event_mask(struct fsnotify_group *group,
 		 * events on dir, don't send it!
 		 */
 		if (event_mask & FS_ISDIR && !(mark->mask & FS_ISDIR))
+			continue;
+
+		/*
+		 * If the event is on a child and this mark is on a parent not
+		 * watching children, don't send it!
+		 */
+		if (type == FSNOTIFY_OBJ_TYPE_PARENT &&
+		    !(mark->mask & FS_EVENT_ON_CHILD))
 			continue;
 
 		marks_mask |= mark->mask;
@@ -469,41 +481,17 @@ out_err:
 }
 
 /*
- * FAN_REPORT_FID is ambiguous in that it reports the fid of the child for
- * some events and the fid of the parent for create/delete/move events.
- *
- * With the FAN_REPORT_TARGET_FID flag, the fid of the child is reported
- * also in create/delete/move events in addition to the fid of the parent
- * and the name of the child.
- */
-static inline bool fanotify_report_child_fid(unsigned int fid_mode, u32 mask)
-{
-	if (mask & ALL_FSNOTIFY_DIRENT_EVENTS)
-		return (fid_mode & FAN_REPORT_TARGET_FID);
-
-	return (fid_mode & FAN_REPORT_FID) && !(mask & FAN_ONDIR);
-}
-
-/*
- * The inode to use as identifier when reporting fid depends on the event
- * and the group flags.
- *
- * With the group flag FAN_REPORT_TARGET_FID, always report the child fid.
- *
- * Without the group flag FAN_REPORT_TARGET_FID, report the modified directory
- * fid on dirent events and the child fid otherwise.
- *
+ * The inode to use as identifier when reporting fid depends on the event.
+ * Report the modified directory inode on dirent modification events.
+ * Report the "victim" inode otherwise.
  * For example:
- * FS_ATTRIB reports the child fid even if reported on a watched parent.
- * FS_CREATE reports the modified dir fid without FAN_REPORT_TARGET_FID.
- *       and reports the created child fid with FAN_REPORT_TARGET_FID.
+ * FS_ATTRIB reports the child inode even if reported on a watched parent.
+ * FS_CREATE reports the modified dir inode and not the created inode.
  */
 static struct inode *fanotify_fid_inode(u32 event_mask, const void *data,
-					int data_type, struct inode *dir,
-					unsigned int fid_mode)
+					int data_type, struct inode *dir)
 {
-	if ((event_mask & ALL_FSNOTIFY_DIRENT_EVENTS) &&
-	    !(fid_mode & FAN_REPORT_TARGET_FID))
+	if (event_mask & ALL_FSNOTIFY_DIRENT_EVENTS)
 		return dir;
 
 	return fsnotify_data_inode(data, data_type);
@@ -708,11 +696,10 @@ static struct fanotify_event *fanotify_alloc_event(
 {
 	struct fanotify_event *event = NULL;
 	gfp_t gfp = GFP_KERNEL_ACCOUNT;
-	unsigned int fid_mode = FAN_GROUP_FLAG(group, FANOTIFY_FID_BITS);
-	struct inode *id = fanotify_fid_inode(mask, data, data_type, dir,
-					      fid_mode);
+	struct inode *id = fanotify_fid_inode(mask, data, data_type, dir);
 	struct inode *dirid = fanotify_dfid_inode(mask, data, data_type, dir);
 	const struct path *path = fsnotify_data_path(data, data_type);
+	unsigned int fid_mode = FAN_GROUP_FLAG(group, FANOTIFY_FID_BITS);
 	struct mem_cgroup *old_memcg;
 	struct dentry *moved = NULL;
 	struct inode *child = NULL;
@@ -723,10 +710,11 @@ static struct fanotify_event *fanotify_alloc_event(
 
 	if ((fid_mode & FAN_REPORT_DIR_FID) && dirid) {
 		/*
-		 * For certain events and group flags, report the child fid
+		 * With both flags FAN_REPORT_DIR_FID and FAN_REPORT_FID, we
+		 * report the child fid for events reported on a non-dir child
 		 * in addition to reporting the parent fid and maybe child name.
 		 */
-		if (fanotify_report_child_fid(fid_mode, mask) && id != dirid)
+		if ((fid_mode & FAN_REPORT_FID) && id != dirid && !ondir)
 			child = id;
 
 		id = dirid;
@@ -837,14 +825,16 @@ out:
  */
 static __kernel_fsid_t fanotify_get_fsid(struct fsnotify_iter_info *iter_info)
 {
-	struct fsnotify_mark *mark;
 	int type;
 	__kernel_fsid_t fsid = {};
 
-	fsnotify_foreach_iter_mark_type(iter_info, mark, type) {
+	fsnotify_foreach_obj_type(type) {
 		struct fsnotify_mark_connector *conn;
 
-		conn = READ_ONCE(mark->connector);
+		if (!fsnotify_iter_should_report_type(iter_info, type))
+			continue;
+
+		conn = READ_ONCE(iter_info->marks[type]->connector);
 		/* Mark is just getting destroyed or created? */
 		if (!conn)
 			continue;

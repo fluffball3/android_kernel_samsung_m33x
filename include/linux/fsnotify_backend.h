@@ -305,40 +305,10 @@ static inline const struct path *fsnotify_data_path(const void *data,
 	}
 }
 
-static inline struct super_block *fsnotify_data_sb(const void *data,
-						   int data_type)
-{
-	switch (data_type) {
-	case FSNOTIFY_EVENT_INODE:
-		return ((struct inode *)data)->i_sb;
-	case FSNOTIFY_EVENT_DENTRY:
-		return ((struct dentry *)data)->d_sb;
-	case FSNOTIFY_EVENT_PATH:
-		return ((const struct path *)data)->dentry->d_sb;
-	default:
-		return NULL;
-	}
-}
-
-/*
- * Index to merged marks iterator array that correlates to a type of watch.
- * The type of watched object can be deduced from the iterator type, but not
- * the other way around, because an event can match different watched objects
- * of the same object type.
- * For example, both parent and child are watching an object of type inode.
- */
-enum fsnotify_iter_type {
-	FSNOTIFY_ITER_TYPE_INODE,
-	FSNOTIFY_ITER_TYPE_VFSMOUNT,
-	FSNOTIFY_ITER_TYPE_SB,
-	FSNOTIFY_ITER_TYPE_PARENT,
-	FSNOTIFY_ITER_TYPE_COUNT
-};
-
-/* The type of object that a mark is attached to */
 enum fsnotify_obj_type {
 	FSNOTIFY_OBJ_TYPE_ANY = -1,
 	FSNOTIFY_OBJ_TYPE_INODE,
+	FSNOTIFY_OBJ_TYPE_PARENT,
 	FSNOTIFY_OBJ_TYPE_VFSMOUNT,
 	FSNOTIFY_OBJ_TYPE_SB,
 	FSNOTIFY_OBJ_TYPE_COUNT,
@@ -351,49 +321,37 @@ static inline bool fsnotify_valid_obj_type(unsigned int obj_type)
 }
 
 struct fsnotify_iter_info {
-	struct fsnotify_mark *marks[FSNOTIFY_ITER_TYPE_COUNT];
-	struct fsnotify_group *current_group;
+	struct fsnotify_mark *marks[FSNOTIFY_OBJ_TYPE_COUNT];
 	unsigned int report_mask;
 	int srcu_idx;
 };
 
 static inline bool fsnotify_iter_should_report_type(
-		struct fsnotify_iter_info *iter_info, int iter_type)
+		struct fsnotify_iter_info *iter_info, int type)
 {
-	return (iter_info->report_mask & (1U << iter_type));
+	return (iter_info->report_mask & (1U << type));
 }
 
 static inline void fsnotify_iter_set_report_type(
-		struct fsnotify_iter_info *iter_info, int iter_type)
+		struct fsnotify_iter_info *iter_info, int type)
 {
-	iter_info->report_mask |= (1U << iter_type);
+	iter_info->report_mask |= (1U << type);
 }
 
-static inline struct fsnotify_mark *fsnotify_iter_mark(
-		struct fsnotify_iter_info *iter_info, int iter_type)
+static inline void fsnotify_iter_set_report_type_mark(
+		struct fsnotify_iter_info *iter_info, int type,
+		struct fsnotify_mark *mark)
 {
-	if (fsnotify_iter_should_report_type(iter_info, iter_type))
-		return iter_info->marks[iter_type];
-	return NULL;
-}
-
-static inline int fsnotify_iter_step(struct fsnotify_iter_info *iter, int type,
-				     struct fsnotify_mark **markp)
-{
-	while (type < FSNOTIFY_ITER_TYPE_COUNT) {
-		*markp = fsnotify_iter_mark(iter, type);
-		if (*markp)
-			break;
-		type++;
-	}
-	return type;
+	iter_info->marks[type] = mark;
+	iter_info->report_mask |= (1U << type);
 }
 
 #define FSNOTIFY_ITER_FUNCS(name, NAME) \
 static inline struct fsnotify_mark *fsnotify_iter_##name##_mark( \
 		struct fsnotify_iter_info *iter_info) \
 { \
-	return fsnotify_iter_mark(iter_info, FSNOTIFY_ITER_TYPE_##NAME); \
+	return (iter_info->report_mask & (1U << FSNOTIFY_OBJ_TYPE_##NAME)) ? \
+		iter_info->marks[FSNOTIFY_OBJ_TYPE_##NAME] : NULL; \
 }
 
 FSNOTIFY_ITER_FUNCS(inode, INODE)
@@ -401,13 +359,8 @@ FSNOTIFY_ITER_FUNCS(parent, PARENT)
 FSNOTIFY_ITER_FUNCS(vfsmount, VFSMOUNT)
 FSNOTIFY_ITER_FUNCS(sb, SB)
 
-#define fsnotify_foreach_iter_type(type) \
-	for (type = 0; type < FSNOTIFY_ITER_TYPE_COUNT; type++)
-#define fsnotify_foreach_iter_mark_type(iter, mark, type) \
-	for (type = 0; \
-	     type = fsnotify_iter_step(iter, type, &mark), \
-	     type < FSNOTIFY_ITER_TYPE_COUNT; \
-	     type++)
+#define fsnotify_foreach_obj_type(type) \
+	for (type = 0; type < FSNOTIFY_OBJ_TYPE_COUNT; type++)
 
 /*
  * fsnotify_connp_t is what we embed in objects which connector can be attached
