@@ -1016,7 +1016,6 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct nfsd_file *nf,
 {
 	struct nfsd_net		*nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
 	struct file		*file = nf->nf_file;
-	struct super_block	*sb = file_inode(file)->i_sb;
 	struct svc_export	*exp;
 	struct iov_iter		iter;
 	errseq_t		since;
@@ -1024,18 +1023,12 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct nfsd_file *nf,
 	int			host_err;
 	int			use_wgather;
 	loff_t			pos = offset;
-	unsigned long		exp_op_flags = 0;
 	unsigned int		pflags = current->flags;
 	rwf_t			flags = 0;
-	bool			restore_flags = false;
 
 	trace_nfsd_write_opened(rqstp, fhp, offset, *cnt);
 
-	if (sb->s_export_op)
-		exp_op_flags = sb->s_export_op->flags;
-
-	if (test_bit(RQ_LOCAL, &rqstp->rq_flags) &&
-	    !(exp_op_flags & EXPORT_OP_REMOTE_FS)) {
+	if (test_bit(RQ_LOCAL, &rqstp->rq_flags))
 		/*
 		 * We want throttling in balance_dirty_pages()
 		 * and shrink_inactive_list() to only consider
@@ -1044,8 +1037,6 @@ nfsd_vfs_write(struct svc_rqst *rqstp, struct svc_fh *fhp, struct nfsd_file *nf,
 		 * the client's dirty pages or its congested queue.
 		 */
 		current->flags |= PF_LOCAL_THROTTLE;
-		restore_flags = true;
-	}
 
 	exp = fhp->fh_export;
 	use_wgather = (rqstp->rq_vers == 2) && EX_WGATHER(exp);
@@ -1091,7 +1082,7 @@ out_nfserr:
 		trace_nfsd_write_err(rqstp, fhp, offset, host_err);
 		nfserr = nfserrno(host_err);
 	}
-	if (restore_flags)
+	if (test_bit(RQ_LOCAL, &rqstp->rq_flags))
 		current_restore_flags(pflags, PF_LOCAL_THROTTLE);
 	return nfserr;
 }
@@ -1802,7 +1793,7 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	struct inode	*fdir, *tdir;
 	__be32		err;
 	int		host_err;
-	bool		close_cached = false;
+	bool		has_cached = false;
 
 	err = fh_verify(rqstp, ffhp, S_IFDIR, NFSD_MAY_REMOVE);
 	if (err)
@@ -1861,9 +1852,8 @@ retry:
 	if (ndentry == trap)
 		goto out_dput_new;
 
-	if ((ndentry->d_sb->s_export_op->flags & EXPORT_OP_CLOSE_BEFORE_UNLINK) &&
-	    nfsd_has_cached_files(ndentry)) {
-		close_cached = true;
+	if (nfsd_has_cached_files(ndentry)) {
+		has_cached = true;
 		goto out_dput_old;
 	} else {
 		struct renamedata rd = {
@@ -1898,7 +1888,7 @@ retry:
 	 * as that would do the wrong thing if the two directories
 	 * were the same, so again we do it by hand.
 	 */
-	if (!close_cached) {
+	if (!has_cached) {
 		fill_post_wcc(ffhp);
 		fill_post_wcc(tfhp);
 	}
@@ -1912,8 +1902,8 @@ retry:
 	 * shouldn't be done with locks held however, so we delay it until this
 	 * point and then reattempt the whole shebang.
 	 */
-	if (close_cached) {
-		close_cached = false;
+	if (has_cached) {
+		has_cached = false;
 		nfsd_close_cached_files(ndentry);
 		dput(ndentry);
 		goto retry;
@@ -1968,8 +1958,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		type = d_inode(rdentry)->i_mode & S_IFMT;
 
 	if (type != S_IFDIR) {
-		if (rdentry->d_sb->s_export_op->flags & EXPORT_OP_CLOSE_BEFORE_UNLINK)
-			nfsd_close_cached_files(rdentry);
+		nfsd_close_cached_files(rdentry);
 		host_err = vfs_unlink(dirp, rdentry, NULL);
 	} else {
 		host_err = vfs_rmdir(dirp, rdentry);

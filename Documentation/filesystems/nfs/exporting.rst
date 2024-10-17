@@ -154,11 +154,6 @@ struct which has the following members:
     to find potential names, and matches inode numbers to find the correct
     match.
 
-  flags
-    Some filesystems may need to be handled differently than others. The
-    export_operations struct also includes a flags field that allows the
-    filesystem to communicate such information to nfsd. See the Export
-    Operations Flags section below for more explanation.
 
 A filehandle fragment consists of an array of 1 or more 4byte words,
 together with a one byte "type".
