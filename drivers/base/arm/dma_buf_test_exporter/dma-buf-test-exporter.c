@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2012-2023 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2012-2024 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -375,7 +375,7 @@ static int dma_buf_te_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 	if (alloc->fail_mmap)
 		return -ENOMEM;
 
-	vm_flags_set(vma, VM_IO | VM_DONTEXPAND | VM_DONTDUMP);
+	__vm_flags_mod(vma, VM_IO | VM_DONTEXPAND | VM_DONTDUMP, 0);
 	vma->vm_ops = &dma_buf_te_vm_ops;
 	vma->vm_private_data = dmabuf;
 
