@@ -1351,19 +1351,23 @@ static int dir_rename(struct inode *old_dir, struct dentry *old_dentry,
 		struct inode *new_dir, struct dentry *new_dentry)
 {
 	struct mount_info *mi = get_mount_info(old_dir->i_sb);
-	struct dentry *backing_old_dentry;
-	struct dentry *backing_new_dentry;
+	struct dentry *backing_old_dentry = get_incfs_dentry(old_dentry)->backing_path.dentry;
+	struct dentry *backing_new_dentry = get_incfs_dentry(new_dentry)->backing_path.dentry;
 	struct dentry *backing_old_dir_dentry;
 	struct dentry *backing_new_dir_dentry;
 	struct inode *target_inode;
 	struct dentry *trap;
 	int error = 0;
+	struct renamedata rd = {
+		.old_dir	= d_inode(backing_old_dir_dentry),
+		.old_dentry	= backing_old_dentry,
+		.new_dir	= d_inode(backing_new_dir_dentry),
+		.new_dentry	= backing_new_dentry,
+	};
 
 	error = mutex_lock_interruptible(&mi->mi_dir_struct_mutex);
 	if (error)
 		return error;
-
-	backing_old_dentry = get_incfs_dentry(old_dentry)->backing_path.dentry;
 
 	if (!backing_old_dentry || backing_old_dentry == mi->mi_index_dir ||
 	    backing_old_dentry == mi->mi_incomplete_dir) {
@@ -1372,7 +1376,6 @@ static int dir_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto exit;
 	}
 
-	backing_new_dentry = get_incfs_dentry(new_dentry)->backing_path.dentry;
 	dget(backing_old_dentry);
 	dget(backing_new_dentry);
 
@@ -1398,9 +1401,7 @@ static int dir_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto unlock_out;
 	}
 
-	error = vfs_rename(d_inode(backing_old_dir_dentry), backing_old_dentry,
-			d_inode(backing_new_dir_dentry), backing_new_dentry,
-			NULL, 0);
+	error = vfs_rename(&rd);
 	if (error)
 		goto unlock_out;
 	if (target_inode)
