@@ -209,27 +209,35 @@ config BUILD_SALT
 
 config HAVE_KERNEL_GZIP
 	bool
+	default y
 
 config HAVE_KERNEL_BZIP2
 	bool
+	default y
 
 config HAVE_KERNEL_LZMA
 	bool
+	default y
 
 config HAVE_KERNEL_XZ
 	bool
+	default y
 
 config HAVE_KERNEL_LZO
 	bool
+	default y
 
 config HAVE_KERNEL_LZ4
 	bool
+	default y
 
 config HAVE_KERNEL_ZSTD
 	bool
+	default y
 
 config HAVE_KERNEL_UNCOMPRESSED
 	bool
+	default y
 
 choice
 	prompt "Kernel compression mode"
