@@ -22,7 +22,13 @@
 #include <gpexbe_secure.h>
 
 /* Uses */
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P1
+#include <linux/mali_drivers/bv_r49p1/protected_mode_switcher.h>
+#endif
+
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P1
 #include <linux/protected_mode_switcher.h>
+#endif
 
 #include <mali_kbase.h>
 #include <device/mali_kbase_device.h>
