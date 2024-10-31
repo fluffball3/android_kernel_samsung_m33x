@@ -381,13 +381,18 @@ static void exynos_ufs_dev_hw_reset(struct ufs_hba *hba)
 	hci_writel(&ufs->handle, 1 << 0, HCI_GPIO_OUT);
 }
 
-static void exynos_ufs_config_host(struct exynos_ufs *ufs)
+static void exynos_ufs_config_host(struct ufs_hba *hba, enum uic_cmd_dme cmd)
 {
 	u32 reg;
 
 	/* internal clock control */
 	exynos_ufs_ctrl_auto_hci_clk(ufs, false);
 	exynos_ufs_set_unipro_mclk(ufs);
+
+	if (cmd == UIC_CMD_DME_HIBER_EXIT) {
+		if (ufs->opts & EXYNOS_UFS_OPT_BROKEN_AUTO_CLK_CTRL)
+			exynos_ufs_disable_auto_ctrl_hcc(ufs);
+		exynos_ufs_ungate_clks(ufs);
 
 	/* period for interrupt aggregation */
 	exynos_ufs_fit_aggr_timeout(ufs);
@@ -510,13 +515,17 @@ static void exynos_ufs_set_features(struct ufs_hba *hba)
 /*
  * Exynos-specific callback functions
  */
-static int exynos_ufs_init(struct ufs_hba *hba)
+static int exynos_ufs_init(struct ufs_hba *hba, enum uic_cmd_dme cmd)
 {
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	int ret;
 
 	/* refer to hba */
 	ufs->hba = hba;
+
+	if (cmd == UIC_CMD_DME_HIBER_EXIT) {
+		u32 cur_mode = 0;
+		u32 pwrmode;
 
 	/* configure externals */
 	ret = exynos_ufs_config_externals(ufs);
@@ -566,7 +575,16 @@ static int exynos_ufs_wait_for_register(struct ufs_vs_handle *handle, u32 reg, u
 		}
 	}
 
-	return err;
+	if (!(ufs->opts & EXYNOS_UFS_OPT_SKIP_CONNECTION_ESTAB))
+			exynos_ufs_establish_connt(ufs);
+	else if (cmd == UIC_CMD_DME_HIBER_ENTER) {
+		ufs->entry_hibern8_t = ktime_get();
+		exynos_ufs_gate_clks(ufs);
+		if (ufs->opts & EXYNOS_UFS_OPT_BROKEN_AUTO_CLK_CTRL)
+			exynos_ufs_enable_auto_ctrl_hcc(ufs);
+	}
+
+	return ret;
 }
 
 /* This is same code with ufshcd_clear_cmd() */
@@ -958,6 +976,7 @@ static int exynos_ufs_pwr_change_notify(struct ufs_hba *hba,
 	return ret;
 }
 
+<<<<<<< HEAD
 /*
  * Translating a bit-wise variable to a count essentially requires
  * requires an iteration that sometimes lead to a big cost.
@@ -1097,6 +1116,19 @@ static void exynos_ufs_compl_nexus_t_xfer_req(void *data, struct ufs_hba *hba,
 	if (!(hba->outstanding_reqs^completed_reqs)) {
 		if (ufs->perf)
 			ufs_perf_reset(ufs->perf);
+=======
+static void exynos_ufs_hibern8_notify(struct ufs_hba *hba,
+				     enum uic_cmd_dme cmd,
+				     enum ufs_notify_change_status notify)
+{
+	switch ((u8)notify) {
+	case PRE_CHANGE:
+		exynos_ufs_pre_hibern8(hba, cmd);
+		break;
+	case POST_CHANGE:
+		exynos_ufs_post_hibern8(hba, cmd);
+		break;
+>>>>>>> aa10c746e79a (scsi: ufs: exynos: Fix hibern8 notify callbacks)
 	}
 }
 
