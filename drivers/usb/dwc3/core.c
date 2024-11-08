@@ -308,6 +308,10 @@ int dwc3_core_soft_reset(struct dwc3 *dwc)
 				udelay(1);
 		} while (--retries);
 
+		pr_info("%s soft_reset retry %d\n", __func__, i + 1);
+	}
+
+	dev_warn(dwc->dev, "DWC3 controller soft reset failed.\n");
 	return -ETIMEDOUT;
 
 done:
