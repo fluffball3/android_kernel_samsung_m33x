@@ -536,7 +536,6 @@ extern void restore_pcpu_tick(int cpu);
 #define hrtimers_dead_cpu	NULL
 static inline void save_pcpu_tick(int cpu) {}
 static inline void restore_pcpu_tick(int cpu) {}
-#else
 #endif
 
 #endif
