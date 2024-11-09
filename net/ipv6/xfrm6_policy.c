@@ -30,12 +30,12 @@ static struct dst_entry *xfrm6_dst_lookup(const struct xfrm_dst_lookup_params *p
 	int err;
 
 	memset(&fl6, 0, sizeof(fl6));
-	fl6.flowi6_l3mdev = l3mdev_master_ifindex_by_index(params->net,
-							   params->oif);
-	fl6.flowi6_mark = params->mark;
-	memcpy(&fl6.daddr, params->daddr, sizeof(fl6.daddr));
-	if (params->saddr)
-		memcpy(&fl6.saddr, params->saddr, sizeof(fl6.saddr));
+	fl6.flowi6_oif = l3mdev_master_ifindex_by_index(net, oif);
+	fl6.flowi6_flags = FLOWI_FLAG_SKIP_NH_OIF;
+	fl6.flowi6_mark = mark;
+	memcpy(&fl6.daddr, daddr, sizeof(fl6.daddr));
+	if (saddr)
+		memcpy(&fl6.saddr, saddr, sizeof(fl6.saddr));
 
 	fl6.flowi4_proto = params->ipproto;
 	fl6.uli = params->uli;
