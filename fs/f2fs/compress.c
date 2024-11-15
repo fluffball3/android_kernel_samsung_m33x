@@ -775,7 +775,7 @@ void f2fs_decompress_cluster(struct decompress_io_ctx *dic, bool in_task)
 
 	ret = cops->decompress_pages(dic);
 
-	if (!ret && (fi->i_compress_flag & 1 << COMPRESS_CHKSUM)) {
+	if (!ret && fi->i_compress_flag & 1 << COMPRESS_CHKSUM) {
 		u32 provided = le32_to_cpu(dic->cbuf->chksum);
 		u32 calculated = f2fs_crc32(sbi, dic->cbuf->cdata, dic->clen);
 
@@ -788,6 +788,7 @@ void f2fs_decompress_cluster(struct decompress_io_ctx *dic, bool in_task)
 					provided, calculated);
 			}
 			set_sbi_flag(sbi, SBI_NEED_FSCK);
+			WARN_ON_ONCE(1);
 		}
 	}
 
