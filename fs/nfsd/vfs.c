@@ -1739,7 +1739,7 @@ nfsd_rename(struct svc_rqst *rqstp, struct svc_fh *ffhp, char *fname, int flen,
 	struct inode	*fdir, *tdir;
 	__be32		err;
 	int		host_err;
-	bool		close_cached = false;
+	bool		has_cached = false;
 
 	err = fh_verify(rqstp, ffhp, S_IFDIR, NFSD_MAY_REMOVE);
 	if (err)
@@ -1798,9 +1798,8 @@ retry:
 	if (ndentry == trap)
 		goto out_dput_new;
 
-	if ((ndentry->d_sb->s_export_op->flags & EXPORT_OP_CLOSE_BEFORE_UNLINK) &&
-	    nfsd_has_cached_files(ndentry)) {
-		close_cached = true;
+	if (nfsd_has_cached_files(ndentry)) {
+		has_cached = true;
 		goto out_dput_old;
 	} else {
 		host_err = vfs_rename(fdir, odentry, tdir, ndentry, NULL, 0);
@@ -1821,7 +1820,7 @@ retry:
 	 * as that would do the wrong thing if the two directories
 	 * were the same, so again we do it by hand.
 	 */
-	if (!close_cached) {
+	if (!has_cached) {
 		fill_post_wcc(ffhp);
 		fill_post_wcc(tfhp);
 	}
@@ -1835,8 +1834,8 @@ retry:
 	 * shouldn't be done with locks held however, so we delay it until this
 	 * point and then reattempt the whole shebang.
 	 */
-	if (close_cached) {
-		close_cached = false;
+	if (has_cached) {
+		has_cached = false;
 		nfsd_close_cached_files(ndentry);
 		dput(ndentry);
 		goto retry;
@@ -1888,8 +1887,7 @@ nfsd_unlink(struct svc_rqst *rqstp, struct svc_fh *fhp, int type,
 		type = d_inode(rdentry)->i_mode & S_IFMT;
 
 	if (type != S_IFDIR) {
-		if (rdentry->d_sb->s_export_op->flags & EXPORT_OP_CLOSE_BEFORE_UNLINK)
-			nfsd_close_cached_files(rdentry);
+		nfsd_close_cached_files(rdentry);
 		host_err = vfs_unlink(dirp, rdentry, NULL);
 	} else {
 		host_err = vfs_rmdir(dirp, rdentry);
