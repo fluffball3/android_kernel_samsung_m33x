@@ -214,7 +214,6 @@ struct export_operations {
 	int (*commit_blocks)(struct inode *inode, struct iomap *iomaps,
 			     int nr_iomaps, struct iattr *iattr);
 #define	EXPORT_OP_NOWCC		(0x1)	/* Don't collect wcc data for NFSv3 replies */
-#define	EXPORT_OP_NOSUBTREECHK	(0x2)	/* Subtree checking is not supported! */
 	unsigned long	flags;
 };
 
