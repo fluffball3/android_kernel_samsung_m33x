@@ -287,7 +287,6 @@ static void uart_shutdown(struct tty_struct *tty, struct uart_state *state)
 			if (uart_console(uport) && tty) {
 				uport->cons->cflag = tty->termios.c_cflag;
 			}
->>>>>>> 2fe399bb8efd0 (serial: protect uart_port_dtr_rts() in uart_shutdown() too)
 
 			if (!tty || C_HUPCL(tty))
 				uart_port_dtr_rts(uport, 0);
