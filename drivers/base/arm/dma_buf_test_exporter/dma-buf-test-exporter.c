@@ -34,7 +34,19 @@
 #if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
 #include <linux/dma-resv.h>
 #endif
+
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P2
+#include <linux/mali_drivers/bv_r49p2/version_compat_defs.h>
+#endif
+#ifdef CONFIG_MALI_DDK_VALHALL_R52P0
+#include <linux/mali_drivers/bv_r52p0/version_compat_defs.h>
+#endif
+
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P2
+#ifndef CONFIG_MALI_DDK_VALHALL_R52P0
 #include <linux/version_compat_defs.h>
+#endif
+#endif
 
 #define DMA_BUF_TE_VER_MAJOR 1
 #define DMA_BUF_TE_VER_MINOR 0
