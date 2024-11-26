@@ -23,7 +23,7 @@
 #define _CORESIGHT_MALI_COMMON_H
 
 #include <linux/types.h>
-#include <linux/mali_kbase_debug_coresight_csf.h>
+#include <linux/mali_drivers/bv_r49p2/mali_kbase_debug_coresight_csf.h>
 
 /* Macros for CoreSight OP types. */
 #define WRITE_IMM_OP(_reg_addr, _val)                                        \

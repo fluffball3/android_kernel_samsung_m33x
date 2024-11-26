@@ -27,10 +27,21 @@
 #include <linux/module.h>
 #if IS_ENABLED(CONFIG_DEBUG_FS)
 #include <linux/debugfs.h>
+
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P2
+#include <linux/mali_drivers/bv_r49p2/version_compat_defs.h>
+#else
 #include <linux/version_compat_defs.h>
 #endif
+
+#endif
 #include <linux/mm.h>
+
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P2
+#include <linux/mali_drivers/bv_r49p2/memory_group_manager.h>
+#else
 #include <linux/memory_group_manager.h>
+#endif
 
 #ifndef CSTD_UNUSED
 #define CSTD_UNUSED(x) ((void)(x))
