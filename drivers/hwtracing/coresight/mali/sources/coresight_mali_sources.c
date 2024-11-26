@@ -27,7 +27,7 @@
 #include <linux/vmalloc.h>
 #include <linux/of_platform.h>
 
-#include <linux/mali_kbase_debug_coresight_csf.h>
+#include <linux/mali_drivers/bv_r49p2/mali_kbase_debug_coresight_csf.h>
 #include <coresight-priv.h>
 #include "sources/coresight_mali_sources.h"
 
