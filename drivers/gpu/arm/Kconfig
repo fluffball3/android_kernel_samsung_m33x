@@ -38,6 +38,9 @@ config MALI_DDK_VALHALL_R38P1
 config MALI_DDK_VALHALL_R49P2
 	bool "Valhall r49p2 driver
 
+config MALI_DDK_VALHALL_R52P0
+	bool "Valhall r52p0 driver
+
 endchoice
 
 if MALI_DDK_VALHALL_R32P1
@@ -50,6 +53,10 @@ endif
 
 if MALI_DDK_VALHALL_R49P2
 source "drivers/gpu/arm/bv_r49p2/Kconfig"
+endif
+
+if MALI_DDK_VALHALL_R52P0
+source "drivers/gpu/arm/bv_r52p0/Kconfig"
 endif
 
 endmenu
