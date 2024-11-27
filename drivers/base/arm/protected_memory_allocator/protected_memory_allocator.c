@@ -30,8 +30,15 @@
 
 #ifdef CONFIG_MALI_DDK_VALHALL_R49P2
 #include <linux/mali_drivers/bv_r49p2/protected_memory_allocator.h>
-#else
+#endif
+#ifdef CONFIG_MALI_DDK_VALHALL_R52P0
+#include <linux/mali_drivers/bv_r52p0/protected_memory_allocator.h>
+#endif
+
+#ifndef CONFIG_MALI_DDK_VALHALL_R52P0
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P2
 #include <linux/protected_memory_allocator.h>
+#endif
 #endif
 
 /* Size of a bitfield element in bytes */
