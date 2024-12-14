@@ -27,7 +27,7 @@
 #include <linux/vmalloc.h>
 #include <linux/of_platform.h>
 
-#include <linux/mali_drivers/bv_r49p2/mali_kbase_debug_coresight_csf.h>
+#include <linux/mali_kbase_debug_coresight_csf.h>
 #include <coresight-priv.h>
 #include "sources/coresight_mali_sources.h"
 
@@ -208,7 +208,11 @@ devm_kfree_drvdata:
 	return ret;
 }
 
+#if (KERNEL_VERSION(6, 11, 0) > LINUX_VERSION_CODE)
 int coresight_mali_sources_remove(struct platform_device *pdev)
+#else
+void coresight_mali_sources_remove(struct platform_device *pdev)
+#endif
 {
 	struct coresight_mali_source_drvdata *drvdata = dev_get_drvdata(&pdev->dev);
 
@@ -225,7 +229,9 @@ int coresight_mali_sources_remove(struct platform_device *pdev)
 
 	devm_kfree(&pdev->dev, drvdata);
 
+#if (KERNEL_VERSION(6, 11, 0) > LINUX_VERSION_CODE)
 	return 0;
+#endif
 }
 
 MODULE_AUTHOR("ARM Ltd.");
