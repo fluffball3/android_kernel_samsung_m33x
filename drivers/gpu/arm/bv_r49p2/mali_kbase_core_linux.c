@@ -6031,7 +6031,9 @@ static int kbase_device_runtime_idle(struct device *dev)
 	 * the autosuspend delay and so won't suspend the device immediately.
 	 */
 	pm_runtime_mark_last_busy(kbdev->dev);
-	return 0;
+	/* MALI_SEC_INTEGRATION */
+	/* Runtime IDLE must be return 1 for turn on next time by RuntimePM API!! */
+	return 1;
 }
 #endif /* KBASE_PM_RUNTIME */
 
@@ -6048,7 +6050,10 @@ static const struct dev_pm_ops kbase_pm_ops = {
 };
 
 #if IS_ENABLED(CONFIG_OF)
-static const struct of_device_id kbase_dt_ids[] = { { .compatible = "arm,malit6xx" },
+static const struct of_device_id kbase_dt_ids[] = {
+							/* MALI_SEC_INTEGRATION */
+							{ .compatible = "arm,mali", },
+							{ .compatible = "arm,malit6xx" },
 						    { .compatible = "arm,mali-midgard" },
 						    { .compatible = "arm,mali-bifrost" },
 						    { .compatible = "arm,mali-valhall" },

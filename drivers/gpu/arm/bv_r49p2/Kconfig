@@ -343,6 +343,6 @@ config MALI_TRACE_POWER_GPU_WORK_PERIOD
 	  If unsure, say N.
 
 
-source "$(MALI_KCONFIG_EXT_PREFIX)drivers/gpu/arm/bv_r49p2/tests/Kconfig"
+#source "$(MALI_KCONFIG_EXT_PREFIX)drivers/gpu/arm/bv_r49p2/tests/Kconfig"
 
 endif

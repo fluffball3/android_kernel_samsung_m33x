@@ -34,19 +34,7 @@
 #if KERNEL_VERSION(5, 5, 0) <= LINUX_VERSION_CODE
 #include <linux/dma-resv.h>
 #endif
-
-#ifdef CONFIG_MALI_DDK_VALHALL_R49P2
-#include <linux/mali_drivers/bv_r49p2/version_compat_defs.h>
-#endif
-#ifdef CONFIG_MALI_DDK_VALHALL_R52P0
-#include <linux/mali_drivers/bv_r52p0/version_compat_defs.h>
-#endif
-
-#ifndef CONFIG_MALI_DDK_VALHALL_R49P2
-#ifndef CONFIG_MALI_DDK_VALHALL_R52P0
 #include <linux/version_compat_defs.h>
-#endif
-#endif
 
 #define DMA_BUF_TE_VER_MAJOR 1
 #define DMA_BUF_TE_VER_MINOR 0
@@ -488,7 +476,7 @@ static int do_dma_buf_te_ioctl_alloc(struct dma_buf_te_ioctl_alloc __user *buf, 
 
 	if (copy_from_user(&alloc_req, buf, sizeof(alloc_req))) {
 		dev_err(te_device.this_device, "%s: couldn't get user data", __func__);
-		goto no_input;
+		return -EFAULT;
 	}
 
 	if (!alloc_req.size) {
@@ -616,7 +604,6 @@ free_alloc_object:
 	kfree(alloc);
 no_alloc_object:
 invalid_size:
-no_input:
 	return -EFAULT;
 }
 

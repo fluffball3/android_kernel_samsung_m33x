@@ -54,4 +54,7 @@ kernel_module(
         "//common:__pkg__",
         "//common-modules/mali:__subpackages__",
     ],
+    deps = [
+        "//common-modules/mali/drivers/gpu/arm:gpu",
+    ],
 )
