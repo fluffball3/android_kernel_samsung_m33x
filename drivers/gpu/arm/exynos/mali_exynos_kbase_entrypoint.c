@@ -77,6 +77,7 @@ static int mali_exynos_ioctl_interactive_boost_fn(struct kbase_context *kctx,
 	return gpexwa_interactive_boost_set(dur->duration);
 }
 
+#if !MALI_USE_CSF
 static int mali_exynos_ioctl_cmar_boost_fn(struct kbase_context *kctx,
 					   struct mali_exynos_ioctl_cmar_boost *cb_flag)
 {
@@ -109,6 +110,7 @@ static int kbase_api_singlebuffer_boost(struct kbase_context *kctx,
 
 	return -EINVAL;
 }
+#endif
 
 /* GPU Profiler */
 static int kbase_api_egp(struct kbase_context *kctx,
@@ -121,6 +123,7 @@ static int kbase_api_egp(struct kbase_context *kctx,
 	return 0;
 }
 
+#if !MALI_USE_CSF
 void mali_exynos_update_firstjob_time(void)
 {
 	gpex_tsg_update_firstjob_time();
@@ -140,6 +143,7 @@ void mali_exynos_sum_jobs_time(int slot_nr)
 {
 	gpex_tsg_sum_jobs_time(slot_nr);
 }
+#endif
 
 void mali_exynos_amigo_interframe_hw_update_eof(void)
 {
@@ -205,6 +209,7 @@ int mali_exynos_ioctl(struct kbase_context *kctx, unsigned int cmd, unsigned lon
 		 * */
 		break;
 
+#if !MALI_USE_CSF
 	case MALI_EXYNOS_IOCTL_CMAR_BOOST:
 		KBASE_HANDLE_IOCTL_IN(cmd, mali_exynos_ioctl_cmar_boost_fn,
 				      struct mali_exynos_ioctl_cmar_boost, kctx);
@@ -215,6 +220,7 @@ int mali_exynos_ioctl(struct kbase_context *kctx, unsigned int cmd, unsigned lon
 		KBASE_HANDLE_IOCTL_IN(cmd, kbase_api_singlebuffer_boost,
 				      struct kbase_ioctl_slsi_singlebuffer_boost_flags, kctx);
 		break;
+#endif
 
 	case KBASE_IOCTL_SLSI_EGP:
 		KBASE_HANDLE_IOCTL_IN(KBASE_IOCTL_SLSI_EGP, kbase_api_egp,
@@ -230,10 +236,12 @@ int mali_exynos_ioctl(struct kbase_context *kctx, unsigned int cmd, unsigned lon
 	return 0;
 }
 
+#if !MALI_USE_CSF
 void mali_exynos_set_thread_priority(struct kbase_context *kctx)
 {
 	gpex_cmar_boost_set_thread_priority(kctx->platform_data);
 }
+#endif
 
 void mali_exynos_set_thread_affinity(void)
 {
@@ -275,6 +283,7 @@ int mali_exynos_set_pm_state_resume_end(void)
 	return gpex_pm_set_state(GPEX_PM_STATE_RESUME_END);
 }
 
+#if !MALI_USE_CSF
 void mali_exynos_set_jobslot_status(int slot, bool is_active)
 {
 	if (slot == 0)
@@ -319,60 +328,14 @@ int mali_exynos_set_count(struct kbase_jd_atom *katom, u32 status, bool stop)
 
 	return gpex_tsg_set_count(status, stop);
 }
+#endif
 
 int mali_exynos_get_gpu_power_state(void)
 {
 	return gpexbe_pm_get_status();
 }
 
-static int gpu_power_on(struct kbase_device *kbdev)
-{
-	int ret = 0;
-	ret = gpex_pm_power_on(kbdev->dev);
-
-	if (ret == 0) {
-		/* GPU state was lost. must return 1 for mali driver */
-		return 1;
-	} else if (ret > 0) {
-		/* GPU runtime PM status was already active, so GPU state is not lost */
-		return 0;
-	} else {
-		/* Major error.... gpu not powering on? */
-		/* TODO: print some dire warning here */
-		return 0;
-	}
-}
-
-static void gpu_power_off(struct kbase_device *kbdev)
-{
-	gpex_pm_power_autosuspend(kbdev->dev);
-}
-
-static void gpu_power_suspend(struct kbase_device *kbdev)
-{
-	gpex_pm_suspend(kbdev->dev);
-}
-
-static int gpu_device_runtime_init(struct kbase_device *kbdev)
-{
-	return gpex_pm_runtime_init(kbdev->dev);
-}
-
-static void gpu_device_runtime_disable(struct kbase_device *kbdev)
-{
-	gpex_pm_runtime_term(kbdev->dev);
-}
-
-static void pm_callback_runtime_off(struct kbase_device *kbdev)
-{
-	gpex_pm_runtime_off_prepare(kbdev->dev);
-}
-
-static int pm_callback_runtime_on(struct kbase_device *kbdev)
-{
-	return gpex_pm_runtime_on_prepare(kbdev->dev);
-}
-
+#if !MALI_USE_CSF
 /* Secure Rendering functions Start */
 int mali_exynos_legacy_jm_enter_protected_mode(struct kbase_device *kbdev)
 {
@@ -383,6 +346,7 @@ int mali_exynos_legacy_jm_exit_protected_mode(struct kbase_device *kbdev)
 {
 	return gpexbe_secure_legacy_jm_exit_protected_mode(kbdev);
 }
+#endif
 
 int mali_exynos_legacy_pm_exit_protected_mode(struct kbase_device *kbdev)
 {
@@ -445,6 +409,7 @@ static void mali_exynos_kbase_entrypoint_term(struct kbase_device *kbdev)
 	kbdev->platform_context = NULL;
 }
 
+#if !MALI_USE_CSF
 static int mali_exynos_kbase_context_init(struct kbase_context *kctx)
 {
 	struct platform_context *pctx = kcalloc(1, sizeof(struct platform_context), GFP_KERNEL);
@@ -458,6 +423,7 @@ static int mali_exynos_kbase_context_init(struct kbase_context *kctx)
 
 	kctx->platform_data = pctx;
 
+
 	return 0;
 }
 
@@ -465,26 +431,19 @@ static void mali_exynos_kbase_context_term(struct kbase_context *kctx)
 {
 	kfree(kctx->platform_data);
 }
+#endif
 
 struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_init_func = &mali_exynos_kbase_entrypoint_init,
 	.platform_term_func = &mali_exynos_kbase_entrypoint_term,
+#if !MALI_USE_CSF
 	.platform_handler_context_init_func = &mali_exynos_kbase_context_init,
 	.platform_handler_context_term_func = &mali_exynos_kbase_context_term,
-	.platform_late_init_func = NULL,
-	.platform_late_term_func = NULL,
 	.platform_handler_atom_submit_func = NULL,
-	.platform_handler_atom_complete_func = NULL
-};
-
-struct kbase_pm_callback_conf pm_callbacks = {
-	.power_suspend_callback = gpu_power_suspend,
-	.power_on_callback = gpu_power_on,
-	.power_off_callback = gpu_power_off,
-	.power_runtime_init_callback = gpu_device_runtime_init,
-	.power_runtime_term_callback = gpu_device_runtime_disable,
-	.power_runtime_on_callback = pm_callback_runtime_on,
-	.power_runtime_off_callback = pm_callback_runtime_off,
+	.platform_handler_atom_complete_func = NULL,
+#endif
+	.platform_late_init_func = NULL,
+	.platform_late_term_func = NULL
 };
 
 MODULE_SOFTDEP("pre: exynos-acme");

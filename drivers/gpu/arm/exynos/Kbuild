@@ -47,6 +47,17 @@ BACKEND_DIR := $(PLATFORM_DIR)/backend
 WA_DIR := $(PLATFORM_DIR)/workarounds
 TESTS_DIR := $(PLATFORM_DIR)/tests
 
+ifeq ($(CONFIG_MALI_DDK_VALHALL_R53P0),y)
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_config_devicetree.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_runtime_pm.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_clk_rate_trace.o
+endif
+ifeq ($(CONFIG_MALI_DDK_VALHALL_R49P2),y)
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r49p2/mali_kbase_config_devicetree.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r49p2/mali_kbase_runtime_pm.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r49p2/mali_kbase_clk_rate_trace.o
+endif
+
 mali_kbase-y += $(PLATFORM_DIR)/mali_exynos_kbase_entrypoint.o
 
 mali_kbase-y += $(FRONTEND_DIR)/gpex_platform.o
@@ -218,7 +229,9 @@ else
 	mali_kbase-y += $(FRONTEND_DIR)/dummy/gpex_ifpo_dummy.o
 endif
 
-mali_kbase-y += $(BACKEND_DIR)/gpexbe_utilization.o
+ifeq (($MALI_USE_CSF), y)
+	mali_kbase-y += $(BACKEND_DIR)/gpexbe_utilization.o
+endif
 mali_kbase-y += $(BACKEND_DIR)/gpexbe_mem_usage.o
 
 ifeq ($(CONFIG_MALI_EXYNOS_UNIT_TESTS), y)
