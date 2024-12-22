@@ -244,6 +244,7 @@ static inline void ip_tunnel_init_flow(struct flowi4 *fl4,
 				       __u32 mark, __u32 tun_inner_hash)
 {
 	memset(fl4, 0, sizeof(*fl4));
+
 	fl4->flowi4_oif = oif;
 	fl4->daddr = daddr;
 	fl4->saddr = saddr;
