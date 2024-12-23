@@ -296,14 +296,7 @@ static inline struct dst_entry *xfrm_dst_lookup(struct xfrm_state *x,
 		daddr = x->coaddr;
 	}
 
-	params.net = net;
-	params.saddr = saddr;
-	params.daddr = daddr;
-	params.tos = tos;
-	params.oif = oif;
-	params.mark = mark;
-
-	dst = __xfrm_dst_lookup(family, &params);
+	dst = __xfrm_dst_lookup(net, tos, oif, saddr, daddr, family, mark);
 
 	if (!IS_ERR(dst)) {
 		if (prev_saddr != saddr)
