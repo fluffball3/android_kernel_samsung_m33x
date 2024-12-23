@@ -37,9 +37,6 @@ static struct dst_entry *xfrm6_dst_lookup(const struct xfrm_dst_lookup_params *p
 	if (saddr)
 		memcpy(&fl6.saddr, saddr, sizeof(fl6.saddr));
 
-	fl6.flowi4_proto = params->ipproto;
-	fl6.uli = params->uli;
-
 	dst = ip6_route_output(params->net, NULL, &fl6);
 
 	err = dst->error;
