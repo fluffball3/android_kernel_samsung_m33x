@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 #
-# (C) COPYRIGHT 2012, 2020-2021, 2024 ARM Limited. All rights reserved.
+# (C) COPYRIGHT 2019-2021 ARM Limited. All rights reserved.
 #
 # This program is free software and is provided to you under the terms of the
 # GNU General Public License version 2 as published by the Free Software
@@ -18,18 +18,6 @@
 #
 #
 
-ifeq ($(CONFIG_MALI_DDK_VALHALL_R32P1),y)
-	obj-$(CONFIG_MALI_MIDGARD) += bv_r32p1/
-endif
-
-ifeq ($(CONFIG_MALI_DDK_VALHALL_R38P1),y)
-	obj-$(CONFIG_MALI_MIDGARD) += bv_r38p1/
-endif
-
-ifeq ($(CONFIG_MALI_DDK_VALHALL_R49P3),y)
-	obj-$(CONFIG_MALI_MIDGARD) += bv_r49p3/
-endif
-
-ifeq ($(CONFIG_MALI_DDK_VALHALL_R53P0),y)
-	obj-$(CONFIG_MALI_MIDGARD) += bv_r53p0/
+ifeq ($(CONFIG_MALI_PROTECTED_MEMORY_ALLOCATOR), y)
+obj-m := protected_memory_allocator.o
 endif

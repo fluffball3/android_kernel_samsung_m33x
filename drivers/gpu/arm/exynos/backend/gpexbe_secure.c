@@ -25,16 +25,16 @@
 #include "../../bv_r53p0/mali_kbase_hwaccess_pm.h"
 #include <linux/mali_drivers/bv_r53p0/protected_mode_switcher.h>
 #endif
-#ifdef CONFIG_MALI_DDK_VALHALL_R49P2
-#include "../../bv_r49p2/mali_kbase_hwaccess_pm.h"
-#include <linux/mali_drivers/bv_r49p2/protected_mode_switcher.h>
+#ifdef CONFIG_MALI_DDK_VALHALL_R49P3
+#include "../../bv_r49p3/mali_kbase_hwaccess_pm.h"
+#include <linux/mali_drivers/bv_r49p3/protected_mode_switcher.h>
 #endif
 
 /* Uses */
 #include <mali_kbase.h>
 
 #ifndef CONFIG_MALI_DDK_VALHALL_R53P0
-#ifndef CONFIG_MALI_DDK_VALHALL_R49P2
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P3
 #include <linux/protected_mode_switcher.h>
 #endif
 #endif

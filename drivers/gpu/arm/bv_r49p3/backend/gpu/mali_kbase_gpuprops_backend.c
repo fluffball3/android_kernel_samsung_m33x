@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note
 /*
  *
- * (C) COPYRIGHT 2014-2024 ARM Limited. All rights reserved.
+ * (C) COPYRIGHT 2014-2023 ARM Limited. All rights reserved.
  *
  * This program is free software and is provided to you under the terms of the
  * GNU General Public License version 2 as published by the Free Software
@@ -27,7 +27,6 @@
 #include <device/mali_kbase_device.h>
 #include <mali_kbase_hwaccess_gpuprops.h>
 #include <mali_kbase_gpuprops_private_types.h>
-#include <mali_kbase_io.h>
 
 #include <mali_exynos_kbase_entrypoint.h>
 
@@ -51,23 +50,19 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev, struct kbasep_gpuprop
 	/* Not a valid register on TMIX */
 
 	/* TGOx specific register */
-	if (kbase_hw_has_feature(kbdev, KBASE_HW_FEATURE_THREAD_TLS_ALLOC))
+	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_THREAD_TLS_ALLOC))
 		regdump->thread_tls_alloc =
 			kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_TLS_ALLOC));
 #endif /* !MALI_USE_CSF */
 
 	regdump->thread_max_threads = kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_THREADS));
-	if (kbase_reg_is_valid(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_WORKGROUP_SIZE)))
-		regdump->thread_max_workgroup_size =
-			kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_WORKGROUP_SIZE));
-#if MALI_USE_CSF
-#endif /* MALI_USE_CSF */
-	if (kbase_reg_is_valid(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_BARRIER_SIZE)))
-		regdump->thread_max_barrier_size =
-			kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_BARRIER_SIZE));
-
+	regdump->thread_max_workgroup_size =
+		kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_WORKGROUP_SIZE));
+	regdump->thread_max_barrier_size =
+		kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_MAX_BARRIER_SIZE));
 	regdump->thread_features = kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(THREAD_FEATURES));
 
+	//maybe deprecated
 	/* EXYNOS TODO: determine if needed by userspace */
 	mali_exynos_coherency_set_coherency_feature();
 
@@ -75,20 +70,15 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev, struct kbasep_gpuprop
 	/* AMBA_FEATURES enum is mapped to COHERENCY_FEATURES enum */
 	regdump->coherency_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(COHERENCY_FEATURES));
 
-	if (kbase_hw_has_feature(kbdev, KBASE_HW_FEATURE_CORE_FEATURES))
+	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_CORE_FEATURES))
 		regdump->core_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(CORE_FEATURES));
 
 #if MALI_USE_CSF
 	if (kbase_reg_is_valid(kbdev, GPU_CONTROL_ENUM(GPU_FEATURES)))
 		regdump->gpu_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(GPU_FEATURES));
-	/* Only applicable to GPUs with power control domain registers */
-	if (kbase_hw_has_feature(kbdev, KBASE_HW_FEATURE_POWER_CONTROL)) {
-		regdump->base_present = kbase_reg_read64(kbdev, HOST_POWER_ENUM(BASE_PRESENT));
-		regdump->neural_present = kbase_reg_read64(kbdev, HOST_POWER_ENUM(NEURAL_PRESENT));
-	}
-
 #endif /* MALI_USE_CSF */
-		regdump->tiler_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(TILER_FEATURES));
+
+	regdump->tiler_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(TILER_FEATURES));
 	regdump->l2_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(L2_FEATURES));
 	regdump->mem_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(MEM_FEATURES));
 	regdump->mmu_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(MMU_FEATURES));
@@ -106,7 +96,7 @@ int kbase_backend_gpuprops_get(struct kbase_device *kbdev, struct kbasep_gpuprop
 				kbase_reg_read32(kbdev, GPU_TEXTURE_FEATURES_OFFSET(i));
 	}
 
-	if (!kbase_io_has_gpu(kbdev))
+	if (kbase_is_gpu_removed(kbdev))
 		return -EIO;
 	return 0;
 }
@@ -123,7 +113,7 @@ int kbase_backend_gpuprops_get_curr_config(struct kbase_device *kbdev,
 		kbase_reg_read64(kbdev, GPU_CONTROL_ENUM(SHADER_PRESENT));
 	curr_config_regdump->l2_present = kbase_reg_read64(kbdev, GPU_CONTROL_ENUM(L2_PRESENT));
 
-	if (!kbase_io_has_gpu(kbdev))
+	if (kbase_is_gpu_removed(kbdev))
 		return -EIO;
 
 	return 0;
@@ -132,7 +122,7 @@ int kbase_backend_gpuprops_get_curr_config(struct kbase_device *kbdev,
 int kbase_backend_gpuprops_get_l2_features(struct kbase_device *kbdev,
 					   struct kbasep_gpuprops_regdump *regdump)
 {
-	if (kbase_hw_has_feature(kbdev, KBASE_HW_FEATURE_L2_CONFIG)) {
+	if (kbase_hw_has_feature(kbdev, BASE_HW_FEATURE_L2_CONFIG)) {
 		regdump->l2_features = KBASE_REG_READ(kbdev, GPU_CONTROL_ENUM(L2_FEATURES));
 		regdump->l2_config = kbase_reg_read32(kbdev, GPU_CONTROL_ENUM(L2_CONFIG));
 
@@ -145,7 +135,7 @@ int kbase_backend_gpuprops_get_l2_features(struct kbase_device *kbdev,
 		}
 #endif /* MALI_USE_CSF */
 
-		if (!kbase_io_has_gpu(kbdev))
+		if (kbase_is_gpu_removed(kbdev))
 			return -EIO;
 	}
 
