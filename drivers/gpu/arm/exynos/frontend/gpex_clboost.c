@@ -36,9 +36,12 @@ int gpex_clboost_check_activation_condition(void)
 {
 	if (clboost_info.state == CLBOOST_DISABLE)
 		return false;
-
+#if !MALI_USE_CSF
 	return gpexbe_utilization_get_pure_compute_time_rate() >=
 	       clboost_info.activation_compute_ratio;
+#else
+	return clboost_info.activation_compute_ratio;
+#endif
 }
 
 void gpex_clboost_set_state(clboost_state state)
@@ -63,10 +66,11 @@ static ssize_t show_clboost_state(char *buf)
 {
 	ssize_t ret = 0;
 
+#if !MALI_USE_CSF
 	ret += snprintf(buf + ret, PAGE_SIZE - ret, "enabled(%d) active(%d) compute_ratio(%d)",
 			clboost_info.state, gpex_clboost_check_activation_condition(),
 			gpexbe_utilization_get_pure_compute_time_rate());
-
+#endif
 	return sysfs_wrapup(ret, buf);
 }
 CREATE_SYSFS_KOBJECT_READ_FUNCTION(show_clboost_state)

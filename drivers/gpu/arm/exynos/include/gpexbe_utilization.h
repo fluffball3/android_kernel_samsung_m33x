@@ -37,12 +37,14 @@ int gpexbe_utilization_init(struct device **dev);
  */
 void gpexbe_utilization_term(void);
 
+#if !MALI_USE_CSF
 /**
  * gpexbe_utilization_calc_utilization() - calculate and return the current overall GPU utilization
  *
  * Return: GPU utilization from 0 to 100
  */
 int gpexbe_utilization_calc_utilization(void);
+#endif
 
 /**
  * gpexbe_utilization_calculate_compute_ratio() - calculate pure compute and graphics utilization ratio

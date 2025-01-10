@@ -27,7 +27,11 @@
 
 #include <gpexbe_pm.h>
 #include <gpexbe_devicetree.h>
+
+#if !MALI_USE_CSF
 #include <gpexbe_utilization.h>
+#endif
+
 #include <gpex_qos.h>
 
 #include "gpu_dvfs_governor.h"
@@ -91,8 +95,10 @@ static int gpu_dvfs_calculate_env_data(void)
 	static int polling_period;
 
 	spin_lock_irqsave(&dvfs.spinlock, flags);
-	dvfs.env_data.utilization = gpexbe_utilization_calc_utilization();
+#if !MALI_USE_CSF
+	dvfs.env_data.utilization = gpexbe_utilization_calc_utilization(struct kbase_device *kbdev, ktime_t now);
 	gpexbe_utilization_calculate_compute_ratio();
+#endif
 	spin_unlock_irqrestore(&dvfs.spinlock, flags);
 
 	polling_period -= dvfs.polling_speed;

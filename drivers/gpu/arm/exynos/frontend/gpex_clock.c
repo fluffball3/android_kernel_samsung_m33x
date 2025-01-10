@@ -28,7 +28,11 @@
 #include <gpex_utils.h>
 #include <gpexbe_devicetree.h>
 #include <gpexbe_clock.h>
+
+#if !MALI_USE_CSF
 #include <gpexbe_utilization.h>
+#endif
+
 #include <gpexbe_debug.h>
 
 #include "gpex_clock_internal.h"
@@ -196,12 +200,15 @@ int gpex_get_valid_gpu_clock(int clock, bool is_round_up)
 int gpex_clock_update_time_in_state(int clock)
 {
 	u64 current_time;
+#if !MALI_USE_CSF
 	int level = gpex_clock_get_table_idx(clock);
-
+#endif
 	if (clk_info.prev_time_in_state_time == 0)
 		clk_info.prev_time_in_state_time = get_jiffies_64();
 
 	current_time = get_jiffies_64();
+
+#if !MALI_USE_CSF
 	if ((level >= gpex_clock_get_table_idx(clk_info.gpu_max_clock)) &&
 	    (level <= gpex_clock_get_table_idx(clk_info.gpu_min_clock))) {
 		clk_info.table[level].time += current_time - clk_info.prev_time_in_state_time;
@@ -213,6 +220,7 @@ int gpex_clock_update_time_in_state(int clock)
 			gpexbe_utilization_get_utilization(), level, clock, level,
 			clk_info.table[level].time_busy / 100, clk_info.table[level].time);
 	}
+#endif
 
 	clk_info.prev_time_in_state_time = current_time;
 
