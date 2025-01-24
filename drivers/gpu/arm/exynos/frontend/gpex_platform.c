@@ -55,9 +55,7 @@ int gpex_platform_init(struct device **dev)
 	gpex_utils_init(dev);
 	gpex_debug_init(dev);
 
-#if !MALI_USE_CSF
 	gpexbe_utilization_init(dev);
-#endif
 	gpex_clboost_init();
 
 	gpex_gts_init(dev);
@@ -131,8 +129,6 @@ void gpex_platform_term(void)
 	gpex_gts_term();
 
 	gpex_clboost_term();
-#if !MALI_USE_CSF
 	gpexbe_utilization_term();
-#endif
 	gpex_utils_term();
 }
