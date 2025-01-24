@@ -335,6 +335,56 @@ int mali_exynos_get_gpu_power_state(void)
 	return gpexbe_pm_get_status();
 }
 
+#if IS_ENABLED(CONFIG_MALI_EXYNOS_RTPM)
+static int gpu_power_on(struct kbase_device *kbdev)
+{
+	int ret = 0;
+	ret = gpex_pm_power_on(kbdev->dev);
+
+	if (ret == 0) {
+		/* GPU state was lost. must return 1 for mali driver */
+		return 1;
+	} else if (ret > 0) {
+		/* GPU runtime PM status was already active, so GPU state is not lost */
+		return 0;
+	} else {
+		/* Major error.... gpu not powering on? */
+		/* TODO: print some dire warning here */
+		return 0;
+	}
+}
+
+static void gpu_power_off(struct kbase_device *kbdev)
+{
+	gpex_pm_power_autosuspend(kbdev->dev);
+}
+
+static void gpu_power_suspend(struct kbase_device *kbdev)
+{
+	gpex_pm_suspend(kbdev->dev);
+}
+
+static int gpu_device_runtime_init(struct kbase_device *kbdev)
+{
+	return gpex_pm_runtime_init(kbdev->dev);
+}
+
+static void gpu_device_runtime_disable(struct kbase_device *kbdev)
+{
+	gpex_pm_runtime_term(kbdev->dev);
+}
+
+static void pm_callback_runtime_off(struct kbase_device *kbdev)
+{
+	gpex_pm_runtime_off_prepare(kbdev->dev);
+}
+
+static int pm_callback_runtime_on(struct kbase_device *kbdev)
+{
+	return gpex_pm_runtime_on_prepare(kbdev->dev);
+}
+#endif
+
 #if !MALI_USE_CSF
 /* Secure Rendering functions Start */
 int mali_exynos_legacy_jm_enter_protected_mode(struct kbase_device *kbdev)
@@ -445,5 +495,17 @@ struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_late_init_func = NULL,
 	.platform_late_term_func = NULL
 };
+
+#if IS_ENABLED(CONFIG_MALI_EXYNOS_RTPM)
+struct kbase_pm_callback_conf pm_callbacks = {
+	.power_suspend_callback = gpu_power_suspend,
+	.power_on_callback = gpu_power_on,
+	.power_off_callback = gpu_power_off,
+	.power_runtime_init_callback = gpu_device_runtime_init,
+	.power_runtime_term_callback = gpu_device_runtime_disable,
+	.power_runtime_on_callback = pm_callback_runtime_on,
+	.power_runtime_off_callback = pm_callback_runtime_off,
+};
+#endif
 
 MODULE_SOFTDEP("pre: exynos-acme");
