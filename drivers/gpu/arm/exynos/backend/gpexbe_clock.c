@@ -91,7 +91,7 @@ int gpexbe_clock_set_rate(int clk)
 
 int gpexbe_clock_get_rate(void)
 {
-	return cal_dfs_get_rate(cal_id);
+	return cal_dfs_cached_get_rate(cal_id);
 }
 
 int gpexbe_clock_init(void)
