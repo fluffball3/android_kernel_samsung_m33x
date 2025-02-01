@@ -344,6 +344,34 @@ int gpu_dvfs_unregister_utilization_notifier(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(gpu_dvfs_unregister_utilization_notifier);
 
+int gpu_dvfs_get_max_locked_freq(void);
+int exynos_profiler_get_max_locked_freq(void)
+{
+	return gpu_dvfs_get_max_locked_freq();
+}
+EXPORT_SYMBOL(exynos_profiler_get_max_locked_freq);
+
+int gpu_dvfs_get_min_locked_freq(void);
+int exynos_profiler_get_min_locked_freq(void)
+{
+	return gpu_dvfs_get_min_locked_freq();
+}
+EXPORT_SYMBOL(exynos_profiler_get_min_locked_freq);
+
+int gpu_dvfs_get_cur_clock(void);
+int exynos_profiler_get_cur_clock(void)
+{
+	return gpu_dvfs_get_cur_clock();
+}
+EXPORT_SYMBOL(exynos_profiler_get_cur_clock);
+
+int gpu_dvfs_get_step(void);
+int exynos_profiler_get_step(void)
+{
+	return gpu_dvfs_get_step();
+}
+EXPORT_SYMBOL(exynos_profiler_get_step);
+
 /* TODO: this sysfs function use external fucntion. */
 /* Actually, Using external function in internal module is not ideal with the Refactoring rules */
 /* So, if we can modify outer modules such as 'migov, cooling, ...' in the future, */
