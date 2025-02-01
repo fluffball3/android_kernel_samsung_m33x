@@ -55,6 +55,7 @@ typedef struct _clock_backend_info *clock_backend_info_ptr;
 typedef struct _debug_backend_info *debug_backend_info_ptr;
 typedef struct _llc_coh_info *llc_coh_info_ptr;
 typedef struct _smc_info *smc_info_ptr;
+typedef struct _hvc_info *hvc_info_ptr;
 
 /**
  * struct exynos_context - contains pointers to each module's private structure. Per device.
@@ -83,6 +84,7 @@ struct exynos_context {
 	debug_backend_info_ptr dbg_info;
 	llc_coh_info_ptr llc_coh_info;
 	smc_info_ptr smc_info;
+	hvc_info_ptr hvc_info;
 };
 
 #ifndef GPEX_STATIC

@@ -22,7 +22,7 @@
 #include <gpex_clock.h>
 #include <gpex_pm.h>
 
-#include <mali_exynos_if.h>
+#include <linux/mali_exynos_if.h>
 
 #include "gpex_dvfs_internal.h"
 static struct dvfs_info *dvfs;
