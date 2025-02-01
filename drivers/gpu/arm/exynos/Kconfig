@@ -156,6 +156,7 @@ config MALI_EXYNOS_CL_BOOST
     depends on MALI_MIDGARD
     default y if SOC_EXYNOS9830
     default y if SOC_EXYNOS2100
+	default y if SOC_S5E8825
     default n
 
 config MALI_NOTIFY_UTILISATION
@@ -190,6 +191,15 @@ config MALI_EXYNOS_SECURE_SMC_NOTIFY_GPU
     default n
     help
       Support SMC Notify calls when GPU is power up and down
+
+config MALI_EXYNOS_SECURE_HVC
+    bool "Enable HVC calls for new secure hardware"
+    depends on MALI_MIDGARD && EXYNOS_CONTENT_PATH_PROTECTION
+    default y if SOC_S5E8825
+    default n
+    help
+      Enabled hvc calls for the new secure hardware. Earlier smc calls were used.
+      For Rice PPCFW and Secure S2MPU both hardware are not used.
 
 config MALI_EXYNOS_WAKEUP_CLOCK_WA
     bool "Enable wakeup clock wa"
@@ -243,10 +253,3 @@ config MALI_EXYNOS_DEBUG_FAULT_DUMP
     default n
     help
       MALI_MIDGARD_ENABLE_TRACE must be enabled for more detailed logs
-
-config MALI_EXYNOS_GPU_MEM_DUMP
-    bool "Enable GPU MEM DUMP Option"
-    depends on MALI_MIDGARD
-    default n
-    help
-      Choose this option to enable checking GPU_MEM in the Mali tTRx DDK.

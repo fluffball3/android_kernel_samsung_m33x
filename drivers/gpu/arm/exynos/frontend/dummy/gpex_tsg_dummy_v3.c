@@ -528,3 +528,27 @@ void exynos_stats_get_frame_info(s32 *nrframe, u64 *nrvsync, u64 *delta_ms)
 	CSTD_UNUSED(delta_ms);
 }
 EXPORT_SYMBOL(exynos_stats_get_frame_info);
+
+int exynos_profiler_get_max_locked_freq(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(exynos_profiler_get_max_locked_freq);
+
+int exynos_profiler_get_min_locked_freq(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(exynos_profiler_get_min_locked_freq);
+
+int exynos_profiler_get_cur_clock(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(exynos_profiler_get_cur_clock);
+
+int exynos_profiler_get_step(void)
+{
+	return 0;
+}
+EXPORT_SYMBOL(exynos_profiler_get_step);

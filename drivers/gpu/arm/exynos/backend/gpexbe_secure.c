@@ -40,7 +40,7 @@
 #endif
 
 #include <gpex_utils.h>
-#include <gpexbe_smc.h>
+#include <gpexbe_smc_hvc.h>
 
 static int exynos_secure_mode_enable(struct protected_mode_device *pdev)
 {
@@ -53,7 +53,7 @@ static int exynos_secure_mode_enable(struct protected_mode_device *pdev)
 	if (ret != 0)
 		return ret;
 
-	return gpexbe_smc_protection_enable();
+	return gpexbe_smc_hvc_protection_enable();
 }
 
 static int exynos_secure_mode_disable(struct protected_mode_device *pdev)
@@ -67,7 +67,7 @@ static int exynos_secure_mode_disable(struct protected_mode_device *pdev)
 	if (ret != 0)
 		return ret;
 
-	return gpexbe_smc_protection_disable();
+	return gpexbe_smc_hvc_protection_disable();
 }
 
 struct protected_mode_ops *gpexbe_secure_get_protected_mode_ops(void)

@@ -112,9 +112,15 @@ mali_kbase-y += $(FRONTEND_DIR)/dummy/gpex_cmar_sched_dummy.o
 endif
 
 ifneq (,$(filter y m,$(CONFIG_EXYNOS_CONTENT_PATH_PROTECTION)))
-	mali_kbase-y += $(BACKEND_DIR)/gpexbe_smc.o
+	ifeq ($(CONFIG_MALI_EXYNOS_SECURE_HVC), y)
+		mali_kbase-y += $(BACKEND_DIR)/gpexbe_hvc.o
+	else
+		mali_kbase-y += $(BACKEND_DIR)/gpexbe_smc.o
+	endif
+	mali_kbase-y += $(BACKEND_DIR)/gpexbe_smc_hvc.o
 else
 	mali_kbase-y += $(BACKEND_DIR)/dummy/gpexbe_smc_dummy.o
+	mali_kbase-y += $(BACKEND_DIR)/dummy/gpexbe_smc_hvc_dummy.o
 endif
 
 ifeq ($(CONFIG_MALI_EXYNOS_SECURE_RENDERING_LEGACY), y)

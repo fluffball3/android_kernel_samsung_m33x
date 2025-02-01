@@ -39,7 +39,7 @@
 #include <gpex_pm.h>
 
 #include <gpexbe_secure.h>
-#include <gpexbe_smc.h>
+#include <gpexbe_smc_hvc.h>
 
 #include <gpex_tsg.h>
 #include <gpex_clboost.h>
@@ -322,7 +322,7 @@ int gpex_pm_runtime_on_prepare(struct device *dev)
 
 	pm.power_status = true;
 
-	gpexbe_smc_notify_power_on();
+	gpexbe_smc_hvc_notify_power_on();
 
 	gpexwa_wakeup_clock_restore();
 
@@ -358,7 +358,7 @@ void gpex_pm_runtime_off_prepare(struct device *dev)
 	CSTD_UNUSED(dev);
 	GPU_LOG_DETAILED(MALI_EXYNOS_DEBUG, LSI_GPU_OFF, 0u, 0u, "runtime off callback\n");
 
-	gpexbe_smc_notify_power_off();
+	gpexbe_smc_hvc_notify_power_off();
 
 	/* power up from ifpo down state before going to full rtpm power off */
 	gpex_ifpo_power_up();
