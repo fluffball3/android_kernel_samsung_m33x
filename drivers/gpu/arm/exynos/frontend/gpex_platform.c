@@ -41,7 +41,7 @@
 #include <gpexbe_utilization.h>
 #include <gpexbe_llc_coherency.h>
 #include <gpexbe_mem_usage.h>
-#include <gpexbe_smc.h>
+#include <gpexbe_smc_hvc.h>
 #include <gpex_gts.h>
 #include <gpexwa_interactive_boost.h>
 
@@ -78,7 +78,7 @@ int gpex_platform_init(struct device **dev)
 
 	gpex_ifpo_init();
 	gpex_dvfs_init(dev);
-	gpexbe_smc_init();
+	gpexbe_smc_hvc_init();
 	gpex_cmar_sched_init();
 	gpex_tsg_init(dev);
 
@@ -104,7 +104,7 @@ void gpex_platform_term(void)
 
 	gpex_tsg_term();
 	gpex_cmar_sched_term();
-	gpexbe_smc_term();
+	gpexbe_smc_hvc_term();
 	gpex_ifpo_term();
 
 	gpex_pm_term();
