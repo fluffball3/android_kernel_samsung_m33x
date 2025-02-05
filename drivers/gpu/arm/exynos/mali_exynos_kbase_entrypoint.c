@@ -335,7 +335,8 @@ int mali_exynos_get_gpu_power_state(void)
 	return gpexbe_pm_get_status();
 }
 
-#if IS_ENABLED(CONFIG_MALI_EXYNOS_RTPM)
+#ifndef CONFIG_MALI_DDK_VALHALL_R53P0
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P3
 static int gpu_power_on(struct kbase_device *kbdev)
 {
 	int ret = 0;
@@ -383,6 +384,7 @@ static int pm_callback_runtime_on(struct kbase_device *kbdev)
 {
 	return gpex_pm_runtime_on_prepare(kbdev->dev);
 }
+#endif
 #endif
 
 #if !MALI_USE_CSF
@@ -496,7 +498,8 @@ struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_late_term_func = NULL
 };
 
-#if IS_ENABLED(CONFIG_MALI_EXYNOS_RTPM)
+#ifndef CONFIG_MALI_DDK_VALHALL_R53P0
+#ifndef CONFIG_MALI_DDK_VALHALL_R49P3
 struct kbase_pm_callback_conf pm_callbacks = {
 	.power_suspend_callback = gpu_power_suspend,
 	.power_on_callback = gpu_power_on,
@@ -506,6 +509,7 @@ struct kbase_pm_callback_conf pm_callbacks = {
 	.power_runtime_on_callback = pm_callback_runtime_on,
 	.power_runtime_off_callback = pm_callback_runtime_off,
 };
+#endif
 #endif
 
 MODULE_SOFTDEP("pre: exynos-acme");
