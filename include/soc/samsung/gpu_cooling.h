@@ -132,9 +132,9 @@ extern void gpu_tmu_get_notifier(struct notifier_block **nb);
 extern int gpu_tmu_notifier(struct notifier_block *notifier,
 				unsigned long event, void *v);
 extern int exynos_tmu_extern_get_temp(int tzid);
-//extern int gpu_dvfs_get_sustainable_info_array(int index);
-//extern int gpu_dvfs_get_max_lock(void);
-//extern bool gpu_dvfs_get_need_cpu_qos(void);
+extern int gpu_dvfs_get_sustainable_info_array(int index);
+extern int gpu_dvfs_get_max_lock(void);
+extern bool gpu_dvfs_get_need_cpu_qos(void);
 #else
 static inline int gpu_dvfs_get_clock(int level) { return 0; }
 static inline int gpu_dvfs_get_voltage(int clock) { return 0; }
@@ -145,7 +145,7 @@ static inline int gpu_dvfs_get_max_freq(void) { return 0; }
 static inline void gpu_tmu_get_notifier(struct notifier_block **nb) { return; }
 static inline int gpu_tmu_notifier(struct notifier_block *notifier,
 				unsigned long event, void *v)	{ return 0; }
-static inline int exynos_tmu_extern_get_temp(int tzid) { return 0; }
+//static inline int exynos_tmu_extern_get_temp(int tzid) { return 0; }
 //static inline int gpu_dvfs_get_sustainable_info_array(int index) { return 0; }
 //static inline int gpu_dvfs_get_max_lock(void) { return 0; }
 //static inline bool gpu_dvfs_get_need_cpu_qos(void) { return false; }

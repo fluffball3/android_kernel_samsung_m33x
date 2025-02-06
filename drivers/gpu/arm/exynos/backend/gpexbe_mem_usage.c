@@ -79,8 +79,12 @@ static int gpu_memory_status_dump(bool print_all_buffers)
 				dev_warn(dev, "%10u | tgid=%10d | pid=%10d  | name=%20s\n",
 						atomic_read(&(kctx->used_pages)),
 						kctx->tgid,
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 						kctx->pid,
 						((struct platform_context *)kctx->platform_data)->name);
+#else
+						kctx->pid);
+#endif
 			}
 		}
 		mutex_unlock(&kbdev->kctx_list_lock);

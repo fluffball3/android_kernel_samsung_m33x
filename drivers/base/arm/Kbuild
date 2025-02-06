@@ -37,11 +37,11 @@ obj-$(CONFIG_DMA_SHARED_BUFFER_TEST_EXPORTER) += dma_buf_test_exporter/
 
 ifeq ($(CONFIG_MALI_MEMORY_GROUP_MANAGER),y)
 	obj-$(CONFIG_MALI_DDK_VALHALL_R49P3) += memory_group_manager_r49p3/
-	obj-$(CONFIG_MALI_DDK_VALHALL_R53P0) += memory_group_manager_r53p0/
+	obj-$(CONFIG_MALI_DDK_VALHALL_R54P0) += memory_group_manager_r54p0/
 endif
 
 ifeq ($(CONFIG_MALI_PROTECTED_MEMORY_ALLOCATOR),y)
 	obj-$(CONFIG_MALI_DDK_VALHALL_R49P3) += protected_memory_allocator_r49p3/
-	obj-$(CONFIG_MALI_DDK_VALHALL_R53P0) += protected_memory_allocator_r53p0/
+	obj-$(CONFIG_MALI_DDK_VALHALL_R54P0) += protected_memory_allocator_r54p0/
 endif
 

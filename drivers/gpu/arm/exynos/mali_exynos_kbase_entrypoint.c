@@ -77,7 +77,7 @@ static int mali_exynos_ioctl_interactive_boost_fn(struct kbase_context *kctx,
 	return gpexwa_interactive_boost_set(dur->duration);
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 static int mali_exynos_ioctl_cmar_boost_fn(struct kbase_context *kctx,
 					   struct mali_exynos_ioctl_cmar_boost *cb_flag)
 {
@@ -123,7 +123,7 @@ static int kbase_api_egp(struct kbase_context *kctx,
 	return 0;
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 void mali_exynos_update_firstjob_time(void)
 {
 	gpex_tsg_update_firstjob_time();
@@ -209,7 +209,7 @@ int mali_exynos_ioctl(struct kbase_context *kctx, unsigned int cmd, unsigned lon
 		 * */
 		break;
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 	case MALI_EXYNOS_IOCTL_CMAR_BOOST:
 		KBASE_HANDLE_IOCTL_IN(cmd, mali_exynos_ioctl_cmar_boost_fn,
 				      struct mali_exynos_ioctl_cmar_boost, kctx);
@@ -236,7 +236,7 @@ int mali_exynos_ioctl(struct kbase_context *kctx, unsigned int cmd, unsigned lon
 	return 0;
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 void mali_exynos_set_thread_priority(struct kbase_context *kctx)
 {
 	gpex_cmar_boost_set_thread_priority(kctx->platform_data);
@@ -283,7 +283,7 @@ int mali_exynos_set_pm_state_resume_end(void)
 	return gpex_pm_set_state(GPEX_PM_STATE_RESUME_END);
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 void mali_exynos_set_jobslot_status(int slot, bool is_active)
 {
 	if (slot == 0)
@@ -335,7 +335,7 @@ int mali_exynos_get_gpu_power_state(void)
 	return gpexbe_pm_get_status();
 }
 
-#ifndef CONFIG_MALI_DDK_VALHALL_R53P0
+#ifndef CONFIG_MALI_DDK_VALHALL_R54P0
 #ifndef CONFIG_MALI_DDK_VALHALL_R49P3
 static int gpu_power_on(struct kbase_device *kbdev)
 {
@@ -387,7 +387,7 @@ static int pm_callback_runtime_on(struct kbase_device *kbdev)
 #endif
 #endif
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 /* Secure Rendering functions Start */
 int mali_exynos_legacy_jm_enter_protected_mode(struct kbase_device *kbdev)
 {
@@ -461,7 +461,7 @@ static void mali_exynos_kbase_entrypoint_term(struct kbase_device *kbdev)
 	kbdev->platform_context = NULL;
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 static int mali_exynos_kbase_context_init(struct kbase_context *kctx)
 {
 	struct platform_context *pctx = kcalloc(1, sizeof(struct platform_context), GFP_KERNEL);
@@ -488,7 +488,7 @@ static void mali_exynos_kbase_context_term(struct kbase_context *kctx)
 struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_init_func = &mali_exynos_kbase_entrypoint_init,
 	.platform_term_func = &mali_exynos_kbase_entrypoint_term,
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 	.platform_handler_context_init_func = &mali_exynos_kbase_context_init,
 	.platform_handler_context_term_func = &mali_exynos_kbase_context_term,
 	.platform_handler_atom_submit_func = NULL,
@@ -498,7 +498,7 @@ struct kbase_platform_funcs_conf platform_funcs = {
 	.platform_late_term_func = NULL
 };
 
-#ifndef CONFIG_MALI_DDK_VALHALL_R53P0
+#ifndef CONFIG_MALI_DDK_VALHALL_R54P0
 #ifndef CONFIG_MALI_DDK_VALHALL_R49P3
 struct kbase_pm_callback_conf pm_callbacks = {
 	.power_suspend_callback = gpu_power_suspend,

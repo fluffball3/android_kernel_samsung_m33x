@@ -86,20 +86,6 @@ ktime_t gpu_dvfs_get_tis_last_update(void)
 }
 EXPORT_SYMBOL(gpu_dvfs_get_tis_last_update);
 
-#if !CONFIG_MALI_EXYNOS_DVFS
-int gpu_dvfs_get_max_freq(void)
-{
-	return 0;
-}
-EXPORT_SYMBOL(gpu_dvfs_get_max_freq);
-
-int gpu_dvfs_get_min_freq(void)
-{
-	return 0;
-}
-EXPORT_SYMBOL(gpu_dvfs_get_min_freq);
-#endif
-
 int exynos_stats_set_queued_threshold_0(unsigned int threshold)
 {
 	CSTD_UNUSED(threshold);

@@ -22,7 +22,7 @@ menu "ARM GPU Configuration"
 
 choice
 	prompt "Mali Version Configuration"
-	default MALI_DDK_VALHALL_R53P0
+	default MALI_DDK_VALHALL_R54P0
 	help
 	  Select Mali GPU driver version.
 
@@ -38,8 +38,8 @@ config MALI_DDK_VALHALL_R38P1
 config MALI_DDK_VALHALL_R49P3
 	bool "Valhall r49p3 driver"
 
-config MALI_DDK_VALHALL_R53P0
-	bool "Valhall r53p0 driver"
+config MALI_DDK_VALHALL_R54P0
+	bool "Valhall r54p0 driver"
 
 endchoice
 
@@ -55,8 +55,8 @@ if MALI_DDK_VALHALL_R49P3
 source "drivers/gpu/arm/bv_r49p3/Kconfig"
 endif
 
-if MALI_DDK_VALHALL_R53P0
-source "drivers/gpu/arm/bv_r53p0/Kconfig"
+if MALI_DDK_VALHALL_R54P0
+source "drivers/gpu/arm/bv_r54p0/Kconfig"
 endif
 
 endmenu

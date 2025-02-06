@@ -47,10 +47,10 @@ BACKEND_DIR := $(PLATFORM_DIR)/backend
 WA_DIR := $(PLATFORM_DIR)/workarounds
 TESTS_DIR := $(PLATFORM_DIR)/tests
 
-ifeq ($(CONFIG_MALI_DDK_VALHALL_R53P0),y)
-	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_config_devicetree.o
-	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_runtime_pm.o
-	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r53p0/mali_kbase_clk_rate_trace.o
+ifeq ($(CONFIG_MALI_DDK_VALHALL_R54P0),y)
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r54p0/mali_kbase_config_devicetree.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r54p0/mali_kbase_runtime_pm.o
+	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r54p0/mali_kbase_clk_rate_trace.o
 endif
 ifeq ($(CONFIG_MALI_DDK_VALHALL_R49P3),y)
 	mali_kbase-y += $(PLATFORM_DIR)/devicetree_r49p3/mali_kbase_config_devicetree.o
