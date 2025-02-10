@@ -74,7 +74,7 @@ static inline void increment_vertex_job_cnt(void)
 	atomic_inc(&util_info.cnt_vertex_jobs);
 }
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 static inline bool is_pure_compute_job(struct kbase_jd_atom *katom)
 {
 	return katom->core_req & BASE_JD_REQ_ONLY_COMPUTE;
@@ -193,7 +193,7 @@ int gpexbe_utilization_calc_utilization(void)
 	diff = ktime_sub(now, kbdev->pm.backend.metrics.time_period_start);
 	ns_time = (u32)(ktime_to_ns(diff) >> KBASE_PM_TIME_SHIFT);
 
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 	if (kbdev->pm.backend.metrics.gpu_active) {
 		kbdev->pm.backend.metrics.values.time_busy += ns_time;
 		/* TODO: busy_cl can be a static global here */
@@ -229,7 +229,7 @@ out:
 	spin_lock_irqsave(&kbdev->pm.backend.metrics.lock, flags);
 	kbdev->pm.backend.metrics.values.time_idle = 0;
 	kbdev->pm.backend.metrics.values.time_busy = 0;
-#if !MALI_USE_CSF
+#if !IS_ENABLED(CONFIG_MALI_CSF_SUPPORT)
 	kbdev->pm.backend.metrics.values.busy_cl[0] = 0;
 	kbdev->pm.backend.metrics.values.busy_cl[1] = 0;
 	kbdev->pm.backend.metrics.values.busy_gl = 0;
