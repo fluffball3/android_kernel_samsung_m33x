@@ -2219,9 +2219,6 @@ SND_SOC_DAPM_PGA_E("HPOUT", SND_SOC_NOPM, 0, 0, NULL, 0, hp_event,
 
 SND_SOC_DAPM_OUTPUT("HPOUTL"),
 SND_SOC_DAPM_OUTPUT("HPOUTR"),
-
-SND_SOC_DAPM_PGA("SPKOUTL Output", WM8962_CLASS_D_CONTROL_1, 6, 0, NULL, 0),
-SND_SOC_DAPM_PGA("SPKOUTR Output", WM8962_CLASS_D_CONTROL_1, 7, 0, NULL, 0),
 };
 
 static const struct snd_soc_dapm_widget wm8962_dapm_spk_mono_widgets[] = {
@@ -2229,6 +2226,7 @@ SND_SOC_DAPM_MIXER("Speaker Mixer", WM8962_MIXER_ENABLES, 1, 0,
 		   spkmixl, ARRAY_SIZE(spkmixl)),
 SND_SOC_DAPM_MUX_E("Speaker PGA", WM8962_PWR_MGMT_2, 4, 0, &spkoutl_mux,
 		   out_pga_event, SND_SOC_DAPM_POST_PMU),
+SND_SOC_DAPM_PGA("Speaker Output", WM8962_CLASS_D_CONTROL_1, 7, 0, NULL, 0),
 SND_SOC_DAPM_OUTPUT("SPKOUT"),
 };
 
@@ -2242,6 +2240,9 @@ SND_SOC_DAPM_MUX_E("SPKOUTL PGA", WM8962_PWR_MGMT_2, 4, 0, &spkoutl_mux,
 		   out_pga_event, SND_SOC_DAPM_POST_PMU),
 SND_SOC_DAPM_MUX_E("SPKOUTR PGA", WM8962_PWR_MGMT_2, 3, 0, &spkoutr_mux,
 		   out_pga_event, SND_SOC_DAPM_POST_PMU),
+
+SND_SOC_DAPM_PGA("SPKOUTR Output", WM8962_CLASS_D_CONTROL_1, 7, 0, NULL, 0),
+SND_SOC_DAPM_PGA("SPKOUTL Output", WM8962_CLASS_D_CONTROL_1, 6, 0, NULL, 0),
 
 SND_SOC_DAPM_OUTPUT("SPKOUTL"),
 SND_SOC_DAPM_OUTPUT("SPKOUTR"),
@@ -2352,18 +2353,12 @@ static const struct snd_soc_dapm_route wm8962_spk_mono_intercon[] = {
 	{ "Speaker PGA", "Mixer", "Speaker Mixer" },
 	{ "Speaker PGA", "DAC", "DACL" },
 
-	{ "SPKOUTL Output", NULL, "Speaker PGA" },
-	{ "SPKOUTL Output", NULL, "SYSCLK" },
-	{ "SPKOUTL Output", NULL, "TOCLK" },
-	{ "SPKOUTL Output", NULL, "TEMP_SPK" },
+	{ "Speaker Output", NULL, "Speaker PGA" },
+	{ "Speaker Output", NULL, "SYSCLK" },
+	{ "Speaker Output", NULL, "TOCLK" },
+	{ "Speaker Output", NULL, "TEMP_SPK" },
 
-	{ "SPKOUTR Output", NULL, "Speaker PGA" },
-	{ "SPKOUTR Output", NULL, "SYSCLK" },
-	{ "SPKOUTR Output", NULL, "TOCLK" },
-	{ "SPKOUTR Output", NULL, "TEMP_SPK" },
-
-	{ "SPKOUT", NULL, "SPKOUTL Output" },
-	{ "SPKOUT", NULL, "SPKOUTR Output" },
+	{ "SPKOUT", NULL, "Speaker Output" },
 };
 
 static const struct snd_soc_dapm_route wm8962_spk_stereo_intercon[] = {
@@ -2453,6 +2448,7 @@ static const int sysclk_rates[] = {
 static void wm8962_configure_bclk(struct snd_soc_component *component)
 {
 	struct wm8962_priv *wm8962 = snd_soc_component_get_drvdata(component);
+	int best, min_diff, diff;
 	int dspclk, i;
 	int clocking2 = 0;
 	int clocking4 = 0;
@@ -2531,23 +2527,25 @@ static void wm8962_configure_bclk(struct snd_soc_component *component)
 
 	dev_dbg(component->dev, "DSPCLK is %dHz, BCLK %d\n", dspclk, wm8962->bclk);
 
-	/* We're expecting an exact match */
+	/* Search a proper bclk, not exact match. */
+	best = 0;
+	min_diff = INT_MAX;
 	for (i = 0; i < ARRAY_SIZE(bclk_divs); i++) {
 		if (bclk_divs[i] < 0)
 			continue;
 
-		if (dspclk / bclk_divs[i] == wm8962->bclk) {
-			dev_dbg(component->dev, "Selected BCLK_DIV %d for %dHz\n",
-				bclk_divs[i], wm8962->bclk);
-			clocking2 |= i;
+		diff = (dspclk / bclk_divs[i]) - wm8962->bclk;
+		if (diff < 0) /* Table is sorted */
 			break;
+		if (diff < min_diff) {
+			best = i;
+			min_diff = diff;
 		}
 	}
-	if (i == ARRAY_SIZE(bclk_divs)) {
-		dev_err(component->dev, "Unsupported BCLK ratio %d\n",
-			dspclk / wm8962->bclk);
-		return;
-	}
+	wm8962->bclk = dspclk / bclk_divs[best];
+	clocking2 |= best;
+	dev_dbg(component->dev, "Selected BCLK_DIV %d for %dHz\n",
+		bclk_divs[best], wm8962->bclk);
 
 	aif2 |= wm8962->bclk / wm8962->lrclk;
 	dev_dbg(component->dev, "Selected LRCLK divisor %d for %dHz\n",
@@ -2903,12 +2901,8 @@ static int wm8962_set_fll(struct snd_soc_component *component, int fll_id, int s
 	switch (fll_id) {
 	case WM8962_FLL_MCLK:
 	case WM8962_FLL_BCLK:
-		fll1 |= (fll_id - 1) << WM8962_FLL_REFCLK_SRC_SHIFT;
-		break;
 	case WM8962_FLL_OSC:
 		fll1 |= (fll_id - 1) << WM8962_FLL_REFCLK_SRC_SHIFT;
-		snd_soc_component_update_bits(component, WM8962_PLL2,
-					      WM8962_OSC_ENA, WM8962_OSC_ENA);
 		break;
 	case WM8962_FLL_INT:
 		snd_soc_component_update_bits(component, WM8962_FLL_CONTROL_1,
@@ -2917,7 +2911,7 @@ static int wm8962_set_fll(struct snd_soc_component *component, int fll_id, int s
 				    WM8962_FLL_FRC_NCO, WM8962_FLL_FRC_NCO);
 		break;
 	default:
-		dev_err(component->dev, "Unknown FLL source %d\n", source);
+		dev_err(component->dev, "Unknown FLL source %d\n", ret);
 		return -EINVAL;
 	}
 
@@ -3035,7 +3029,7 @@ static struct snd_soc_dai_driver wm8962_dai = {
 		.formats = WM8962_FORMATS,
 	},
 	.ops = &wm8962_dai_ops,
-	.symmetric_rates = 1,
+	.symmetric_rate = 1,
 };
 
 static void wm8962_mic_work(struct work_struct *work)
@@ -3265,6 +3259,7 @@ static int wm8962_beep_event(struct input_dev *dev, unsigned int type,
 	case SND_BELL:
 		if (hz)
 			hz = 1000;
+		fallthrough;
 	case SND_TONE:
 		break;
 	default:
@@ -3277,9 +3272,8 @@ static int wm8962_beep_event(struct input_dev *dev, unsigned int type,
 	return 0;
 }
 
-static ssize_t wm8962_beep_set(struct device *dev,
-			       struct device_attribute *attr,
-			       const char *buf, size_t count)
+static ssize_t beep_store(struct device *dev, struct device_attribute *attr,
+			  const char *buf, size_t count)
 {
 	struct wm8962_priv *wm8962 = dev_get_drvdata(dev);
 	long int time;
@@ -3294,7 +3288,7 @@ static ssize_t wm8962_beep_set(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(beep, 0200, NULL, wm8962_beep_set);
+static DEVICE_ATTR_WO(beep);
 
 static void wm8962_init_beep(struct snd_soc_component *component)
 {

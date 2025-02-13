@@ -1,21 +1,22 @@
-/*
- * cs35l41.h -- CS35L41 definitions
+/* SPDX-License-Identifier: GPL-2.0
  *
- * Copyright 2016 Cirrus Logic, Inc.
+ * cs35l41.h -- CS35L41 ALSA SoC audio driver
  *
- * Author: Brian Austin <brian.austin@cirrus.com>
- *         David Rhodes <david.rhodes@cirrus.com>
+ * Copyright 2017-2021 Cirrus Logic, Inc.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
+ * Author: David Rhodes <david.rhodes@cirrus.com>
  */
 
 #ifndef __CS35L41_H__
 #define __CS35L41_H__
 
+#include <linux/gpio/consumer.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
+#include <sound/core.h>
+#include <sound/cs35l41.h>
+
+#include "wm_adsp.h"
 
 #define CS35L41_FIRSTREG		0x00000000
 #define CS35L41_LASTREG			0x03804FE8
@@ -49,6 +50,7 @@
 #define CS35L41_DSP_CLK_CTRL		0x00002C08
 #define CS35L41_GLOBAL_CLK_CTRL		0x00002C0C
 #define CS35L41_DATA_FS_SEL		0x00002C10
+#define CS35L41_TST_FS_MON0		0x00002D10
 #define CS35L41_MDSYNC_EN		0x00003400
 #define CS35L41_MDSYNC_TX_ID		0x00003408
 #define CS35L41_MDSYNC_PWR_CTRL		0x0000340C
@@ -498,51 +500,50 @@
 #define CS35L41_DIGPWM_IOCTRL		0x0000706C
 
 /*registers populated by OTP*/
-#define CS35L41_OTP_TRIM_1	0x0000208c
-#define CS35L41_OTP_TRIM_2	0x00002090
-#define CS35L41_OTP_TRIM_3	0x00003010
-#define CS35L41_OTP_TRIM_4	0x0000300C
-#define CS35L41_OTP_TRIM_5	0x0000394C
-#define CS35L41_OTP_TRIM_6	0x00003950
-#define CS35L41_OTP_TRIM_7	0x00003954
-#define CS35L41_OTP_TRIM_8	0x00003958
-#define CS35L41_OTP_TRIM_9	0x0000395C
-#define CS35L41_OTP_TRIM_10	0x0000416C
-#define CS35L41_OTP_TRIM_11	0x00004160
-#define CS35L41_OTP_TRIM_12	0x00004170
-#define CS35L41_OTP_TRIM_13	0x00004360
-#define CS35L41_OTP_TRIM_14	0x00004448
-#define CS35L41_OTP_TRIM_15	0x0000444C
-#define CS35L41_OTP_TRIM_16	0x00006E30
-#define CS35L41_OTP_TRIM_17	0x00006E34
-#define CS35L41_OTP_TRIM_18	0x00006E38
-#define CS35L41_OTP_TRIM_19	0x00006E3C
-#define CS35L41_OTP_TRIM_20	0x00006E40
-#define CS35L41_OTP_TRIM_21	0x00006E44
-#define CS35L41_OTP_TRIM_22	0x00006E48
-#define CS35L41_OTP_TRIM_23	0x00006E4C
-#define CS35L41_OTP_TRIM_24	0x00006E50
-#define CS35L41_OTP_TRIM_25	0x00006E54
-#define CS35L41_OTP_TRIM_26	0x00006E58
-#define CS35L41_OTP_TRIM_27	0x00006E5C
-#define CS35L41_OTP_TRIM_28	0x00006E60
-#define CS35L41_OTP_TRIM_29	0x00006E64
-#define CS35L41_OTP_TRIM_30	0x00007418
-#define CS35L41_OTP_TRIM_31	0x0000741C
-#define CS35L41_OTP_TRIM_32	0x00007434
-#define CS35L41_OTP_TRIM_33	0x00007068
-#define CS35L41_OTP_TRIM_34	0x0000410C
-#define CS35L41_OTP_TRIM_35	0x0000400C
-#define CS35L41_OTP_TRIM_36	0x00002030
+#define CS35L41_OTP_TRIM_1		0x0000208c
+#define CS35L41_OTP_TRIM_2		0x00002090
+#define CS35L41_OTP_TRIM_3		0x00003010
+#define CS35L41_OTP_TRIM_4		0x0000300C
+#define CS35L41_OTP_TRIM_5		0x0000394C
+#define CS35L41_OTP_TRIM_6		0x00003950
+#define CS35L41_OTP_TRIM_7		0x00003954
+#define CS35L41_OTP_TRIM_8		0x00003958
+#define CS35L41_OTP_TRIM_9		0x0000395C
+#define CS35L41_OTP_TRIM_10		0x0000416C
+#define CS35L41_OTP_TRIM_11		0x00004160
+#define CS35L41_OTP_TRIM_12		0x00004170
+#define CS35L41_OTP_TRIM_13		0x00004360
+#define CS35L41_OTP_TRIM_14		0x00004448
+#define CS35L41_OTP_TRIM_15		0x0000444C
+#define CS35L41_OTP_TRIM_16		0x00006E30
+#define CS35L41_OTP_TRIM_17		0x00006E34
+#define CS35L41_OTP_TRIM_18		0x00006E38
+#define CS35L41_OTP_TRIM_19		0x00006E3C
+#define CS35L41_OTP_TRIM_20		0x00006E40
+#define CS35L41_OTP_TRIM_21		0x00006E44
+#define CS35L41_OTP_TRIM_22		0x00006E48
+#define CS35L41_OTP_TRIM_23		0x00006E4C
+#define CS35L41_OTP_TRIM_24		0x00006E50
+#define CS35L41_OTP_TRIM_25		0x00006E54
+#define CS35L41_OTP_TRIM_26		0x00006E58
+#define CS35L41_OTP_TRIM_27		0x00006E5C
+#define CS35L41_OTP_TRIM_28		0x00006E60
+#define CS35L41_OTP_TRIM_29		0x00006E64
+#define CS35L41_OTP_TRIM_30		0x00007418
+#define CS35L41_OTP_TRIM_31		0x0000741C
+#define CS35L41_OTP_TRIM_32		0x00007434
+#define CS35L41_OTP_TRIM_33		0x00007068
+#define CS35L41_OTP_TRIM_34		0x0000410C
+#define CS35L41_OTP_TRIM_35		0x0000400C
+#define CS35L41_OTP_TRIM_36		0x00002030
 
-#define CS35L41_INT1_CAP_TRIM_MASK	0x0F80
-#define CS35L41_INT2_CAP_TRIM_MASK	0x001F
-
-#define CS35L41_MAX_CACHE_REG		0x0000006F
+#define CS35L41_MAX_CACHE_REG		36
 #define CS35L41_OTP_SIZE_WORDS		32
-#define CS35L41_NUM_OTP_ELEM		99
+#define CS35L41_NUM_OTP_ELEM		100
+#define CS35L41_NUM_OTP_MAPS		5
 
 #define CS35L41_VALID_PDATA		0x80000000
+#define CS35L41_NUM_SUPPLIES            2
 
 #define CS35L41_SCLK_MSTR_MASK		0x10
 #define CS35L41_SCLK_MSTR_SHIFT		4
@@ -557,6 +558,7 @@
 #define CS35L41_LRCLK_FRC_MASK		0x02
 #define CS35L41_LRCLK_FRC_SHIFT		1
 
+#define CS35L41_AMP_GAIN_PCM_MASK	0x3E0
 #define CS35L41_AMP_GAIN_ZC_MASK	0x0400
 #define CS35L41_AMP_GAIN_ZC_SHIFT	10
 
@@ -565,8 +567,17 @@
 #define CS35L41_BST_CTL_SEL_REG		0x00
 #define CS35L41_BST_CTL_SEL_CLASSH	0x01
 #define CS35L41_BST_IPK_MASK		0x7F
+#define CS35L41_BST_IPK_SHIFT		0
 #define CS35L41_BST_LIM_MASK		0x4
 #define CS35L41_BST_LIM_SHIFT		2
+#define CS35L41_BST_K1_MASK		0x000000FF
+#define CS35L41_BST_K1_SHIFT		0
+#define CS35L41_BST_K2_MASK		0x0000FF00
+#define CS35L41_BST_K2_SHIFT		8
+#define CS35L41_BST_SLOPE_MASK		0x0000FF00
+#define CS35L41_BST_SLOPE_SHIFT		8
+#define CS35L41_BST_LBST_VAL_MASK	0x00000003
+#define CS35L41_BST_LBST_VAL_SHIFT	0
 
 #define CS35L41_TEMP_THLD_MASK		0x03
 #define CS35L41_VMON_IMON_VOL_MASK	0x07FF07FF
@@ -584,8 +595,6 @@
 #define CS35L41_CH_WKFET_THLD_MASK	0x0F00
 #define CS35L41_CH_WKFET_THLD_SHIFT	8
 
-#define CS35L41_WKFET_AMP_EN_MASK	0x01000000
-
 #define CS35L41_HW_NG_SEL_MASK		0x3F00
 #define CS35L41_HW_NG_SEL_SHIFT		8
 #define CS35L41_HW_NG_DLY_MASK		0x0070
@@ -599,22 +608,6 @@
 #define CS35L41_DSP_NG_THLD_SHIFT	0
 #define CS35L41_DSP_NG_DELAY_MASK	0x0F00
 #define CS35L41_DSP_NG_DELAY_SHIFT	8
-
-#define CS35L41_AMP_MUTE_SHIFT		4
-#define CS35L41_AMP_MUTE_MASK		1
-
-#define CS35L41_AMP_VOL_PCM_SHIFT	0x03
-#define CS35L41_AMP_VOL_PCM_MASK	0x7FF
-#define CS35L41_AMP_VOL_PCM_DEFAULT	0x0000
-#define CS35L41_AMP_VOL_PCM_MUTE	0x04CF
-#define CS35L41_AMP_VOL_CTRL_DEFAULT	817
-#define CS35l41_INV_PCM_MASK		0x4000
-
-#define CS35L41_AMP_VOL_RAMP_MASK	0x7
-#define CS35L41_AMP_VOL_RAMP_SHIFT	0x0
-#define CS35L41_AMP_VOL_RAMP_NONE	0x0
-#define CS35L41_AMP_VOL_RAMP_30MS	0x7
-#define CS35L41_AMP_VOL_MIN		102
 
 #define CS35L41_ASP_FMT_MASK		0x0700
 #define CS35L41_ASP_FMT_SHIFT		8
@@ -669,10 +662,11 @@
 
 #define CS35L41_GLOBAL_EN_MASK		0x01
 #define CS35L41_GLOBAL_EN_SHIFT		0
-#define CS35L41_BST_EN_MASK		0x3
+#define CS35L41_BST_EN_MASK		0x0030
 #define CS35L41_BST_EN_SHIFT		4
-#define CS35L41_BST_EN_DISABLE		0x0
 #define CS35L41_BST_EN_DEFAULT		0x2
+#define CS35L41_AMP_EN_SHIFT		0
+#define CS35L41_AMP_EN_MASK		1
 
 #define CS35L41_PDN_DONE_MASK		0x00800000
 #define CS35L41_PDN_DONE_SHIFT		23
@@ -689,7 +683,8 @@
 #define CS35L41_BST_OVP_ERR		0x40
 #define CS35L41_BST_DCM_UVP_ERR		0x80
 #define CS35L41_OTP_BOOT_DONE		0x02
-#define CS35L41_PLL_UNLOCK			0x10
+#define CS35L41_PLL_UNLOCK		0x10
+#define CS35L41_OTP_BOOT_ERR		0x80000000
 
 #define CS35L41_AMP_SHORT_ERR_RLS	0x02
 #define CS35L41_BST_SHORT_ERR_RLS	0x04
@@ -703,6 +698,7 @@
 #define CS35L41_INT1_UNMASK_PDN		0xFF7FFFFF
 
 #define CS35L41_GPIO_DIR_MASK		0x80000000
+#define CS35L41_GPIO_DIR_SHIFT		31
 #define CS35L41_GPIO1_CTRL_MASK		0x00030000
 #define CS35L41_GPIO1_CTRL_SHIFT	16
 #define CS35L41_GPIO2_CTRL_MASK		0x07000000
@@ -713,71 +709,61 @@
 #define CS35L41_GPIO_POL_MASK		0x1000
 #define CS35L41_GPIO_POL_SHIFT		12
 
+#define CS35L41_AMP_INV_PCM_SHIFT	14
+#define CS35L41_AMP_INV_PCM_MASK	BIT(CS35L41_AMP_INV_PCM_SHIFT)
+#define CS35L41_AMP_PCM_VOL_SHIFT	3
+#define CS35L41_AMP_PCM_VOL_MASK	(0x7FF << 3)
+#define CS35L41_AMP_PCM_VOL_MUTE	0x4CF
+
 #define CS35L41_CHIP_ID			0x35a40
 #define CS35L41R_CHIP_ID		0x35b40
 #define CS35L41_MTLREVID_MASK		0x0F
 #define CS35L41_REVID_A0		0xA0
+#define CS35L41_REVID_B0		0xB0
+#define CS35L41_REVID_B2		0xB2
 
 #define CS35L41_HALO_CORE_RESET		0x00000200
 
+#define CS35L41_FS1_WINDOW_MASK		0x000007FF
+#define CS35L41_FS2_WINDOW_MASK		0x00FFF800
+#define CS35L41_FS2_WINDOW_SHIFT	12
+
+#define CS35L41_SPI_MAX_FREQ_OTP	4000000
+
 #define CS35L41_RX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE)
-#define CS35L41_TX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE \
-				| SNDRV_PCM_FMTBIT_S32_LE)
+#define CS35L41_TX_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | SNDRV_PCM_FMTBIT_S24_LE)
 
 bool cs35l41_readable_reg(struct device *dev, unsigned int reg);
+bool cs35l41_precious_reg(struct device *dev, unsigned int reg);
 bool cs35l41_volatile_reg(struct device *dev, unsigned int reg);
 
-struct otp_packed_element_t {
+struct cs35l41_otp_packed_element_t {
 	u32 reg;
 	u8 shift;
 	u8 size;
 };
 
-struct otp_map_element_t {
+struct cs35l41_otp_map_element_t {
 	u32 id;
 	u32 num_elements;
-	const struct otp_packed_element_t *map;
+	const struct cs35l41_otp_packed_element_t *map;
+	u32 bit_offset;
+	u32 word_offset;
 };
 
 extern const struct reg_default cs35l41_reg[CS35L41_MAX_CACHE_REG];
-extern const struct otp_map_element_t otp_map_map[3];
+extern const struct cs35l41_otp_map_element_t
+				cs35l41_otp_map_map[CS35L41_NUM_OTP_MAPS];
 
-#define CS35L41_OTP_HDR_MASK_1	0xFFFFFFFE
-#define CS35L41_OTP_HDR_MASK_2	0x0000FFFF
-#define CS35L41_OTP_HDR_VAL_1	0x00001500
-#define CS35L41_OTP_HDR_VAL_2	0x00000300
+#define CS35L41_REGSTRIDE		4
 
-#define CS35L41_CSPL_CMD_NONE			0
-#define CS35L41_CSPL_CMD_MUTE			1
-#define CS35L41_CSPL_CMD_UNMUTE			2
-#define CS35L41_CSPL_CMD_REINIT			3
-
-#define CS35L41_CSPL_XM_STRUCT_ADDR		0x0280020c
-#define CS35L41_CSPL_COMMAND			0x02800210
-#define CS35L41_CSPL_STATE			0x02800214
-#define CS35L41_CSPL_CAL_STRUCT_ADDR		0x02800224
-#define CS35L41_AMB_TEMP_DEFAULT		25
-
-
-#define CS35L41_REGSTRIDE			4
-
-#define CS35L41_DSP_VIRT1_MBOX_SHIFT		20
-#define CS35L41_DSP_VIRT2_MBOX_SHIFT		21
-#define CS35L41_CSPL_MBOX_STS			CS35L41_DSP_MBOX_2
-/* Firmware update following reg */
-#define CS35L41_CSPL_MBOX_CMD_FW		CS35L41_DSP_VIRT2_MBOX_1
-#define CS35L41_CSPL_MBOX_CMD_FW_SHIFT		CS35L41_DSP_VIRT2_MBOX_SHIFT
-/* Driver update following reg */
-#define CS35L41_CSPL_MBOX_CMD_DRV		CS35L41_DSP_VIRT1_MBOX_1
-#define CS35L41_CSPL_MBOX_CMD_DRV_SHIFT		CS35L41_DSP_VIRT1_MBOX_SHIFT
-
-enum cs35l41_cspl_mboxstate {
+enum cs35l41_cspl_mbox_status {
 	CSPL_MBOX_STS_RUNNING = 0,
 	CSPL_MBOX_STS_PAUSED = 1,
 	CSPL_MBOX_STS_RDY_FOR_REINIT = 2,
 };
 
-enum cs35l41_cspl_mboxcmd {
+enum cs35l41_cspl_mbox_cmd {
 	CSPL_MBOX_CMD_NONE = 0,
 	CSPL_MBOX_CMD_PAUSE = 1,
 	CSPL_MBOX_CMD_RESUME = 2,
@@ -786,5 +772,23 @@ enum cs35l41_cspl_mboxcmd {
 	CSPL_MBOX_CMD_UNKNOWN_CMD = -1,
 	CSPL_MBOX_CMD_INVALID_SEQUENCE = -2,
 };
+
+struct cs35l41_private {
+	struct wm_adsp dsp; /* needs to be first member */
+	struct snd_soc_codec *codec;
+	struct cs35l41_platform_data pdata;
+	struct device *dev;
+	struct regmap *regmap;
+	struct regulator_bulk_data supplies[CS35L41_NUM_SUPPLIES];
+	int irq;
+	/* GPIO for /RST */
+	struct gpio_desc *reset_gpio;
+	void (*otp_setup)(struct cs35l41_private *cs35l41, bool is_pre_setup,
+			  unsigned int *freq);
+};
+
+int cs35l41_probe(struct cs35l41_private *cs35l41,
+		  struct cs35l41_platform_data *pdata);
+void cs35l41_remove(struct cs35l41_private *cs35l41);
 
 #endif /*__CS35L41_H__*/

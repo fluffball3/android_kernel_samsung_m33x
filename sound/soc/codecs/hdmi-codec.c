@@ -188,97 +188,84 @@ static const struct snd_pcm_chmap_elem hdmi_codec_8ch_chmaps[] = {
 /*
  * hdmi_codec_channel_alloc: speaker configuration available for CEA
  *
- * This is an ordered list where ca_id must exist in hdmi_codec_8ch_chmaps
+ * This is an ordered list that must match with hdmi_codec_8ch_chmaps struct
  * The preceding ones have better chances to be selected by
  * hdmi_codec_get_ch_alloc_table_idx().
  */
 static const struct hdmi_codec_cea_spk_alloc hdmi_codec_channel_alloc[] = {
 	{ .ca_id = 0x00, .n_ch = 2,
-	  .mask = FL | FR },
-	{ .ca_id = 0x03, .n_ch = 4,
-	  .mask = FL | FR | LFE | FC },
+	  .mask = FL | FR},
+	/* 2.1 */
+	{ .ca_id = 0x01, .n_ch = 4,
+	  .mask = FL | FR | LFE},
+	/* Dolby Surround */
 	{ .ca_id = 0x02, .n_ch = 4,
 	  .mask = FL | FR | FC },
-	{ .ca_id = 0x01, .n_ch = 4,
-	  .mask = FL | FR | LFE },
+	/* surround51 */
 	{ .ca_id = 0x0b, .n_ch = 6,
-	  .mask = FL | FR | LFE | FC | RL | RR },
-	{ .ca_id = 0x0a, .n_ch = 6,
-	  .mask = FL | FR | FC | RL | RR },
-	{ .ca_id = 0x09, .n_ch = 6,
-	  .mask = FL | FR | LFE | RL | RR },
+	  .mask = FL | FR | LFE | FC | RL | RR},
+	/* surround40 */
 	{ .ca_id = 0x08, .n_ch = 6,
 	  .mask = FL | FR | RL | RR },
-	{ .ca_id = 0x07, .n_ch = 6,
-	  .mask = FL | FR | LFE | FC | RC },
-	{ .ca_id = 0x06, .n_ch = 6,
-	  .mask = FL | FR | FC | RC },
-	{ .ca_id = 0x05, .n_ch = 6,
-	  .mask = FL | FR | LFE | RC },
-	{ .ca_id = 0x04, .n_ch = 6,
-	  .mask = FL | FR | RC },
-	{ .ca_id = 0x13, .n_ch = 8,
-	  .mask = FL | FR | LFE | FC | RL | RR | RLC | RRC },
-	{ .ca_id = 0x1f, .n_ch = 8,
-	  .mask = FL | FR | LFE | FC | RL | RR | FLC | FRC },
-	{ .ca_id = 0x12, .n_ch = 8,
-	  .mask = FL | FR | FC | RL | RR | RLC | RRC },
-	{ .ca_id = 0x1e, .n_ch = 8,
-	  .mask = FL | FR | FC | RL | RR | FLC | FRC },
-	{ .ca_id = 0x11, .n_ch = 8,
-	  .mask = FL | FR | LFE | RL | RR | RLC | RRC },
-	{ .ca_id = 0x1d, .n_ch = 8,
-	  .mask = FL | FR | LFE | RL | RR | FLC | FRC },
-	{ .ca_id = 0x10, .n_ch = 8,
-	  .mask = FL | FR | RL | RR | RLC | RRC },
-	{ .ca_id = 0x1c, .n_ch = 8,
-	  .mask = FL | FR | RL | RR | FLC | FRC },
+	/* surround41 */
+	{ .ca_id = 0x09, .n_ch = 6,
+	  .mask = FL | FR | LFE | RL | RR },
+	/* surround50 */
+	{ .ca_id = 0x0a, .n_ch = 6,
+	  .mask = FL | FR | FC | RL | RR },
+	/* 6.1 */
 	{ .ca_id = 0x0f, .n_ch = 8,
 	  .mask = FL | FR | LFE | FC | RL | RR | RC },
-	{ .ca_id = 0x1b, .n_ch = 8,
-	  .mask = FL | FR | LFE | RC | FC | FLC | FRC },
-	{ .ca_id = 0x0e, .n_ch = 8,
-	  .mask = FL | FR | FC | RL | RR | RC },
-	{ .ca_id = 0x1a, .n_ch = 8,
-	  .mask = FL | FR | RC | FC | FLC | FRC },
-	{ .ca_id = 0x0d, .n_ch = 8,
-	  .mask = FL | FR | LFE | RL | RR | RC },
-	{ .ca_id = 0x19, .n_ch = 8,
-	  .mask = FL | FR | LFE | RC | FLC | FRC },
-	{ .ca_id = 0x0c, .n_ch = 8,
-	  .mask = FL | FR | RC | RL | RR },
-	{ .ca_id = 0x18, .n_ch = 8,
-	  .mask = FL | FR | RC | FLC | FRC },
-	{ .ca_id = 0x17, .n_ch = 8,
-	  .mask = FL | FR | LFE | FC | FLC | FRC },
-	{ .ca_id = 0x16, .n_ch = 8,
-	  .mask = FL | FR | FC | FLC | FRC },
-	{ .ca_id = 0x15, .n_ch = 8,
-	  .mask = FL | FR | LFE | FLC | FRC },
-	{ .ca_id = 0x14, .n_ch = 8,
-	  .mask = FL | FR | FLC | FRC },
-	{ .ca_id = 0x0b, .n_ch = 8,
-	  .mask = FL | FR | LFE | FC | RL | RR },
-	{ .ca_id = 0x0a, .n_ch = 8,
-	  .mask = FL | FR | FC | RL | RR },
-	{ .ca_id = 0x09, .n_ch = 8,
-	  .mask = FL | FR | LFE | RL | RR },
-	{ .ca_id = 0x08, .n_ch = 8,
-	  .mask = FL | FR | RL | RR },
-	{ .ca_id = 0x07, .n_ch = 8,
-	  .mask = FL | FR | LFE | FC | RC },
-	{ .ca_id = 0x06, .n_ch = 8,
-	  .mask = FL | FR | FC | RC },
-	{ .ca_id = 0x05, .n_ch = 8,
-	  .mask = FL | FR | LFE | RC },
-	{ .ca_id = 0x04, .n_ch = 8,
-	  .mask = FL | FR | RC },
+	/* surround71 */
+	{ .ca_id = 0x13, .n_ch = 8,
+	  .mask = FL | FR | LFE | FC | RL | RR | RLC | RRC },
+	/* others */
 	{ .ca_id = 0x03, .n_ch = 8,
 	  .mask = FL | FR | LFE | FC },
-	{ .ca_id = 0x02, .n_ch = 8,
-	  .mask = FL | FR | FC },
-	{ .ca_id = 0x01, .n_ch = 8,
-	  .mask = FL | FR | LFE },
+	{ .ca_id = 0x04, .n_ch = 8,
+	  .mask = FL | FR | RC},
+	{ .ca_id = 0x05, .n_ch = 8,
+	  .mask = FL | FR | LFE | RC },
+	{ .ca_id = 0x06, .n_ch = 8,
+	  .mask = FL | FR | FC | RC },
+	{ .ca_id = 0x07, .n_ch = 8,
+	  .mask = FL | FR | LFE | FC | RC },
+	{ .ca_id = 0x0c, .n_ch = 8,
+	  .mask = FL | FR | RC | RL | RR },
+	{ .ca_id = 0x0d, .n_ch = 8,
+	  .mask = FL | FR | LFE | RL | RR | RC },
+	{ .ca_id = 0x0e, .n_ch = 8,
+	  .mask = FL | FR | FC | RL | RR | RC },
+	{ .ca_id = 0x10, .n_ch = 8,
+	  .mask = FL | FR | RL | RR | RLC | RRC },
+	{ .ca_id = 0x11, .n_ch = 8,
+	  .mask = FL | FR | LFE | RL | RR | RLC | RRC },
+	{ .ca_id = 0x12, .n_ch = 8,
+	  .mask = FL | FR | FC | RL | RR | RLC | RRC },
+	{ .ca_id = 0x14, .n_ch = 8,
+	  .mask = FL | FR | FLC | FRC },
+	{ .ca_id = 0x15, .n_ch = 8,
+	  .mask = FL | FR | LFE | FLC | FRC },
+	{ .ca_id = 0x16, .n_ch = 8,
+	  .mask = FL | FR | FC | FLC | FRC },
+	{ .ca_id = 0x17, .n_ch = 8,
+	  .mask = FL | FR | LFE | FC | FLC | FRC },
+	{ .ca_id = 0x18, .n_ch = 8,
+	  .mask = FL | FR | RC | FLC | FRC },
+	{ .ca_id = 0x19, .n_ch = 8,
+	  .mask = FL | FR | LFE | RC | FLC | FRC },
+	{ .ca_id = 0x1a, .n_ch = 8,
+	  .mask = FL | FR | RC | FC | FLC | FRC },
+	{ .ca_id = 0x1b, .n_ch = 8,
+	  .mask = FL | FR | LFE | RC | FC | FLC | FRC },
+	{ .ca_id = 0x1c, .n_ch = 8,
+	  .mask = FL | FR | RL | RR | FLC | FRC },
+	{ .ca_id = 0x1d, .n_ch = 8,
+	  .mask = FL | FR | LFE | RL | RR | FLC | FRC },
+	{ .ca_id = 0x1e, .n_ch = 8,
+	  .mask = FL | FR | FC | RL | RR | FLC | FRC },
+	{ .ca_id = 0x1f, .n_ch = 8,
+	  .mask = FL | FR | LFE | FC | RL | RR | FLC | FRC },
 };
 
 struct hdmi_codec_priv {
@@ -290,7 +277,7 @@ struct hdmi_codec_priv {
 	bool busy;
 	struct snd_soc_jack *jack;
 	unsigned int jack_status;
-	u8 iec_status[5];
+	u8 iec_status[AES_IEC958_STATUS_SIZE];
 };
 
 static const struct snd_soc_dapm_widget hdmi_widgets[] = {
@@ -387,8 +374,7 @@ static int hdmi_codec_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 	struct snd_pcm_chmap *info = snd_kcontrol_chip(kcontrol);
 	struct hdmi_codec_priv *hcp = info->private_data;
 
-	if (hcp->chmap_idx != HDMI_CODEC_CHMAP_IDX_UNKNOWN)
-		map = info->chmap[hcp->chmap_idx].map;
+	map = info->chmap[hcp->chmap_idx].map;
 
 	for (i = 0; i < info->max_channels; i++) {
 		if (hcp->chmap_idx == HDMI_CODEC_CHMAP_IDX_UNKNOWN)
@@ -699,6 +685,25 @@ static int hdmi_codec_mute(struct snd_soc_dai *dai, int mute, int direction)
 	return -ENOTSUPP;
 }
 
+/*
+ * This driver can select all SND_SOC_DAIFMT_CBx_CFx,
+ * but need to be selected from Sound Card, not be auto selected.
+ * Because it might be used from other driver.
+ * For example,
+ *	${LINUX}/drivers/gpu/drm/bridge/synopsys/dw-hdmi-i2s-audio.c
+ */
+static u64 hdmi_codec_formats =
+	SND_SOC_POSSIBLE_DAIFMT_NB_NF	|
+	SND_SOC_POSSIBLE_DAIFMT_NB_IF	|
+	SND_SOC_POSSIBLE_DAIFMT_IB_NF	|
+	SND_SOC_POSSIBLE_DAIFMT_IB_IF	|
+	SND_SOC_POSSIBLE_DAIFMT_I2S	|
+	SND_SOC_POSSIBLE_DAIFMT_DSP_A	|
+	SND_SOC_POSSIBLE_DAIFMT_DSP_B	|
+	SND_SOC_POSSIBLE_DAIFMT_RIGHT_J	|
+	SND_SOC_POSSIBLE_DAIFMT_LEFT_J	|
+	SND_SOC_POSSIBLE_DAIFMT_AC97;
+
 static const struct snd_soc_dai_ops hdmi_codec_i2s_dai_ops = {
 	.startup	= hdmi_codec_startup,
 	.shutdown	= hdmi_codec_shutdown,
@@ -706,6 +711,8 @@ static const struct snd_soc_dai_ops hdmi_codec_i2s_dai_ops = {
 	.prepare	= hdmi_codec_prepare,
 	.set_fmt	= hdmi_codec_i2s_set_fmt,
 	.mute_stream	= hdmi_codec_mute,
+	.auto_selectable_formats	= &hdmi_codec_formats,
+	.num_auto_selectable_formats	= 1,
 };
 
 static const struct snd_soc_dai_ops hdmi_codec_spdif_dai_ops = {
@@ -836,9 +843,8 @@ static int hdmi_dai_probe(struct snd_soc_dai *dai)
 static void hdmi_codec_jack_report(struct hdmi_codec_priv *hcp,
 				   unsigned int jack_status)
 {
-	if (jack_status != hcp->jack_status) {
-		if (hcp->jack)
-			snd_soc_jack_report(hcp->jack, jack_status, SND_JACK_LINEOUT);
+	if (hcp->jack && jack_status != hcp->jack_status) {
+		snd_soc_jack_report(hcp->jack, jack_status, SND_JACK_LINEOUT);
 		hcp->jack_status = jack_status;
 	}
 }
@@ -864,20 +870,18 @@ static int hdmi_codec_set_jack(struct snd_soc_component *component,
 			       void *data)
 {
 	struct hdmi_codec_priv *hcp = snd_soc_component_get_drvdata(component);
+	int ret = -ENOTSUPP;
 
 	if (hcp->hcd.ops->hook_plugged_cb) {
 		hcp->jack = jack;
-
-		/*
-		 * Report the initial jack status which may have been provided
-		 * by the parent hdmi driver while the hpd hook was registered.
-		 */
-		snd_soc_jack_report(jack, hcp->jack_status, SND_JACK_LINEOUT);
-
-		return 0;
+		ret = hcp->hcd.ops->hook_plugged_cb(component->dev->parent,
+						    hcp->hcd.data,
+						    plugged_cb,
+						    component->dev);
+		if (ret)
+			hcp->jack = NULL;
 	}
-
-	return -ENOTSUPP;
+	return ret;
 }
 
 static int hdmi_dai_spdif_probe(struct snd_soc_dai *dai)
@@ -961,21 +965,6 @@ static int hdmi_of_xlate_dai_id(struct snd_soc_component *component,
 	return ret;
 }
 
-static int hdmi_probe(struct snd_soc_component *component)
-{
-	struct hdmi_codec_priv *hcp = snd_soc_component_get_drvdata(component);
-	int ret = 0;
-
-	if (hcp->hcd.ops->hook_plugged_cb) {
-		ret = hcp->hcd.ops->hook_plugged_cb(component->dev->parent,
-						    hcp->hcd.data,
-						    plugged_cb,
-						    component->dev);
-	}
-
-	return ret;
-}
-
 static void hdmi_remove(struct snd_soc_component *component)
 {
 	struct hdmi_codec_priv *hcp = snd_soc_component_get_drvdata(component);
@@ -986,7 +975,6 @@ static void hdmi_remove(struct snd_soc_component *component)
 }
 
 static const struct snd_soc_component_driver hdmi_driver = {
-	.probe			= hdmi_probe,
 	.remove			= hdmi_remove,
 	.dapm_widgets		= hdmi_widgets,
 	.num_dapm_widgets	= ARRAY_SIZE(hdmi_widgets),
