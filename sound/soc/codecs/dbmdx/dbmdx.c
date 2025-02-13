@@ -6943,7 +6943,8 @@ static int dbmdx_configure_ns(struct dbmdx_private *p, int mode, bool enable)
 		to_set_idle_mode = false;
 		to_set_bypass = false;
 		p->va_ns_cfg_index = VA_NS_CONFIG_DISABLE;
-	} else if (p->va_active_mic_config == DBMDX_MIC_MODE_ANALOG) {
+	} else if (p->va_active_mic_config == DBMDX_MIC_MODE_ANALOG
+			|| p->va_active_mic_config == DBMDX_MIC_MODE_ANALOG_DUAL) {
 		to_set_idle_mode = true;
 		to_load_asrp_fw = false;
 		to_set_bypass = false;

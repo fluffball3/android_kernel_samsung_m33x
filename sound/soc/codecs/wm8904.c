@@ -1990,7 +1990,7 @@ static struct snd_soc_dai_driver wm8904_dai = {
 		.formats = WM8904_FORMATS,
 	},
 	.ops = &wm8904_dai_ops,
-	.symmetric_rates = 1,
+	.symmetric_rate = 1,
 };
 
 static void wm8904_handle_retune_mobile_pdata(struct snd_soc_component *component)
@@ -2305,9 +2305,6 @@ static int wm8904_i2c_probe(struct i2c_client *i2c,
 	/* Use normal bias source */
 	regmap_update_bits(wm8904->regmap, WM8904_BIAS_CONTROL_0,
 			    WM8904_POBCTRL, 0);
-
-	/* Fill the cache for the ADC test register */
-	regmap_read(wm8904->regmap, WM8904_ADC_TEST_0, &val);
 
 	/* Can leave the device powered off until we need it */
 	regcache_cache_only(wm8904->regmap, true);

@@ -20,6 +20,7 @@
 extern "C" {
 #include "TFA_I2C.h"
 #endif
+#include "tfa_device.h"
 
 /* Linux kernel module defines TFA98XX_GIT_VERSIONS
  * in the linux_driver/Makefile
@@ -29,7 +30,9 @@ extern "C" {
 /* #define TFA98XX_GIT_VERSIONS "v6.7.3+a-Jul.10,2020" */
 /* #define TFA98XX_GIT_VERSIONS "v6.7.4-Jul.27,2020" */
 /* #define TFA98XX_GIT_VERSIONS "v6.7.4+-Oct.06,2020" */
-#define TFA98XX_GIT_VERSIONS "v6.7.4-++-Jan.27,2021"
+/* #define TFA98XX_GIT_VERSIONS "v6.7.4++-Jan.27,2021" */
+/* #define TFA98XX_GIT_VERSIONS "v6.7.14-Jan.14,2022" */
+#define TFA98XX_GIT_VERSIONS "v6.7.14+-May.27,2022"
 
 #if !defined(TFA98XX_GIT_VERSIONS)
 #include "versions.h"
@@ -43,10 +46,10 @@ extern "C" {
 	/* #define TFA98XX_API_REV_STR "v6.7.3+a-Jul.10,2020" */
 	/* #define TFA98XX_API_REV_STR "v6.7.4-Jul.27,2020" */
 	/* #define TFA98XX_API_REV_STR "v6.7.4+-Oct.06,2020" */
-	#define TFA98XX_API_REV_STR "v6.7.4-++-Jan.27,2021"
+	/* #define TFA98XX_API_REV_STR "v6.7.4++-Jan.27,2021" */
+	/* #define TFA98XX_API_REV_STR "v6.7.14-Jan.14,2022" */
+	#define TFA98XX_API_REV_STR "v6.7.14+-May.27,2022"
 #endif
-
-#include "tfa_device.h"
 
 /*
  * data previously defined in Tfa9888_dsp.h
@@ -113,15 +116,14 @@ extern "C" {
 #define TFA98XX_LOADFW_NTRIES			800
 #define TFA98XX_WAITRESULT_NTRIES		40
 #define TFA98XX_WAITRESULT_NTRIES_LONG	2000
+#define TFA98XX_WAITPOWERUP_NTRIES		100
 
 /* following lengths are in bytes */
 #define TFA98XX_PRESET_LENGTH			87
 #define TFA98XX_CONFIG_LENGTH			201
 #define TFA98XX_DRC_LENGTH              381	/* 127 words */
 
-#if defined(TFA_REDUCE_BYPASS_GAIN)
 #define TFA_TDMSPKG_IN_BYPASS	14
-#endif
 
 /* not used in current driver */
 /*
@@ -285,6 +287,7 @@ struct tfa98xx_drc_state_info {
 	float grpostdrc2[2];
 	float grbldrc[2];
 };
+
 struct tfa98xx_state_info {
 	/* SpeakerBoost State */
 	float agc_gain;	/* Current AGC Gain value */
@@ -326,7 +329,6 @@ struct tfa_group {
 	uint8_t msg_size;
 	uint8_t profile_id[64];
 };
-
 
 struct tfa98xx_memtrack_data {
 	int length;
@@ -371,14 +373,6 @@ enum tfa98xx_dmem tfa98xx_filter_mem(struct tfa_device *tfa,
  */
 enum tfa98xx_error tfa98xx_init(struct tfa_device *tfa);
 
-/**
- * If needed, this function can be used to get a text version
- * of the status ID code
- * @param status the given status ID code
- * @return the I2C status ID string
- */
-const char *tfa98xx_get_i2c_status_id_string(int status);
-
 /* control the powerdown bit
  * @param tfa the device struct pointer
  * @param powerdown must be 1 or 0
@@ -413,6 +407,8 @@ void tfa98xx_key2(struct tfa_device *tfa, int lock);
 int tfa_calibrate(struct tfa_device *tfa);
 void tfa98xx_set_exttemp(struct tfa_device *tfa, short ext_temp);
 short tfa98xx_get_exttemp(struct tfa_device *tfa);
+
+enum tfa98xx_error tfa98xx_read_reference_temp(short *value);
 
 /* control the volume of the DSP
  * @param vol volume in bit field. It must be between 0 and 255
@@ -618,13 +614,6 @@ enum tfa98xx_error tfa_dsp_get_calibration_impedance(struct tfa_device *tfa);
  */
 int tfa_get_calibration_info(struct tfa_device *tfa, int channel);
 
-#if defined(USE_TFA9891)
-/*
- * return sign extended tap pattern
- */
-int tfa_get_tap_pattern(struct tfa_device *tfa);
-#endif
-
 /*
  * Reads a number of words from dsp memory
  * @param tfa the device struct pointer
@@ -733,9 +722,6 @@ enum tfa98xx_error tfa98xx_write_data(struct tfa_device *tfa,
 enum tfa98xx_error tfa98xx_write_raw(struct tfa_device *tfa,
 	int num_bytes, const unsigned char data[]);
 
-/* support for converting error codes into text */
-const char *tfa98xx_get_error_string(enum tfa98xx_error error);
-
 /*
  * convert signed 24 bit integers to 32bit aligned bytes
  * input:   data contains "num_bytes/3" int24 elements
@@ -794,7 +780,7 @@ enum tfa98xx_error tfa98xx_dsp_write_drc(struct tfa_device *tfa,
  * @param length length of the character buffer to write
  * @param buf character buffer to write
  */
-int tfa_dsp_msg(void *tfa, int length, const char *buf);
+int tfa_dsp_msg_rpc(void *tfa, int length, const char *buf);
 
 /*
  * Read a message from dsp
@@ -802,7 +788,7 @@ int tfa_dsp_msg(void *tfa, int length, const char *buf);
  * @param length number of bytes of the message
  * @param bytes pointer to unsigned char buffer
  */
-int tfa_dsp_msg_read(void *tfa, int length, unsigned char *bytes);
+int tfa_dsp_msg_read_rpc(void *tfa, int length, unsigned char *bytes);
 
 /*
  * The wrapper functions to call the dsp msg, register and memory function
@@ -810,10 +796,6 @@ int tfa_dsp_msg_read(void *tfa, int length, unsigned char *bytes);
  */
 enum tfa98xx_error dsp_msg(struct tfa_device *tfa,
 	int length, const char *buf);
-#if defined(TFADSP_DSP_MSG_PACKET_STRATEGY)
-enum tfa98xx_error dsp_msg_packet(struct tfa_device *tfa,
-	uint8_t *blob, int tfadsp_buf_size);
-#endif
 enum tfa98xx_error dsp_msg_read(struct tfa_device *tfa,
 	int length, unsigned char *bytes);
 enum tfa98xx_error reg_write(struct tfa_device *tfa,
@@ -827,51 +809,12 @@ enum tfa98xx_error mem_read(struct tfa_device *tfa,
 
 enum tfa98xx_error dsp_partial_coefficients(struct tfa_device *tfa,
 	uint8_t *prev, uint8_t *next);
-#if defined(USE_TFA9894N2)
-int is_94_N2_device(struct tfa_device *tfa);
-#endif
 
 /*
- * write/read raw msg functions:
- * the buffer is provided in little endian format, each word occupying
- * 3 bytes, length is in bytes.
- * Functions will return immediately and do not not wait for DSP response.
- * An ID is added to modify the command-ID
+ * Get manstate from device
  * @param tfa the device struct pointer
- * @param length length of the character buffer to write
- * @param buf character buffer to write
- * @param cmdid command identifier
  */
-enum tfa98xx_error tfa_dsp_msg_id(struct tfa_device *tfa,
-	int length, const char *buf, uint8_t cmdid[3]);
-
-/*
- * write raw dsp msg functions
- * @param tfa the device struct pointer
- * @param length length of the character buffer to write
- * @param buffer character buffer to write
- */
-enum tfa98xx_error tfa_dsp_msg_write(struct tfa_device *tfa,
-	int length, const char *buffer);
-
-/*
- * write raw dsp msg functions
- * @param tfa the device struct pointer
- * @param length length of the character buffer to write
- * @param buffer character buffer to write
- * @param cmdid command identifier
- */
-enum tfa98xx_error tfa_dsp_msg_write_id(struct tfa_device *tfa,
-	int length, const char *buffer, uint8_t cmdid[3]);
-
-/*
- * status function used by tfa_dsp_msg() to retrieve command/msg status:
- * return a <0 status of the DSP did not ACK.
- * @param tfa the device struct pointer
- * @param p_rpc_status status for remote processor communication
- */
-enum tfa98xx_error tfa_dsp_msg_status(struct tfa_device *tfa,
-	int *p_rpc_status);
+int tfa_get_manstate(struct tfa_device *tfa);
 
 int tfa_set_bf(struct tfa_device *tfa,
 	const uint16_t bf, const uint16_t value);
@@ -901,40 +844,6 @@ int tfa_read_reg(struct tfa_device *tfa,
 	const uint16_t bf);
 
 /* bitfield */
-/*
- * get the datasheet or bitfield name corresponding to the bitfield number
- * @param num is the number for which to get the bitfield name
- * @param rev is the device type
- */
-char *tfa_cont_bf_name(uint16_t num, unsigned short rev);
-
-/*
- * get the datasheet name corresponding to the bitfield number
- * @param num is the number for which to get the bitfield name
- * @param rev is the device type
- */
-char *tfa_cont_ds_name(uint16_t num, unsigned short rev);
-
-/*
- * get the bitfield name corresponding to the bitfield number
- * @param num is the number for which to get the bitfield name
- * @param rev is the device type
- */
-char *tfa_cont_bit_name(uint16_t num, unsigned short rev);
-
-/*
- * get the bitfield number corresponding to the bitfield name
- * @param name is the bitfield name for which to get the bitfield number
- * @param rev is the device type
- */
-uint16_t tfa_cont_bf_enum(const char *name, unsigned short rev);
-
-/*
- * get the bitfield number corresponding to the bitfield name,
- * checks for all devices
- * @param name is the bitfield name for which to get the bitfield number
- */
-uint16_t tfa_cont_bf_enum_any(const char *name);
 
 #define TFA_FAM(tfa, fieldname) \
 	((tfa->tfa_family == 1) ? \
@@ -964,23 +873,8 @@ uint16_t tfa_cont_bf_enum_any(const char *name);
 #define TFA_READ_REG(tfa, fieldname) \
 	tfa_read_reg(tfa, TFA_FAM(tfa, fieldname))
 
-/* instance for TFA9874 / TFA9878 / TFA9872 */
-#if defined(USE_TFA9874)
-#define TFA7x_FAM(tfa, fieldname) (TFA9874_BF_##fieldname)
-#elif defined(USE_TFA9878)
+/* instance for TFA9874 / TFA9878 / TFA9872 / TFA9894 */
 #define TFA7x_FAM(tfa, fieldname) (TFA9878_BF_##fieldname)
-#elif defined(USE_TFA9872)
-#define TFA7x_FAM(tfa, fieldname) (TFA9872_BF_##fieldname)
-#elif defined(USE_TFA9894)
-/* instance for TFA9894 */
-#if defined(USE_TFA9894N2)
-#define TFA7x_FAM(tfa, fieldname) (TFA9894N2_BF_##fieldname)
-#else
-#define TFA7x_FAM(tfa, fieldname) (TFA9894_BF_##fieldname)
-#endif
-#else
-#define TFA7x_FAM(tfa, fieldname) TFA_FAM(tfa, fieldname)
-#endif
 
 /* set/get bit fields to HW register*/
 #define TFA7x_SET_BF(tfa, fieldname, value) \
@@ -1013,12 +907,6 @@ uint16_t tfa_cont_bf_enum_any(const char *name);
 #define TFA98XX_API_REWRTIE_MTP_NTRIES 5
 #define CAL_STATUS_INTERVAL	100
 
-/*
- * run the startup/init sequence and set ACS bit
- * @param tfa the device struct pointer
- * @param state the cold start state that is requested
- */
-enum tfa98xx_error tfa_run_coldboot(struct tfa_device *tfa, int state);
 enum tfa98xx_error tfa_run_mute(struct tfa_device *tfa);
 enum tfa98xx_error tfa_run_unmute(struct tfa_device *tfa);
 
@@ -1037,7 +925,6 @@ enum tfa98xx_error tfa_wait_cal(struct tfa_device *tfa);
 int tfa_run_damage_check(struct tfa_device *tfa,
 	int dsp_event, int dsp_status);
 
-#if defined(TFA_USE_TFAVVAL_NODE)
 /*
  * check V validation result with event / status
  * @param tfa the device struct pointer
@@ -1046,7 +933,6 @@ int tfa_run_damage_check(struct tfa_device *tfa,
  */
 int tfa_run_vval_result_check(struct tfa_device *tfa,
 	int dsp_event, int dsp_status);
-#endif /* TFA_USE_TFAVVAL_NODE */
 
 /*
  * wait for calibrate_done
@@ -1062,6 +948,13 @@ enum tfa98xx_error tfa_run_wait_calibration(struct tfa_device *tfa,
  * @param profile the profile that should be loaded
  */
 enum tfa98xx_error tfa_run_coldstartup(struct tfa_device *tfa, int profile);
+
+/*
+ * run the startup/init sequence and set ACS bit
+ * @param tfa the device struct pointer
+ * @param state the cold start state that is requested
+ */
+enum tfa98xx_error tfa_run_coldboot(struct tfa_device *tfa, int state);
 
 /*
  * this will load the patch witch will implicitly start the DSP
@@ -1087,6 +980,11 @@ enum tfa98xx_error tfa_set_calibration_values(struct tfa_device *tfa);
  * Call tfa_set_calibration_values at once with loop
  */
 enum tfa98xx_error tfa_set_calibration_values_once(struct tfa_device *tfa);
+
+/*
+ * Force to bypass and initialize algorithm if it's already configured
+ */
+enum tfa98xx_error tfa98xx_set_tfadsp_bypass(struct tfa_device *tfa);
 
 /*
  * start the maximus speakerboost algorithm
@@ -1129,7 +1027,7 @@ enum tfa98xx_error tfa_cf_powerup(struct tfa_device *tfa);
  * print the current device manager state
  * @param tfa the device struct pointer
  */
-enum tfa98xx_error show_current_state(struct tfa_device *tfa);
+enum tfa98xx_error tfa_show_current_state(struct tfa_device *tfa);
 
 /*
  * Init registers and coldboot dsp
@@ -1167,11 +1065,6 @@ enum tfa_status_type {
 int tfa_count_status_flag(struct tfa_device *tfa, int type);
 void tfa_set_status_flag(struct tfa_device *tfa, int type, int value);
 
-#if defined(TFA_CHANGE_PCM_FORMAT)
-int tfa_is_pcm_format_changed(struct tfa_device *tfa);
-void tfa_overwrite_pcm_format(struct tfa_device *tfa);
-#endif /* TFA_CHANGE_PCM_FORMAT */
-
 void tfa_set_query_info(struct tfa_device *tfa);
 
 int tfa_get_pga_gain(struct tfa_device *tfa);
@@ -1183,21 +1076,16 @@ int tfa_get_noclk(struct tfa_device *tfa);
  * @param tfa the device struct pointer
  * @return tfa error enum
  */
-enum tfa98xx_error tfa_status(struct tfa_device *tfa);
-/* instance for TFA9874 / TFA9878 */
-#if defined(USE_TFA9874) || defined(USE_TFA9878) || defined(USE_TFA9894)
+/* instance for TFA9874 / TFA9878 / TFA9894 */
 enum tfa98xx_error tfa7x_status(struct tfa_device *tfa);
-#endif
 
 /*
  * function overload for flag_mtp_busy
  */
 int tfa_dev_get_mtpb(struct tfa_device *tfa);
 
-#if defined(TFA_USE_TFASTC_NODE)
 enum tfa98xx_error tfa_read_tspkr(struct tfa_device *tfa, int *spkt);
 enum tfa98xx_error tfa_write_volume(struct tfa_device *tfa, int *sknt);
-#endif
 
 #ifdef __cplusplus
 }
