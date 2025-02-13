@@ -58,7 +58,6 @@ struct tfa_irq_name {
 /* missing 'common' defs break the build */
 #define TFA2_BF_CFSM -1
 
-
 /* MTP access uses registers
  *  defs are derived from corresponding bitfield names as used in the BF macros
  */
@@ -73,17 +72,17 @@ struct tfa_irq_name {
 #define TFA1_BF_SAAMGAIN 0x2202
 #define TFA2_BF_SAAMGAIN -1
 
-/* TFA9872 specific bit field names */
-#define TFA2_BF_IELP0 TFA9872_BF_IELP0
-#define TFA2_BF_ISTLP0 TFA9872_BF_ISTLP0
-#define TFA2_BF_IPOLP0 TFA9872_BF_IPOLP0
-#define TFA2_BF_IELP1 TFA9872_BF_IELP1
-#define TFA2_BF_ISTLP1 TFA9872_BF_ISTLP1
-#define TFA2_BF_IPOLP1 TFA9872_BF_IPOLP1
-#define TFA2_BF_LP0 TFA9872_BF_LP0
-#define TFA2_BF_LP1 TFA9872_BF_LP1
-#define TFA2_BF_R25C TFA9872_BF_R25C
-#define TFA2_BF_SAMMODE TFA9872_BF_SAMMODE
+/* TFA9878 specific bit field names */
+#define TFA2_BF_IELP0 -1
+#define TFA2_BF_ISTLP0 -1
+#define TFA2_BF_IPOLP0 -1
+#define TFA2_BF_IELP1 -1
+#define TFA2_BF_ISTLP1 -1
+#define TFA2_BF_IPOLP1 -1
+#define TFA2_BF_LP0 TFA9878_BF_LP0
+#define TFA2_BF_LP1 TFA9878_BF_LP1
+#define TFA2_BF_R25C TFA9878_BF_R25C
+#define TFA2_BF_SAMMODE -1
 
 /* interrupt bit field names of TFA2 and TFA1 do not match */
 #define TFA1_BF_IEACS TFA1_BF_INTENACS
