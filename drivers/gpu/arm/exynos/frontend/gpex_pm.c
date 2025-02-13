@@ -165,7 +165,9 @@ int gpex_pm_power_on(struct device *dev)
 		gpex_debug_incr_error_cnt(HIST_RTPM);
 	}
 
+#ifdef CONFIG_MALI_EXYNOS_DVFS
 	gpex_dvfs_start();
+#endif
 
 	return ret;
 }
@@ -174,7 +176,9 @@ void gpex_pm_power_autosuspend(struct device *dev)
 {
 	int ret = 0;
 
+#ifdef CONFIG_MALI_EXYNOS_IFPO
 	gpex_ifpo_power_down();
+#endif
 
 	if (!pm.skip_auto_suspend) {
 		pm_runtime_mark_last_busy(dev);
@@ -190,7 +194,9 @@ void gpex_pm_suspend(struct device *dev)
 	int ret = 0;
 
 	gpexwa_wakeup_clock_suspend();
+#ifdef CONFIG_MALI_EXYNOS_QOS
 	gpex_qos_set_from_clock(0);
+#endif
 
 	gpex_debug_new_record(HIST_SUSPEND);
 	ret = pm_runtime_suspend(dev);
@@ -216,7 +222,9 @@ static void gpu_poweroff_delay_recovery_callback(struct work_struct *data)
 	gpex_clock_lock_clock(GPU_CLOCK_MIN_UNLOCK, MM_LOCK, 0);
 	GPU_LOG(MALI_EXYNOS_DEBUG, "gpu poweroff delay recovery done & clock min unlock\n");
 
+#ifdef CONFIG_MALI_EXYNOS_CL_BOOST
 	gpex_clboost_set_state(CLBOOST_ENABLE);
+#endif
 }
 
 static int gpu_poweroff_delay_recovery(unsigned int period)
@@ -360,14 +368,22 @@ void gpex_pm_runtime_off_prepare(struct device *dev)
 
 	gpexbe_smc_hvc_notify_power_off();
 
+#ifdef CONFIG_MALI_EXYNOS_IFPO
 	/* power up from ifpo down state before going to full rtpm power off */
 	gpex_ifpo_power_up();
+#endif
+#ifdef CONFIG_MALI_TSG
 	gpex_tsg_reset_count(0);
+#endif
+#ifdef CONFIG_MALI_EXYNOS_DVFS
 	gpex_dvfs_stop();
+#endif
 
 	gpex_clock_prepare_runtime_off();
 	gpexwa_wakeup_clock_set();
+#ifdef CONFIG_MALI_EXYNOS_QOS
 	gpex_qos_set_from_clock(0);
+#endif
 
 	pm.power_status = false;
 }
