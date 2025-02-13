@@ -1034,6 +1034,7 @@ int arizona_out_ev(struct snd_soc_dapm_widget *w,
 				priv->out_down_delay += 1000;
 				break;
 			}
+			break;
 		default:
 			break;
 		}
