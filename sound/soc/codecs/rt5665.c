@@ -1180,15 +1180,8 @@ static int rt5665_hp_vol_put(struct snd_kcontrol *kcontrol,
 	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
 	struct rt5665_priv *rt5665 = snd_soc_component_get_drvdata(component);
 	struct snd_soc_dapm_context *dapm = &component->dapm;
-	struct soc_mixer_control *mc =
-		(struct soc_mixer_control *)kcontrol->private_value;
 	int reg05, reg06;
 	int ret;
-
-	/*  Modified in case the value is set higher than max value */ 
-	/*  For AND operation, MAX values can only be applied to 0xf and 0x1f */ 
-	ucontrol->value.integer.value[0] &= mc->max;
-	ucontrol->value.integer.value[1] &= mc->max;
 
 	snd_soc_dapm_mutex_lock(dapm);
 
@@ -1223,16 +1216,7 @@ static int rt5665_mono_vol_put(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_component *component = snd_kcontrol_chip(kcontrol);
-	struct soc_mixer_control *mc =
-		(struct soc_mixer_control *)kcontrol->private_value;
-	int ret;
-
-	/*  Modified in case the value is set higher than max value */ 
-	/*  For AND operation, MAX values can only be applied to 0xf and 0x1f */ 
-	ucontrol->value.integer.value[0] &= mc->max;
-	ucontrol->value.integer.value[1] &= mc->max;
-
-	ret = snd_soc_put_volsw(kcontrol, ucontrol);
+	int ret = snd_soc_put_volsw(kcontrol, ucontrol);
 
 	if (snd_soc_component_read(component, RT5665_MONO_NG2_CTRL_1) & RT5665_NG2_EN) {
 		snd_soc_component_update_bits(component, RT5665_MONO_NG2_CTRL_1,
@@ -5382,7 +5366,7 @@ static int rt5665_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
-	dev_dbg(dai->dev, "lrck is %dHz and pre_div is %d for iis %d\n",
+	dev_dbg(component->dev, "lrck is %dHz and pre_div is %d for iis %d\n",
 				rt5665->lrck[dai->id], pre_div, dai->id);
 
 	switch (params_width(params)) {
@@ -6145,13 +6129,13 @@ static int rt5665_parse_dt(struct rt5665_priv *rt5665, struct device *dev)
 		pr_debug("%s: dtv_check gpio value: %d\n", __func__,
 			gpio_get_value(rt5665->pdata.dtv_check_gpio));
 
-	if (gpio_get_value(rt5665->pdata.dtv_check_gpio)) {
-		pr_debug("%s: DTV flags\n", __func__);
-		of_property_read_u32(dev->of_node, "realtek,sar-hs-open-gender",
-			&rt5665->pdata.sar_hs_open_gender);
-		rt5665->pdata.ext_ant_det_gpio = of_get_named_gpio(dev->of_node,
-			"realtek,ext-ant-det-gpio", 0);
-	}
+		if (gpio_get_value(rt5665->pdata.dtv_check_gpio)) {
+			pr_debug("%s: DTV flags\n", __func__);
+			of_property_read_u32(dev->of_node, "realtek,sar-hs-open-gender",
+				&rt5665->pdata.sar_hs_open_gender);
+			rt5665->pdata.ext_ant_det_gpio = of_get_named_gpio(dev->of_node,
+				"realtek,ext-ant-det-gpio", 0);
+		}
 	}
 
 	of_property_read_u32_array(dev->of_node, "realtek,offset-comp",

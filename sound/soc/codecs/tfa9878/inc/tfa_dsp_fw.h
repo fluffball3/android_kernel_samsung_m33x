@@ -45,6 +45,12 @@ enum tfa_fw_event {/* not all available on each device */
 	TFA_FW_MAX
 };
 
+#define TFA_API_SBFW_BIG_M_88	2
+#define TFA_API_SBFW_8_09_00_BIG_M		8
+#define TFA_API_SBFW_PO_BIG_M	10
+#define TFA_API_SBFW_8_09_00_SMALL_M	31
+#define TFA_API_SBFW_9_00_00_SMALL_M	33
+
 /* the following type mappings are compiler specific */
 #define subaddress_t unsigned char
 
@@ -102,11 +108,6 @@ enum tfa_fw_event {/* not all available on each device */
 #define SB_PARAM_SET_DATA_LOGGER        0x0D
 #define SB_PARAM_SET_POWER_SAVER        0x0E
 #define SB_PARAM_SET_DRC                0x0F /* old version */
-#if !defined(TFA_USE_STC_VOLUME_TABLE)
-#if !defined(TFA_USE_CUSTOM_SET_TSURF)
-#define SB_PARAM_SET_TSURF              0x7F /* to be defined */
-#endif
-#endif
 
 /* GET */
 #define SB_PARAM_GET_ALGO_PARAMS        0x80
@@ -133,11 +134,7 @@ enum tfa_fw_event {/* not all available on each device */
 
 /* aligned with wrapper */
 /* SET */
-#if !defined(TFA_USE_STC_VOLUME_TABLE)
-#if defined(TFA_USE_CUSTOM_SET_TSURF)
 #define CUSTOM_PARAM_SET_TSURF          0x01
-#endif
-#endif
 #define CUSTOM_PARAM_SET_BYPASS         0x02
 
 /* GET */
