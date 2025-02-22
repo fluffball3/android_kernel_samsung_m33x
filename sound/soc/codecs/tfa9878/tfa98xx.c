@@ -2657,7 +2657,7 @@ static int tfa98xx_set_cnt_reload(struct snd_kcontrol *kcontrol,
 
 		do {
 			ret = request_firmware_nowait(THIS_MODULE,
-				FW_ACTION_UEVENT,
+				FW_ACTION_HOTPLUG,
 				fw_name, tfa98xx->dev, GFP_KERNEL,
 				tfa98xx, tfa98xx_container_loaded);
 			/* wait until driver completes loading */
@@ -3625,7 +3625,7 @@ static int tfa98xx_load_container(struct tfa98xx *tfa98xx)
 
 	do {
 		ret = request_firmware_nowait(THIS_MODULE,
-			FW_ACTION_UEVENT,
+			FW_ACTION_HOTPLUG,
 			fw_name, tfa98xx->dev, GFP_KERNEL,
 			tfa98xx, tfa98xx_container_loaded);
 		/* wait until driver completes loading */
@@ -4309,9 +4309,9 @@ static struct snd_soc_dai_driver tfa98xx_dai[] = {
 			.formats = TFA98XX_FORMATS,
 		},
 		.ops = &tfa98xx_dai_ops,
-		.symmetric_rate = 1,
+		.symmetric_rates = 1,
 		.symmetric_channels = 0,
-		.symmetric_sample_bits = 0,
+		.symmetric_samplebits = 0,
 	},
 };
 
