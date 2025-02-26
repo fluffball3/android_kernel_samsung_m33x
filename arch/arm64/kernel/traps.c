@@ -405,22 +405,25 @@ void unregister_undef_hook(struct undef_hook *hook)
 	raw_spin_unlock_irqrestore(&undef_lock, flags);
 }
 
-static int user_insn_read(struct pt_regs *regs, u32 *insnp)
+static int call_undef_hook(struct pt_regs *regs)
 {
+	struct undef_hook *hook;
+	unsigned long flags;
 	u32 instr;
+	int (*fn)(struct pt_regs *regs, u32 instr) = NULL;
 	void __user *pc = (void __user *)instruction_pointer(regs);
 
 	if (compat_thumb_mode(regs)) {
 		/* 16-bit Thumb instruction */
 		__le16 instr_le;
 		if (get_user(instr_le, (__le16 __user *)pc))
-			return -EFAULT;
+			goto exit;
 		instr = le16_to_cpu(instr_le);
 		if (aarch32_insn_is_wide(instr)) {
 			u32 instr2;
 
 			if (get_user(instr_le, (__le16 __user *)(pc + 2)))
-				return -EFAULT;
+				goto exit;
 			instr2 = le16_to_cpu(instr_le);
 			instr = (instr << 16) | instr2;
 		}
@@ -428,19 +431,9 @@ static int user_insn_read(struct pt_regs *regs, u32 *insnp)
 		/* 32-bit ARM instruction */
 		__le32 instr_le;
 		if (get_user(instr_le, (__le32 __user *)pc))
-			return -EFAULT;
+			goto exit;
 		instr = le32_to_cpu(instr_le);
 	}
-
-	*insnp = instr;
-	return 0;
-}
-
-static int call_undef_hook(struct pt_regs *regs, u32 instr)
-{
-	struct undef_hook *hook;
-	unsigned long flags;
-	int (*fn)(struct pt_regs *regs, u32 instr) = NULL;
 
 	raw_spin_lock_irqsave(&undef_lock, flags);
 	list_for_each_entry(hook, &undef_hook, node)
@@ -449,7 +442,7 @@ static int call_undef_hook(struct pt_regs *regs, u32 instr)
 			fn = hook->fn;
 
 	raw_spin_unlock_irqrestore(&undef_lock, flags);
-
+exit:
 	return fn ? fn(regs, instr) : 1;
 }
 
@@ -513,16 +506,11 @@ static inline void do_s3c2410wdt_builtin_expire_watchdog(void)
 
 void do_el0_undef(struct pt_regs *regs, unsigned long esr)
 {
-	u32 insn;
-
 	/* check for AArch32 breakpoint instructions */
 	if (!aarch32_break_handler(regs))
 		return;
 
-	if (user_insn_read(regs, &insn))
-		goto out_err;
-
-	if (call_undef_hook(regs, insn) == 0)
+	if (call_undef_hook(regs) == 0)
 		return;
 
 	if (IS_ENABLED(CONFIG_SEC_DEBUG_FAULT_MSG_ADV) && !user_mode(regs)) {
@@ -534,7 +522,6 @@ void do_el0_undef(struct pt_regs *regs, unsigned long esr)
 		die("undefined instruction", regs, 0);
 	}
 
-out_err:
 	force_signal_inject(SIGILL, ILL_ILLOPC, regs->pc, 0);
 }
 
