@@ -426,10 +426,6 @@ int cpuctl_task_group_idx(struct task_struct *p)
 	int idx;
 	struct cgroup_subsys_state *css;
 
-	// Halium: prevent kernel panic due to hardcoded CGROUP_COUNT value
-	// FIXME: see if we can adapt boost groups to our usecase
-	return CGROUP_ROOT;
-
 	rcu_read_lock();
 	css = task_css(p, cpu_cgrp_id);
 	idx = css->id - 1;
