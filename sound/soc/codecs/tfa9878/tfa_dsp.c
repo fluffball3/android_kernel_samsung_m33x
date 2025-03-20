@@ -2944,7 +2944,7 @@ enum tfa98xx_error tfa_set_calibration_values(struct tfa_device *tfa)
 
 			/* reset MTPEX to force calibration */
 			ret = tfa_dev_mtp_set(tfa, TFA_MTP_EX, 0);
-			if (ret != tfa_error_ok) {
+			if (ret != TFA98XX_ERROR_OK) {
 				pr_err("%s: resetting MPTEX failed, device %d err (%d)\n",
 					__func__, tfa->dev_idx, ret);
 				tfa->reset_mtpex = 1;
@@ -3589,8 +3589,7 @@ enum tfa98xx_error tfa_run_coldstartup(struct tfa_device *tfa, int profile)
  */
 enum tfa98xx_error tfa_run_mute(struct tfa_device *tfa)
 {
-	enum tfa98xx_error ret = TFA98XX_ERROR_OK;
-	enum tfa_error err = tfa_error_ok;
+	enum tfa98xx_error err, ret = TFA98XX_ERROR_OK;
 	int status;
 	int tries = 0;
 	int i = 0, cur_ampe;
@@ -3610,7 +3609,7 @@ enum tfa98xx_error tfa_run_mute(struct tfa_device *tfa)
 	/* signal the TFA98XX to mute */
 	/* err = tfa98xx_set_mute(tfa, TFA98XX_MUTE_AMPLIFIER); */
 	err = tfa_dev_set_state(tfa, TFA_STATE_MUTE, 0);
-	if (err != tfa_error_ok) {
+	if (err != TFA98XX_ERROR_OK) {
 		pr_err("%s: failed to set mute state (err %d)\n",
 			__func__, err);
 		return TFA98XX_ERROR_OTHER;
@@ -3648,8 +3647,7 @@ enum tfa98xx_error tfa_run_mute(struct tfa_device *tfa)
  */
 enum tfa98xx_error tfa_run_unmute(struct tfa_device *tfa)
 {
-	enum tfa98xx_error ret = TFA98XX_ERROR_OK;
-	enum tfa_error err = tfa_error_ok;
+	enum tfa98xx_error err, ret = TFA98XX_ERROR_OK;
 
 	if (tfa->ampgain != -1) {
 		int i = 0, cur_ampe;
@@ -3670,7 +3668,7 @@ enum tfa98xx_error tfa_run_unmute(struct tfa_device *tfa)
 	/* signal the TFA98XX to mute */
 	/* err = tfa98xx_set_mute(tfa, TFA98XX_MUTE_OFF); */
 	err = tfa_dev_set_state(tfa, TFA_STATE_UNMUTE, 0);
-	if (err != tfa_error_ok) {
+	if (err != TFA98XX_ERROR_OK) {
 		pr_err("%s: failed to set unmute state (err %d)\n",
 			__func__, err);
 		return TFA98XX_ERROR_OTHER;
@@ -4948,7 +4946,7 @@ static enum tfa98xx_error tfa_process_re25(struct tfa_device *tfa)
 	 */
 	/* store calibration data to MTP */
 	ret = tfa_dev_mtp_set(tfa, TFA_MTP_OTC, 1);
-	if (ret != tfa_error_ok)
+	if (ret != TFA98XX_ERROR_OK)
 		pr_debug("%s: error in setting MTPOTC\n",
 			__func__);
 
@@ -4958,7 +4956,7 @@ static enum tfa98xx_error tfa_process_re25(struct tfa_device *tfa)
 		/* set RE25 in shadow regiser */
 		ret = tfa_dev_mtp_set(tfa,
 			TFA_MTP_RE25, tfa->mohm[cal_idx]);
-		if (ret != tfa_error_ok) {
+		if (ret != TFA98XX_ERROR_OK) {
 			pr_err("%s: writing calibration data failed to MTP, device %d err (%d)\n",
 				__func__, tfa->dev_idx, ret);
 			return TFA98XX_ERROR_RPC_CALIB_FAILED;
@@ -5004,7 +5002,7 @@ static enum tfa98xx_error tfa_process_re25(struct tfa_device *tfa)
 		msleep_interruptible(BUSLOAD_INTERVAL);
 
 		ret = tfa_dev_mtp_set(tfa, TFA_MTP_EX, 1);
-		if (ret != tfa_error_ok) {
+		if (ret != TFA98XX_ERROR_OK) {
 			pr_err("%s: setting MPTEX failed, device %d err (%d)\n",
 				__func__, tfa->dev_idx, ret);
 			continue;
@@ -5466,7 +5464,7 @@ int tfa_dev_probe(int resp_addr, struct tfa_device *tfa)
 	return 0;
 }
 
-enum tfa_error tfa_dev_set_state(struct tfa_device *tfa,
+enum tfa98xx_error tfa_dev_set_state(struct tfa_device *tfa,
 	enum tfa_state state, int is_calibration)
 {
 	enum tfa98xx_error ret = TFA98XX_ERROR_OK;
@@ -5502,7 +5500,7 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa,
 		do {
 			ret = tfa98xx_dsp_system_stable(tfa, &ready);
 			if (ret != TFA98XX_ERROR_OK)
-				return tfa_error_dsp;
+				return TFA98XX_ERROR_DSP_NOT_RUNNING;
 			if (ready)
 				break;
 		} while (loop--);
@@ -5587,7 +5585,7 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa,
 		break;
 	default:
 		if (state & 0x0f)
-			return tfa_error_bad_param;
+			return TFA98XX_ERROR_BAD_PARAMETER;
 		break;
 	}
 
@@ -5607,7 +5605,7 @@ enum tfa_error tfa_dev_set_state(struct tfa_device *tfa,
 	/* tfa->state = state; */ /* to correct with real state of device */
 	tfa_dev_get_state(tfa);
 
-	return tfa_error_ok;
+	return TFA98XX_ERROR_OK;
 }
 
 enum tfa_state tfa_dev_get_state(struct tfa_device *tfa)
@@ -5700,7 +5698,7 @@ enum tfa98xx_error tfa_dev_mtp_set(struct tfa_device *tfa,
 		err = tfa98xx_set_mtp(tfa, (uint16_t)
 			(value << TFA98XX_KEY2_PROTECTED_MTP0_MTPEX_POS),
 			TFA98XX_KEY2_PROTECTED_MTP0_MTPEX_MSK);
-		if (err == tfa_error_ok) {
+		if (err == TFA98XX_ERROR_OK) {
 			tfa->mtpex = value;
 			if (value == 0)
 				tfa->reset_mtpex = 0;
