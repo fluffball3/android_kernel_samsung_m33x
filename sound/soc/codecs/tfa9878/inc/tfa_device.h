@@ -304,7 +304,7 @@ enum tfa98xx_error tfa_dev_stop(struct tfa_device *tfa);
  *  @param state struct = desired device state after function return
  *  @return tfa_error enum
  */
-enum tfa_error tfa_dev_set_state(struct tfa_device *tfa,
+enum tfa98xx_error tfa_dev_set_state(struct tfa_device *tfa,
 	enum tfa_state state, int is_calibration);
 
 /*
