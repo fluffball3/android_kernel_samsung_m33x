@@ -1845,13 +1845,15 @@ TRACE_EVENT(gsc_cpu_group_load,
 
 TRACE_EVENT(gsc_decision_activate,
 
-	TP_PROTO(int gid, u64 group_load, u64 now, u64 last_update_time, char *label),
+	TP_PROTO(int gid, u64 group_load, int fps, int avg_nr_run, u64 now, u64 last_update_time, char *label),
 
-	TP_ARGS(gid, group_load, now, last_update_time, label),
+	TP_ARGS(gid, group_load, fps, avg_nr_run, now, last_update_time, label),
 
 	TP_STRUCT__entry(
 		__field( int,			gid			)
 		__field( u64,			group_load		)
+		__field( int,			fps			)
+		__field( int,			avg_nr_run		)
 		__field( u64,			now			)
 		__field( u64,			last_update_time	)
 		__array( char,			label,	64		)
@@ -1860,13 +1862,16 @@ TRACE_EVENT(gsc_decision_activate,
 	TP_fast_assign(
 		__entry->gid			= gid;
 		__entry->group_load		= group_load;
+		__entry->fps			= fps;
+		__entry->avg_nr_run		= avg_nr_run;
 		__entry->now			= now;
 		__entry->last_update_time	= last_update_time;
 		strncpy(__entry->label, label, 63);
 	),
 
-	TP_printk("group_id=%d group_load=%llu now=%llu last_uptime=%llu reason=%s",
-		__entry->gid,  __entry->group_load, __entry->now,
+	TP_printk("group_id=%d load=%5llu fps=%3d avg_nr_run=%2d now=%llu last_uptime=%llu reason=%s",
+		__entry->gid,  __entry->group_load, __entry->fps,
+		__entry->avg_nr_run, __entry->now,
 		__entry->last_update_time, __entry->label)
 );
 
@@ -2152,33 +2157,6 @@ TRACE_EVENT(lb_nohz_balancer_kick,
 );
 
 /*
- * Tracepoint for lb idle pull tasks rt
- */
-TRACE_EVENT(lb_idle_pull_tasks_rt,
-
-	TP_PROTO(int src_cpu, struct task_struct *p, int pulled),
-
-	TP_ARGS(src_cpu, p, pulled),
-
-	TP_STRUCT__entry(
-		__array(	char,		comm,	TASK_COMM_LEN	)
-		__field(	pid_t,		pid			)
-		__field(	int,		src_cpu			)
-		__field(	int,		pulled			)
-	),
-
-	TP_fast_assign(
-		memcpy(__entry->comm, p ? p->comm : "no task", TASK_COMM_LEN);
-		__entry->pid			= p ? p->pid : -1;
-		__entry->src_cpu		= src_cpu;
-		__entry->pulled			= pulled;
-	),
-
-	TP_printk("src_cpu=%d pulled=%d comm=%s pid=%d",
-		__entry->src_cpu, __entry->pulled, __entry->comm, __entry->pid)
-);
-
-/*
  * Tracepoint for mhdvfs profile
  */
 TRACE_EVENT(mhdvfs_profile,
@@ -2271,6 +2249,31 @@ TRACE_EVENT(mhdvfs_kick_cpufreq,
 
 	TP_printk("cpu=%d ipc=%llu ratio=%d",
 		__entry->cpu, __entry->ipc, __entry->ratio)
+);
+
+/*
+ * Tracepoint for emstune task boost
+ */
+TRACE_EVENT(emstune_task_boost,
+
+	TP_PROTO(struct task_struct *p, int val),
+
+	TP_ARGS(p, val),
+
+	TP_STRUCT__entry(
+		__array(	char,		comm,	TASK_COMM_LEN	)
+		__field(	pid_t,		pid			)
+		__array(	char,		val,	10		)
+	),
+
+	TP_fast_assign(
+		memcpy(__entry->comm, p->comm, TASK_COMM_LEN);
+		__entry->pid = p->pid;
+		strncpy(__entry->val, val ? "on" : "off", 9);
+	),
+
+	TP_printk("comm=%s pid=%d val=%s",
+		__entry->comm, __entry->pid, __entry->val)
 );
 #endif /* _TRACE_EMS_DEBUG_H */
 
