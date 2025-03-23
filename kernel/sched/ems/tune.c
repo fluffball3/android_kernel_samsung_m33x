@@ -1140,7 +1140,7 @@ static ssize_t aio_tuner_store(struct device *dev,
 	_arg = arg0;
 	ptr = strsep(&_arg, ",");
 	i = 0;
-	while (ptr != NULL && (i < NUM_OF_KEY)) {
+	while (ptr != NULL) {
 		ret = kstrtol(ptr, 10, &val);
 		if (ret)
 			return ret;
@@ -1735,7 +1735,7 @@ static ssize_t task_boost_store(struct device *dev,
 
 	mutex_lock(&task_boost_mutex);
 
-	if (sscanf(buf, "%s", &arg) != 1) {
+	if (sscanf(buf, "%99s", &arg) != 1) {
 		mutex_unlock(&task_boost_mutex);
 		return -EINVAL;
 	}
@@ -1785,6 +1785,8 @@ static ssize_t task_boost_del_store(struct device *dev,
 	if (task) {
 		ems_boosted_tex(task) = 0;
 		put_task_struct(task);
+
+		trace_emstune_task_boost(task, 0);
 	}
 
 	/* clear task_boost at last task_boost_del */
