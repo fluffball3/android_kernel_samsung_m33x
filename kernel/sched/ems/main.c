@@ -8,7 +8,7 @@
 #include <linux/pm_qos.h>
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
-//#include <linux/panic_notifier.h>
+#include <linux/panic_notifier.h>
 
 #include "../sched.h"
 #include "ems.h"
@@ -683,11 +683,19 @@ void ems_dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 		lb_dequeue_misfit_task(p, rq);
 }
 
+#define ems_for_each_sched_entity(se) \
+	for (; (se); (se) = (se)->parent)
+
 void ems_replace_next_task_fair(struct rq *rq, struct task_struct **p_ptr,
 				struct sched_entity **se_ptr, bool *repick,
 				bool simple, struct task_struct *prev)
 {
 	tex_replace_next_task_fair(rq, p_ptr, se_ptr, repick, simple, prev);
+
+	if (*repick && simple) {
+		ems_for_each_sched_entity(*se_ptr)
+			set_next_entity(cfs_rq_of(*se_ptr), *se_ptr);
+	}
 }
 
 void ems_check_preempt_wakeup(struct rq *rq, struct task_struct *p,
@@ -700,7 +708,7 @@ void ems_do_sched_yield(struct rq *rq)
 {
 	struct task_struct *curr = rq->curr;
 
-	lockdep_assert_held(&rq->lock);
+	lockdep_assert_held(&rq->__lock);
 
 	tex_do_yield(curr);
 }
@@ -767,6 +775,18 @@ void ems_sched_fork_init(struct task_struct *p)
 void ems_schedule(struct task_struct *prev,
 		struct task_struct *next, struct rq *rq)
 {
+	/* check nr running */
+	if (unlikely(((get_sched_class(next) != EMS_SCHED_IDLE)
+				&& !rq->nr_running)))
+		BUG_ON(1);
+
+	/* check rt on_rq */
+	if (get_sched_class(next) == EMS_SCHED_RT) {
+		struct sched_rt_entity *rt_se = &next->rt;
+		if (unlikely(!rt_se->on_rq))
+			BUG_ON(1);
+	}
+
 	if (prev == next)
 		return;
 
@@ -785,10 +805,15 @@ void ems_set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 void ems_set_binder_task(struct task_struct *p, bool sync,
 		struct binder_proc *proc)
 {
+	if (!p)
+		return;
+
+	if ((is_top_app_task(current) && is_rt_task(p->group_leader)) ||
+			(is_top_app_task(p) && is_rt_task(current->group_leader)))
+		ems_binder_task(p) = 1;
+
 	if (p && current->signal &&
-			(current->signal->oom_score_adj == 0) &&
-			((current->prio < DEFAULT_PRIO) ||
-			 (p->group_leader->prio < MAX_RT_PRIO)))
+			is_important_task(current))
 		ems_binder_task(p) = 1;
 }
 
@@ -801,11 +826,6 @@ void ems_set_binder_priority(struct binder_transaction *t, struct task_struct *p
 {
 	if (t && t->need_reply && ems_boosted_tex(current))
 		ems_boosted_tex(p) = 1;
-
-	if (t && t->need_reply
-			&& emstune_get_cur_level() == 2
-			&& get_tex_level(current) < NOT_TEX)
-		ems_binder_task(p) = 1;
 }
 
 void ems_restore_binder_priority(struct binder_transaction *t, struct task_struct *p)
