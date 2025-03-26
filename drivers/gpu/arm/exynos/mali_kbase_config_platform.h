@@ -35,6 +35,7 @@
 #else
 #define POWER_MANAGEMENT_CALLBACKS (NULL)
 #endif
+extern struct kbase_pm_callback_conf pm_callbacks;
 
 /**
  * PLATFORM_FUNCS - Platform specific configuration functions
@@ -45,10 +46,11 @@
 /* MALI_SEC_INTEGRATION */
 #define PLATFORM_FUNCS (&platform_funcs)
 
+#ifndef CONFIG_MALI_DDK_VALHALL_R38P1
 #define CLK_RATE_TRACE_OPS (&clk_rate_trace_ops)
-
-extern struct kbase_pm_callback_conf pm_callbacks;
 extern struct kbase_clk_rate_trace_op_conf clk_rate_trace_ops;
+#endif
+
 /**
  * AUTO_SUSPEND_DELAY - Autosuspend delay
  *
