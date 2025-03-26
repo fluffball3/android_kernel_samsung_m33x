@@ -1,6 +1,6 @@
 #!/bin/bash
 
-XY_VERSION="R3.0"
+E35P_VERSION="v3.0"
 
 set -e
 
@@ -34,15 +34,15 @@ MODULES_DIR="$DLKM_RAMDISK_DIR/lib/modules"
 MKBOOTIMG="$(pwd)/kernel_build/mkbootimg/mkbootimg.py"
 MKDTBOIMG="$(pwd)/kernel_build/dtb/mkdtboimg.py"
 
-OUT_KERNELZIP="$(pwd)/kernel_build/ExynosUnbound-${XY_VERSION}_a33x.zip"
-OUT_KERNELTAR="$(pwd)/kernel_build/ExynosUnbound-${XY_VERSION}_a33x.tar"
+OUT_KERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.zip"
+OUT_KERNELTAR="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.tar"
 OUT_KERNEL="$OUTDIR/arch/arm64/boot/Image"
 OUT_BOOTIMG="$(pwd)/kernel_build/zip/boot.img"
 OUT_VENDORBOOTIMG="$(pwd)/kernel_build/zip/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
 
 # Kernel-side
-BUILD_ARGS="LOCALVERSION=-XyUnbound-${XY_VERSION} KBUILD_BUILD_USER=Gabriel260BR KBUILD_BUILD_HOST=ExynosUnbound"
+BUILD_ARGS="LOCALVERSION=-Elite3XP-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
 
 kfinish() {
     rm -rf "$TMPDIR"
@@ -73,10 +73,10 @@ if [ ! -d "$PARENT_DIR/build-tools" ]; then
     git clone https://android.googlesource.com/platform/prebuilts/build-tools "$PARENT_DIR/build-tools" --depth=1
 fi
 
-make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS a33x_defconfig >/dev/null
+make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS m33x_defconfig
 make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS dtbs >/dev/null
 make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS >/dev/null
-make -j$(nproc --all) -C $(pwd) O=out INSTALL_MOD_STRIP="--strip-debug --keep-section=.ARM.attributes" INSTALL_MOD_PATH="$MODULES_OUTDIR" modules_install >/dev/null
+make -j$(nproc --all) -C $(pwd) O=out INSTALL_MOD_STRIP="--strip-debug" INSTALL_MOD_PATH="$MODULES_OUTDIR" modules_install >/dev/null
 
 rm -rf "$TMPDIR"
 rm -f "$OUT_BOOTIMG"
