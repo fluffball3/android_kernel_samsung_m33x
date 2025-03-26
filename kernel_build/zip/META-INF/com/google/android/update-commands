@@ -18,7 +18,7 @@
 ### All lines starting with '#' are treated as comments
 ### Commands & arguments should be separated by ' ', '=' or ':'
 
-prop_startswith ro.boot.bootloader A336
+prop_startswith ro.boot.bootloader M336
 quick_flash yes
 flash_compressed boot.br /dev/block/by-name/boot
 flash_compressed vendor_boot.br /dev/block/by-name/vendor_boot
