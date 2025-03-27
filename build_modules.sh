@@ -1,20 +1,22 @@
 #!/bin/bash
 
-export PATH=$(pwd)/../clang-r416183b/bin:$PATH
-export PATH=$(pwd)/../build-tools/path/linux-x86:$PATH
+KERNEL_HOME="$(pwd)"
+CROSS_COMPILE="$KERNEL_HOME/../clang-r450784/bin/aarch64-linux-gnu-"
+export PATH="$(pwd)/../build-tools/path/linux-x86:$PATH"
+export PATH="$(pwd)/../clang-r450784/bin:$PATH"
+export CC="$(pwd)/../clang-r450784/bin/clang"
 MODULES_OUTDIR="$(pwd)/modules_out"
 MODULES_DIR="$MODULES_OUTDIR/lib/modules"
 IMAGE="$(pwd)/out/arch/arm64/boot/Image"
-KERNEL_HOME="$(pwd)"
 
-if [ ! -d "$KERNEL_HOME/build-tools" ]; then
-echo "Please execute "build.sh" instead"
-fi
-if [ ! -d "$KERNEL_HOME/clang-r416183b" ]; then
-    if [ -d "$KERNEL_HOME/build-tools" ]; then
-    echo "!!"
-    else
+if [ ! -d "$KERNEL_HOME/../build-tools" ]; then
     echo "Please execute "build.sh" instead"
+    if [ ! -d "$KERNEL_HOME/../clang-r450784" ]; then
+        if [ -d "$KERNEL_HOME/../build-tools" ]; then
+        echo "!!"
+        else
+        echo "Please execute "build.sh" instead"
+        fi
     fi
 else
     rm -r "$MODULES_OUTDIR"
