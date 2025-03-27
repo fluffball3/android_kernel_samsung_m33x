@@ -7655,6 +7655,7 @@ CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,appar
 # CONFIG_DDAR is not set
 CONFIG_SDP=y
 # CONFIG_SDP_KEY_DUMP is not set
+CONFIG_SELINUX_ENFORCING=y
 
 #
 # Kernel hardening options
