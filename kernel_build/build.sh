@@ -37,8 +37,8 @@ MKDTBOIMG="$(pwd)/kernel_build/dtb/mkdtboimg.py"
 OUT_KERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.zip"
 OUT_KERNELTAR="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.tar"
 OUT_KERNEL="$OUTDIR/arch/arm64/boot/Image"
-OUT_BOOTIMG="$(pwd)/kernel_build/zip/boot.img"
-OUT_VENDORBOOTIMG="$(pwd)/kernel_build/zip/vendor_boot.img"
+OUT_BOOTIMG="$(pwd)/kernel_build/AnyKernel3/boot.img"
+OUT_VENDORBOOTIMG="$(pwd)/kernel_build/AnyKernel3/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
 
 # Kernel-side
@@ -162,12 +162,10 @@ cd "$DIR"
 echo "Done!"
 
 echo "Building zip..."
-cd "$(pwd)/kernel_build/zip"
+cd "$(pwd)/kernel_build/AnyKernel3"
 rm -f "$OUT_KERNELZIP"
-brotli --quality=11 -c boot.img > boot.br
-brotli --quality=11 -c vendor_boot.img > vendor_boot.br
-zip -r9 -q "$OUT_KERNELZIP" META-INF boot.br vendor_boot.br
-rm -f boot.br vendor_boot.br
+zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder
+
 cd "$DIR"
 echo "Done! Output: $OUT_KERNELZIP"
 
