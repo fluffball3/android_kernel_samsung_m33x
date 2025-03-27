@@ -339,6 +339,10 @@ config KZT
 	  Enable this option to enable the Knox Zero Trust feature in the kernel.
 	  This feature requires some kernel support to function properly.
 
+config SELINUX_ENFORCING
+	bool "SELINUX toggle"
+	default y
+
 source "security/Kconfig.hardening"
 
 source "security/samsung/defex_lsm/Kconfig" # ADDED BY LEGO AUTOMATICALLY: DO NOT SUBMIT
