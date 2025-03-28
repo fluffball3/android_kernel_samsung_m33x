@@ -1389,7 +1389,9 @@ struct task_struct {
 	ANDROID_KABI_USE(1, void *pf_io_worker);
 
 	ANDROID_KABI_RESERVE(2);
-	ANDROID_KABI_RESERVE(3);
+
+	ANDROID_KABI_USE(3, int latency_nice);
+
 #ifdef CONFIG_KSU_SUSFS
 	ANDROID_KABI_USE(4, u64 susfs_task_state);
 	ANDROID_KABI_USE(5, u64 susfs_last_fake_mnt_id);
