@@ -11,6 +11,7 @@
 
 #include <linux/cgroup.h>
 #include <linux/fs.h>
+#include <linux/log2.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/vmstat.h>
@@ -44,7 +45,7 @@ static const unsigned long vmpressure_win = SWAP_CLUSTER_MAX * 16;
  * essence, they are percents: the higher the value, the more number
  * unsuccessful reclaims there were.
  */
-static const unsigned int vmpressure_level_med = 65;
+static const unsigned int vmpressure_level_med = 60;
 static const unsigned int vmpressure_level_critical = 95;
 
 /*
@@ -66,7 +67,7 @@ static const unsigned int vmpressure_level_critical = 95;
  * scans 'lru_size >> prio' pages, so it is actually 12.5%, or one
  * eights).
  */
-static const unsigned int vmpressure_level_critical_prio = 3;
+static const unsigned int vmpressure_level_critical_prio = ilog2(100 / 10);
 
 static struct vmpressure *work_to_vmpressure(struct work_struct *work)
 {
