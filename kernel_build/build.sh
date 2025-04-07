@@ -31,9 +31,11 @@ DLKM_RAMDISK_DIR="$TMPDIR/ramdisk_dlkm"
 PREBUILT_RAMDISK="$(pwd)/kernel_build/boot/ramdisk"
 MODULES_DIR="$DLKM_RAMDISK_DIR/lib/modules"
 
+ZIPSIGNER="$(pwd)/kernel_build/bin/zipsigner-3.0.jar"
 MKBOOTIMG="$(pwd)/kernel_build/mkbootimg/mkbootimg.py"
 MKDTBOIMG="$(pwd)/kernel_build/dtb/mkdtboimg.py"
 
+OUT_SIGNEDKERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x-signed.zip"
 OUT_KERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.zip"
 OUT_KERNELTAR="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.tar"
 OUT_KERNEL="$OUTDIR/arch/arm64/boot/Image"
@@ -165,11 +167,12 @@ echo "Building zip..."
 cd "$(pwd)/kernel_build/AnyKernel3"
 rm -f "$OUT_KERNELZIP"
 zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder
-
+java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
 cd "$DIR"
-echo "Done! Output: $OUT_KERNELZIP"
 
+echo "Done! Output: $OUT_SIGNEDKERNELZIP"
 echo "Building tar..."
+
 cd "$(pwd)/kernel_build"
 rm -f "$OUT_KERNELTAR"
 lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG" > boot.img.lz4
@@ -177,8 +180,8 @@ lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
 tar -cf "$OUT_KERNELTAR" boot.img.lz4 vendor_boot.img.lz4
 cd "$DIR"
 rm -f boot.img.lz4 vendor_boot.img.lz4
-echo "Done! Output: $OUT_KERNELTAR"
 
+echo "Done! Output: $OUT_KERNELTAR"
 echo "Cleaning..."
 rm -f "${OUT_VENDORBOOTIMG}" "${OUT_BOOTIMG}"
 kfinish
