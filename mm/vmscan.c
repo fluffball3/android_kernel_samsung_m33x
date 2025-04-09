@@ -1989,7 +1989,6 @@ static unsigned noinline_for_stack move_pages_to_lru(struct lruvec *lruvec,
 
 		SetPageLRU(page);
 		add_page_to_lru_list(page, lruvec);
-		trace_android_vh_add_page_to_lrulist(page, false, lru);
 
 		if (put_page_testzero(page)) {
 			del_page_from_lru_list(page, lruvec);
