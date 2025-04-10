@@ -324,6 +324,7 @@ extern unsigned long ml_cpu_util(int cpu);
 extern unsigned long ml_cpu_util_with(struct task_struct *p, int dst_cpu);
 extern unsigned long ml_cpu_util_without(int cpu, struct task_struct *p);
 extern unsigned long ml_cpu_load_avg(int cpu);
+extern unsigned long ego_sched_cpu_util(int cpu);
 
 #define MLT_PERIOD_SIZE		(4 * NSEC_PER_MSEC)
 #define MLT_PERIOD_COUNT	8
