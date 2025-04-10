@@ -760,6 +760,13 @@ out:
 	return min(scale, util);
 }
 
+unsigned long ego_sched_cpu_util(int cpu)
+{
+	struct ego_cpu *egc = &per_cpu(ego_cpu, cpu);
+	unsigned long min, max;
+	return ego_cpu_util(egc->cpu, ml_cpu_util(egc->cpu), &min, &max);
+}
+
 unsigned long ego_effective_cpu_perf(int cpu, unsigned long actual,
 				 unsigned long min,
 				 unsigned long max)
