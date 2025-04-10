@@ -210,7 +210,11 @@ static DEFINE_PER_CPU(struct teo_cpu, teo_cpus);
 #if defined(CONFIG_SMP) && defined(CONFIG_CPU_FREQ_GOV_SCHEDUTIL)
 static bool teo_cpu_is_utilized(int cpu, struct teo_cpu *cpu_data)
 {
+#ifdef CONFIG_SCHED_EMS
+	return ego_sched_cpu_util(cpu) > cpu_data->util_threshold;
+#else
 	return sched_cpu_util(cpu) > cpu_data->util_threshold;
+#endif
 }
 #else
 static bool teo_cpu_is_utilized(int cpu, struct teo_cpu *cpu_data)
