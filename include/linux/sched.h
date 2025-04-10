@@ -2027,7 +2027,11 @@ extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 
 #ifdef CONFIG_SMP
 /* Returns effective CPU energy utilization, as seen by the scheduler */
+#ifdef CONFIG_SCHED_EMS
+unsigned long ego_sched_cpu_util(int cpu);
+#else
 unsigned long sched_cpu_util(int cpu);
+#endif
 #endif /* CONFIG_SMP */
 
 #ifdef CONFIG_RSEQ
