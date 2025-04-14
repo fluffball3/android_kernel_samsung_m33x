@@ -33,3 +33,6 @@ endif
 ifeq ($(CONFIG_MALI_DDK_VALHALL_R54P0),y)
 	obj-$(CONFIG_MALI_MIDGARD) += bv_r54p0/
 endif
+ifeq ($(CONFIG_MALI_DDK_VALHALL_R44P0),y)
+	obj-$(CONFIG_MALI_MIDGARD) += v_r44p0/
+endif

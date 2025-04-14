@@ -47,8 +47,10 @@ extern struct kbase_pm_callback_conf pm_callbacks;
 #define PLATFORM_FUNCS (&platform_funcs)
 
 #ifndef CONFIG_MALI_DDK_VALHALL_R38P1
+#ifndef CONFIG_MALI_DDK_VALHALL_R44P0
 #define CLK_RATE_TRACE_OPS (&clk_rate_trace_ops)
 extern struct kbase_clk_rate_trace_op_conf clk_rate_trace_ops;
+#endif
 #endif
 
 /**
