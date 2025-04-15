@@ -508,10 +508,23 @@ static void ego_update_freq_variant_param(struct ego_policy *egp, u64 time,
 static bool ego_request_freq_change(struct ego_policy *egp, u64 time,
 				   unsigned int next_freq)
 {
-	if (egp->need_freq_update)
+	if (egp->need_freq_update) {
 		egp->need_freq_update = false;
-	else if (egp->policy->cur == next_freq)
+
+		/*
+		 * The policy limits have changed, but if the return value of
+		 * cpufreq_driver_resolve_freq() after applying the new limits
+		 * is still equal to the previously selected frequency, the
+		 * driver callback need not be invoked unless the driver
+		 * specifically wants that to happen on every update of the
+		 * policy limits.
+		 */
+		if (egp->policy->cur == next_freq &&
+		    !cpufreq_driver_test_flags(CPUFREQ_NEED_UPDATE_LIMITS))
+			return false;
+	} else if (egp->policy->cur == next_freq) {
 		return false;
+	}
 
 	return true;
 }
