@@ -436,10 +436,22 @@ static unsigned int ego_resolve_freq_wo_clamp(struct cpufreq_policy *policy,
 	return policy->freq_table[index].frequency;
 }
 
+static bool ego_should_rate_limit(struct ego_policy *egp, u64 time)
+{
+	s64 rate_limit_ns, delta_ns = time - egp->last_freq_update_time;
+
+	/*
+	 * EGO doesn't know target frequency at this point, so consider
+	 * the minimum value between up/down rate limit to cover all cases.
+	 * The exact rate limit will be considered in ego_postpone_freq_update().
+	 */
+	rate_limit_ns = min(egp->up_rate_limit_ns, egp->down_rate_limit_ns);
+
+	return delta_ns < rate_limit_ns;
+}
+
 static bool ego_should_update_freq(struct ego_policy *egp, u64 time)
 {
-	s64 delta_ns, rate_limit_ns;
-
 	/*
 	 * Since cpufreq_update_util() is called with rq->lock held for
 	 * the @target_cpu, our per-CPU data is fully serialized.
@@ -468,16 +480,16 @@ static bool ego_should_update_freq(struct ego_policy *egp, u64 time)
 	if (egp->work_in_progress)
 		return true;
 
-	delta_ns = time - egp->last_freq_update_time;
-
 	/*
-	 * EGO doesn't know target frequency at this point, so consider
-	 * the minimum value between up/down rate limit to cover all cases.
-	 * The exact rate limit will be considered in ego_postpone_freq_update().
+	 * When frequency-invariant utilization tracking is present, there's no
+	 * rate limit when increasing frequency. Therefore, the next frequency
+	 * must be determined before a decision can be made to rate limit the
+	 * frequency change, hence the rate limit check is bypassed here.
 	 */
-	rate_limit_ns = min(egp->up_rate_limit_ns, egp->down_rate_limit_ns);
+	if (arch_scale_freq_invariant())
+		return true;
 
-	return delta_ns >= rate_limit_ns;
+	return !ego_should_rate_limit(egp, time);
 }
 
 static void ego_update_pelt_margin(struct ego_policy *egp, u64 time,
@@ -505,6 +517,19 @@ static void ego_update_freq_variant_param(struct ego_policy *egp, u64 time,
 	ego_update_up_rate_limit(egp, time, next_freq);
 }
 
+/* update next freq and last frequency change requesting time  */
+static void ego_update_next_freq(struct ego_policy *egp, u64 time,
+				   unsigned int next_freq)
+{
+	ego_update_freq_variant_param(egp, time, next_freq);
+
+	if (egp->next_freq > next_freq)
+		next_freq = (egp->next_freq + next_freq) >> 1;
+
+	egp->next_freq = next_freq;
+	egp->last_freq_update_time = time;
+}
+
 static bool ego_request_freq_change(struct ego_policy *egp, u64 time,
 				   unsigned int next_freq)
 {
@@ -519,27 +544,29 @@ static bool ego_request_freq_change(struct ego_policy *egp, u64 time,
 		 * specifically wants that to happen on every update of the
 		 * policy limits.
 		 */
-		if (egp->policy->cur == next_freq &&
-		    !cpufreq_driver_test_flags(CPUFREQ_NEED_UPDATE_LIMITS))
-			return false;
-	} else if (egp->policy->cur == next_freq) {
-		return false;
+		if (cpufreq_driver_test_flags(CPUFREQ_NEED_UPDATE_LIMITS))
+			goto must_update;
 	}
 
+	/*
+	 * When a frequency update isn't mandatory (!need_freq_update), the rate
+	 * limit is checked again upon frequency reduction because systems with
+	 * frequency-invariant utilization bypass the rate limit check entirely
+	 * in sugov_should_update_freq(). This is done so that the rate limit
+	 * can be applied only for frequency reduction when frequency-invariant
+	 * utilization is present. Now that the next frequency is known, the
+	 * rate limit can be selectively applied to frequency reduction on such
+	 * systems. A check for arch_scale_freq_invariant() is omitted here
+	 * because unconditionally rechecking the rate limit is cheaper.
+	 */
+	if (next_freq == egp->next_freq ||
+	    (next_freq < egp->next_freq &&
+	     ego_should_rate_limit(egp, time)))
+		return false;
+
+must_update:
+	ego_update_next_freq(egp, time, next_freq);
 	return true;
-}
-
-/* update next freq and last frequency change requesting time  */
-static void ego_update_next_freq(struct ego_policy *egp, u64 time,
-				   unsigned int next_freq)
-{
-	ego_update_freq_variant_param(egp, time, next_freq);
-
-	if (egp->next_freq > next_freq)
-		next_freq = (egp->next_freq + next_freq) >> 1;
-
-	egp->next_freq = next_freq;
-	egp->last_freq_update_time = time;
 }
 
 static void ego_fast_switch(struct ego_policy *egp, u64 time,
