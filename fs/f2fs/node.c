@@ -874,29 +874,23 @@ int f2fs_get_dnode_of_data(struct dnode_of_data *dn, pgoff_t index, int mode)
 
 	if (is_inode_flag_set(dn->inode, FI_COMPRESSED_FILE) &&
 					f2fs_sb_has_readonly(sbi)) {
-		struct dnode_of_data dn2 = *dn;
-		unsigned int cluster_size = F2FS_I(dn->inode)->i_cluster_size;
-		unsigned int c_len;
+		unsigned int c_len = f2fs_cluster_blocks_are_contiguous(dn);
 		block_t blkaddr;
-
-		dn2.ofs_in_node = round_down(dn2.ofs_in_node, cluster_size);
-		dn2.data_blkaddr = f2fs_data_blkaddr(&dn2);
-		c_len = f2fs_cluster_blocks_are_contiguous(&dn2);
 
 		if (!c_len)
 			goto out;
 
-		blkaddr = f2fs_data_blkaddr(&dn2);
+		blkaddr = f2fs_data_blkaddr(dn);
 		if (blkaddr == COMPRESS_ADDR)
-			blkaddr = data_blkaddr(dn2.inode, dn2.node_page,
-						dn2.ofs_in_node + 1);
+			blkaddr = data_blkaddr(dn->inode, dn->node_page,
+						dn->ofs_in_node + 1);
 
 		f2fs_update_read_extent_tree_range_compressed(dn->inode,
-					round_down(index, cluster_size),
-					blkaddr, cluster_size, c_len);
+					index, blkaddr,
+					F2FS_I(dn->inode)->i_cluster_size,
+					c_len);
 	}
 out:
-	__lock_dnode(dn, false);
 	return 0;
 
 release_pages:

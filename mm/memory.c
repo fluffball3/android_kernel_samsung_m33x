@@ -4244,7 +4244,7 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 			spin_unlock(vmf->ptl);
 		} else if (unlikely(pte_alloc(vma->vm_mm, vmf->pmd))) {
 			return VM_FAULT_OOM;
-	}
+		}
 	}
 
 	/*

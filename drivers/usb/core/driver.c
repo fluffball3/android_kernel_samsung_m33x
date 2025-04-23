@@ -1518,6 +1518,7 @@ static int usb_resume_both(struct usb_device *udev, pm_message_t msg)
 	int			status = 0;
 	int			i;
 	struct usb_interface	*intf;
+	int			bypass = 0;
 
 	int			bypass = 0;
 

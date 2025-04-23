@@ -104,7 +104,6 @@ DECLARE_HOOK(android_vh_percpu_rwsem_wq_add,
 	TP_PROTO(struct percpu_rw_semaphore *sem, bool reader),
 	TP_ARGS(sem, reader));
 
-
 /* macro versions of hooks are no longer required */
 
 #endif /* _TRACE_HOOK_DTASK_H */

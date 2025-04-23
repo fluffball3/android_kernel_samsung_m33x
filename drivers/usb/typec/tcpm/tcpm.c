@@ -1973,13 +1973,11 @@ static void vdm_run_state_machine(struct tcpm_port *port)
 			switch (PD_VDO_CMD(vdo_hdr)) {
 			case CMD_DISCOVER_IDENT:
 				res = tcpm_ams_start(port, DISCOVER_IDENTITY);
-				if (res == 0) {
+				if (res == 0)
 					port->send_discover = false;
-				} else if (res == -EAGAIN) {
-					port->vdo_data[0] = 0;
+				else if (res == -EAGAIN)
 					mod_send_discover_delayed_work(port,
 								       SEND_DISCOVER_RETRY_MS);
-				}
 				break;
 			case CMD_DISCOVER_SVID:
 				res = tcpm_ams_start(port, DISCOVER_SVIDS);

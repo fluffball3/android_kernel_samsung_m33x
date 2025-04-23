@@ -355,6 +355,7 @@ static const struct arm64_cpu_capabilities arm64_dsb_after_tlbi_list[] = {
 	{},
 };
 #endif
+
 #ifdef CONFIG_ARM64_WORKAROUND_TSB_FLUSH_FAILURE
 static const struct midr_range tsb_flush_fail_cpus[] = {
 #ifdef CONFIG_ARM64_ERRATUM_2067961

@@ -36,6 +36,7 @@ void __weak __cfi_check(uint64_t id, void *ptr, void *diag)
 {
 	return;
 }
+
 static inline void handle_cfi_failure(void *ptr)
 {
 	if (IS_ENABLED(CONFIG_CFI_PERMISSIVE))

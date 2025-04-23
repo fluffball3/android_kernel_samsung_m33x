@@ -75,6 +75,7 @@
 
 #include "binder_internal.h"
 #include "binder_trace.h"
+#include <trace/hooks/binder.h>
 
 #ifdef CONFIG_SAMSUNG_FREECESS
 #include <linux/freecess.h>
@@ -5458,7 +5459,7 @@ static int binder_ioctl_freeze(struct binder_freeze_info *info,
 			(!target_proc->outstanding_txns),
 			msecs_to_jiffies(info->timeout_ms));
 
-    /* Check pending transactions that wait for reply */
+	/* Check pending transactions that wait for reply */
 	if (ret >= 0) {
 		binder_inner_proc_lock(target_proc);
 		if (binder_txns_pending_ilocked(target_proc))
@@ -5713,15 +5714,15 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		binder_inner_proc_unlock(proc);
 		break;
 	}
-    // [ @SystemFW
-    case BINDER_SET_SYSTEM_SERVER_PID: {
-        if (copy_from_user(&system_server_pid, ubuf, sizeof(system_server_pid))) {
-            ret = -EINVAL;
-            goto err;
-        }
-        break;
-    }
-    // ] @SystemFW
+	// [ @SystemFW
+	case BINDER_SET_SYSTEM_SERVER_PID: {
+		if (copy_from_user(&system_server_pid, ubuf, sizeof(system_server_pid))) {
+			ret = -EINVAL;
+			goto err;
+		}
+		break;
+	}
+	// ] @SystemFW
 	default:
 		ret = -EINVAL;
 		goto err;

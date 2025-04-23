@@ -473,36 +473,16 @@ static inline void do_s3c2410wdt_builtin_expire_watchdog(void)
 }
 #endif
 
-void do_el0_undef(struct pt_regs *regs, unsigned long esr)
+void do_undefinstr(struct pt_regs *regs)
 {
-	u32 insn;
-
 	/* check for AArch32 breakpoint instructions */
 	if (!aarch32_break_handler(regs))
 		return;
 
-	if (user_insn_read(regs, &insn))
-		goto out_err;
-
-	if (try_emulate_mrs(regs, insn))
+	if (call_undef_hook(regs) == 0)
 		return;
 
-	if (try_emulate_armv8_deprecated(regs, insn))
-		return;
-
-out_err:
-	force_signal_inject(SIGILL, ILL_ILLOPC, regs->pc, 0);
-}
-
-void do_el1_undef(struct pt_regs *regs, unsigned long esr)
-{
-	u32 insn;
-
-	if (aarch64_insn_read((void *)regs->pc, &insn))
-		goto out_err;
-
-	if (try_emulate_el1_ssbs(regs, insn))
-		return;
+	trace_android_rvh_do_undefinstr(regs, user_mode(regs));
 
 	if (IS_ENABLED(CONFIG_SEC_DEBUG_FAULT_MSG_ADV) && !user_mode(regs)) {
 		pr_auto(ASL1, "%s: pc=0x%016llx\n",
@@ -513,14 +493,17 @@ void do_el1_undef(struct pt_regs *regs, unsigned long esr)
 		die("undefined instruction", regs, 0);
 	}
 
-out_err:
-	die("Oops - Undefined instruction", regs, esr);
-}
-
-void do_el0_bti(struct pt_regs *regs)
-{
+	BUG_ON(!user_mode(regs));
 	force_signal_inject(SIGILL, ILL_ILLOPC, regs->pc, 0);
 }
+NOKPROBE_SYMBOL(do_undefinstr);
+
+void do_bti(struct pt_regs *regs)
+{
+	BUG_ON(!user_mode(regs));
+	force_signal_inject(SIGILL, ILL_ILLOPC, regs->pc, 0);
+}
+NOKPROBE_SYMBOL(do_bti);
 
 #define show_pac_key_single_kern(k, uk, kk)					\
 do {										\
@@ -573,18 +556,14 @@ static __always_inline void __call_expire_watchdog(void)
 static inline void __call_expire_watchdog(void) { }
 #endif /* CONFIG_S3C2410_BUILTIN_WATCHDOG */
 
-void do_el1_bti(struct pt_regs *regs, unsigned long esr)
-{
-	die("Oops - BTI", regs, esr);
-}
-
-void do_el0_fpac(struct pt_regs *regs, unsigned long esr)
+void do_ptrauth_fault(struct pt_regs *regs, unsigned int esr)
 {
 	/*
 	 * Unexpected FPAC exception or pointer authentication failure in
 	 * the kernel: kill the task before it does any more harm.
 	 */
 	trace_android_rvh_do_ptrauth_fault(regs, esr, user_mode(regs));
+
 	if (user_mode(regs)) {
 		force_signal_inject(SIGILL, ILL_ILLOPN, regs->pc, esr);
 		return;
@@ -596,16 +575,6 @@ void do_el0_fpac(struct pt_regs *regs, unsigned long esr)
 
 	pr_auto(ASL1, "Wrong PAC detected on CPU%d, LR 0x%010lx, code 0x%08x -- %s\n",
 		smp_processor_id(), regs->regs[30], esr, esr_get_class_string(esr));
-}
-
-void do_el1_fpac(struct pt_regs *regs, unsigned long esr)
-{
-	/*
-	 * Unexpected FPAC exception in the kernel: kill the task before it
-	 * does any more harm.
-	 */
-	die("Oops - FPAC", regs, esr);
-
 #ifdef CONFIG_ARM64_PTR_AUTH
 	show_pac_keys(&current->thread.keys_user, &current->thread.keys_kernel);
 #endif
@@ -621,6 +590,7 @@ void do_el1_fpac(struct pt_regs *regs, unsigned long esr)
 
 	panic("ptrauth fault");
 }
+NOKPROBE_SYMBOL(do_ptrauth_fault);
 
 #define __user_cache_maint(insn, address, res)			\
 	if (address >= user_addr_max()) {			\

@@ -635,7 +635,7 @@ void f2fs_truncate_data_blocks_range(struct dnode_of_data *dn, int count)
 		fofs = f2fs_start_bidx_of_node(ofs_of_node(dn->node_page),
 							dn->inode) + ofs;
 		f2fs_update_read_extent_cache_range(dn, fofs, 0, len);
-		f2fs_update_age_extent_cache_range(dn, fofs, len);
+		f2fs_update_age_extent_cache_range(dn, fofs, nr_free);
 		dec_valid_block_count(sbi, dn->inode, nr_free);
 	}
 	dn->ofs_in_node = ofs;
@@ -1459,7 +1459,6 @@ static int f2fs_do_zero_range(struct dnode_of_data *dn, pgoff_t start,
 	}
 
 	f2fs_update_read_extent_cache_range(dn, start, 0, index - start);
-	f2fs_update_age_extent_cache_range(dn, start, index - start);
 
 	return ret;
 }
@@ -1690,8 +1689,7 @@ next_alloc:
 		if (has_not_enough_free_secs(sbi, 0,
 			GET_SEC_FROM_SEG(sbi, overprovision_segments(sbi)))) {
 			f2fs_down_write(&sbi->gc_lock);
-			err = __f2fs_gc(sbi, true, false, false, NULL_SEGNO,
-							init_victim_map);
+			err = f2fs_gc(sbi, true, false, false, NULL_SEGNO);
 			if (err && err != -ENODATA && err != -EAGAIN)
 				goto out_err;
 			init_victim_map = false;
@@ -3790,14 +3788,16 @@ static int f2fs_release_compress_blocks(struct file *filp, unsigned long arg)
 	if (ret)
 		goto out;
 
-	if (!atomic_read(&F2FS_I(inode)->i_compr_blocks)) {
-		ret = -EPERM;
-		goto out;
-	}
+
 
 	set_inode_flag(inode, FI_COMPRESS_RELEASED);
 	inode->i_ctime = current_time(inode);
 	f2fs_mark_inode_dirty_sync(inode, true);
+
+	if (!atomic_read(&F2FS_I(inode)->i_compr_blocks)) {
+		ret = -EPERM;
+		goto out;
+	}
 
 	f2fs_down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 	f2fs_down_write(&F2FS_I(inode)->i_mmap_sem);
@@ -4365,7 +4365,6 @@ static int f2fs_ioc_decompress_file(struct file *filp, unsigned long arg)
 
 	count = last_idx - page_idx;
 
-	f2fs_down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 	while (count) {
 		int len = min(cluster_size, count);
 
@@ -4383,7 +4382,6 @@ static int f2fs_ioc_decompress_file(struct file *filp, unsigned long arg)
 	if (!ret)
 		ret = filemap_write_and_wait_range(inode->i_mapping, 0,
 							LLONG_MAX);
-	f2fs_up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 
 	if (ret)
 		f2fs_warn(sbi, "%s: The file might be partially decompressed (errno=%d). Please delete the file.",
@@ -4437,18 +4435,12 @@ static int f2fs_ioc_compress_file(struct file *filp, unsigned long arg)
 	if (ret)
 		goto out;
 
+	set_inode_flag(inode, FI_ENABLE_COMPRESS);
+
 	last_idx = DIV_ROUND_UP(i_size_read(inode), PAGE_SIZE);
 
 	count = last_idx - page_idx;
 
-	if (count < cluster_size) {
-		ret = 0;
-		goto out;
-	}
-
-	set_inode_flag(inode, FI_ENABLE_COMPRESS);
-
-	f2fs_down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 	while (count) {
 		int len = min(cluster_size, count);
 
@@ -4466,7 +4458,6 @@ static int f2fs_ioc_compress_file(struct file *filp, unsigned long arg)
 	if (!ret)
 		ret = filemap_write_and_wait_range(inode->i_mapping, 0,
 							LLONG_MAX);
-	f2fs_up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 
 	clear_inode_flag(inode, FI_ENABLE_COMPRESS);
 

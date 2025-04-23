@@ -457,7 +457,6 @@ static int dma_info_to_prot(enum dma_data_direction dir, bool coherent,
 		prot |= IOMMU_SYS_CACHE;
 	if (attrs & DMA_ATTR_SYS_CACHE_ONLY_NWA)
 		prot |= IOMMU_SYS_CACHE_NWA;
-
 	if (attrs & DMA_ATTR_HAS_PRIV_DATA)
 		prot |= DMA_ATTR_TO_PRIV_PROT(attrs) << IOMMU_PRIV_SHIFT;
 

@@ -28,7 +28,6 @@
 #include <linux/kvm_para.h>
 
 #include <trace/hooks/softlockup.h>
-
 #include <linux/sec_debug.h>
 
 static DEFINE_MUTEX(watchdog_mutex);

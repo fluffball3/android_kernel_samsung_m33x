@@ -1910,7 +1910,6 @@ stop:
 	if (gc_type == FG_GC)
 		f2fs_unpin_all_sections(sbi, true);
 
-	gc_end_time = local_clock();
 	trace_f2fs_gc_end(sbi->sb, ret, total_freed, sec_freed,
 				get_pages(sbi, F2FS_DIRTY_NODES),
 				get_pages(sbi, F2FS_DIRTY_DENTS),
@@ -1919,9 +1918,6 @@ stop:
 				free_segments(sbi),
 				reserved_segments(sbi),
 				prefree_segments(sbi));
-
-	sbi->sec_stat.gc_count[gc_type]++;
-	f2fs_update_gc_total_time(sbi, gc_start_time, gc_end_time, gc_type);
 
 	f2fs_up_write(&sbi->gc_lock);
 

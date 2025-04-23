@@ -38,7 +38,7 @@
 				 UTP_TASK_REQ_COMPL |\
 				 UFSHCD_ERROR_MASK)
 /* UIC command timeout, unit: ms */
-#define UIC_CMD_TIMEOUT	500
+#define UIC_CMD_TIMEOUT	5000
 
 /* NOP OUT retries waiting for NOP IN response */
 #define NOP_OUT_RETRIES    10
@@ -4446,7 +4446,7 @@ static int ufshcd_complete_dev_init(struct ufs_hba *hba)
 					QUERY_FLAG_IDN_FDEVICEINIT, 0, &flag_res);
 		if (!flag_res)
 			break;
-		usleep_range(5000, 10000);
+		usleep_range(500, 1000);
 	} while (ktime_before(ktime_get(), timeout));
 
 	if (err) {
@@ -5150,7 +5150,7 @@ ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		result |= DID_ABORT << 16;
 		break;
 	case OCS_INVALID_COMMAND_STATUS:
-		dev_err(hba->dev,
+		dev_err_ratelimited(hba->dev,
 			"Retrying request with tag %d / cdb %#02x because of invalid command status\n",
 			lrbp->task_tag, lrbp->cmd && lrbp->cmd->cmnd ?
 			lrbp->cmd->cmnd[0] : 0);
@@ -8093,7 +8093,6 @@ static void ufshcd_async_scan(void *data, async_cookie_t cookie)
 	}
 
 	up(&hba->host_sem);
-
 	if (ret)
 		goto out;
 

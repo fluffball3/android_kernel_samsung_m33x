@@ -52,7 +52,6 @@ struct redist_region {
 };
 
 static DEFINE_STATIC_KEY_FALSE(gic_arm64_2941627_erratum);
-
 static struct gic_chip_data gic_data __read_mostly;
 static DEFINE_STATIC_KEY_TRUE(supports_deactivate_key);
 

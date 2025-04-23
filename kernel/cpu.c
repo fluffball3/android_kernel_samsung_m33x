@@ -1807,11 +1807,9 @@ void thaw_secondary_cpus(void)
 				       __func__, cpu);
 			else
 				kobject_uevent(&cpu_device->kobj, KOBJ_ONLINE);
-
 			if (freezing_32bit_capable_cpus &&
 			    cpumask_test_cpu(cpu, system_32bit_el0_cpumask()))
 				freezing_32bit_capable_cpus = false;
-
 			continue;
 		}
 		pr_warn("Error taking CPU%d up: %d\n", cpu, error);

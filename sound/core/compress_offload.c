@@ -727,6 +727,18 @@ static int snd_compr_pause(struct snd_compr_stream *stream)
 		return retval;
 	}
 
+	trace_android_vh_snd_compr_use_pause_in_drain(&use_pause_in_drain,
+				&leave_draining_state);
+
+	if (use_pause_in_drain && stream->runtime->state == SNDRV_PCM_STATE_DRAINING) {
+		retval = stream->ops->trigger(stream, SNDRV_PCM_TRIGGER_PAUSE_PUSH);
+		if (!retval && leave_draining_state) {
+			stream->runtime->state = SNDRV_PCM_STATE_PAUSED;
+			wake_up(&stream->runtime->sleep);
+		}
+		return retval;
+	}
+
 	if (stream->runtime->state != SNDRV_PCM_STATE_RUNNING
 		&& stream->runtime->state != SNDRV_PCM_STATE_DRAINING)
 		return -EPERM;
@@ -741,6 +753,12 @@ static int snd_compr_resume(struct snd_compr_stream *stream)
 	int retval;
 	bool use_pause_in_drain = false;
 	bool leave_draining_state = false;
+
+	trace_android_vh_snd_compr_use_pause_in_drain(&use_pause_in_drain,
+				&leave_draining_state);
+
+	if (use_pause_in_drain && stream->runtime->state == SNDRV_PCM_STATE_DRAINING)
+		return stream->ops->trigger(stream, SNDRV_PCM_TRIGGER_PAUSE_RELEASE);
 
 	trace_android_vh_snd_compr_use_pause_in_drain(&use_pause_in_drain,
 				&leave_draining_state);

@@ -36,8 +36,8 @@
 
 #include <asm/barrier.h>
 #include <asm/unaligned.h>
-
 #include <trace/hooks/memory.h>
+
 #ifdef CONFIG_RKP
 #include <linux/uh.h>
 #include <linux/rkp.h>

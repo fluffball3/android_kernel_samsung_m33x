@@ -3114,6 +3114,7 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 #ifdef CONFIG_PAGE_BOOST_RECORDING
 	head_pgoff = xas.xa_index;
 #endif
+
 	if (!(vmf->flags & FAULT_FLAG_SPECULATIVE) &&
 	    filemap_map_pmd(vmf, head)) {
 		ret = VM_FAULT_NOPAGE;

@@ -18,7 +18,6 @@
 #include <linux/uidgid.h>
 
 #include <trace/hooks/creds.h>
-
 #ifdef CONFIG_KDP_CRED
 #include <linux/kdp.h>
 #endif
