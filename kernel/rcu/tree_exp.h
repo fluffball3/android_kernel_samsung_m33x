@@ -8,6 +8,7 @@
  */
 
 #include <linux/lockdep.h>
+#include <linux/sec_debug.h>
 
 static void rcu_exp_handler(void *unused);
 static int rcu_print_task_exp_stall(struct rcu_node *rnp);
@@ -525,7 +526,8 @@ static void synchronize_rcu_expedited_wait(void)
 		if (rcu_stall_is_suppressed())
 			continue;
 		panic_on_rcu_stall();
-		pr_err("INFO: %s detected expedited stalls on CPUs/tasks: {",
+		trace_rcu_stall_warning(rcu_state.name, TPS("ExpeditedStall"));
+		pr_auto(ASL1, "INFO: %s detected expedited stalls on CPUs/tasks: {",
 		       rcu_state.name);
 		ndetected = 0;
 		rcu_for_each_leaf_node(rnp) {
@@ -572,6 +574,9 @@ static void synchronize_rcu_expedited_wait(void)
 				preempt_enable();
 			}
 		}
+		if (IS_ENABLED(CONFIG_SEC_DEBUG_PANIC_ON_RCU_STALL))
+			panic("RCU Stall\n");
+
 		jiffies_stall = 3 * rcu_jiffies_till_stall_check() + 3;
 	}
 }
@@ -819,7 +824,7 @@ static int rcu_print_task_exp_stall(struct rcu_node *rnp)
  */
 void synchronize_rcu_expedited(void)
 {
-	bool boottime = (rcu_scheduler_active == RCU_SCHEDULER_INIT);
+	bool no_wq;
 	struct rcu_exp_work rew;
 	struct rcu_node *rnp;
 	unsigned long s;
@@ -844,15 +849,22 @@ void synchronize_rcu_expedited(void)
 	if (exp_funnel_lock(s))
 		return;  /* Someone else did our work for us. */
 
+	/* Don't use workqueue during boot or from an incoming CPU. */
+	preempt_disable();
+	no_wq = rcu_scheduler_active == RCU_SCHEDULER_INIT ||
+		!cpumask_test_cpu(smp_processor_id(), cpu_active_mask);
+	preempt_enable();
+
 	/* Ensure that load happens before action based on it. */
-	if (unlikely(boottime)) {
-		/* Direct call during scheduler init and early_initcalls(). */
+	if (unlikely(no_wq)) {
+		/* Direct call for scheduler init, early_initcall()s, and incoming CPUs. */
 		rcu_exp_sel_wait_wake(s);
 	} else {
 		/* Marshall arguments & schedule the expedited grace period. */
 		rew.rew_s = s;
 		INIT_WORK_ONSTACK(&rew.rew_work, wait_rcu_exp_gp);
 		queue_work(rcu_gp_wq, &rew.rew_work);
+		secdbg_dtsk_built_set_data(DTYPE_WORK, &rew.rew_work);
 	}
 
 	/* Wait for expedited grace period to complete. */
@@ -861,10 +873,12 @@ void synchronize_rcu_expedited(void)
 		   sync_exp_work_done(s));
 	smp_mb(); /* Workqueue actions happen before return. */
 
+	secdbg_dtsk_built_clear_data();
+
 	/* Let the next expedited grace period start. */
 	mutex_unlock(&rcu_state.exp_mutex);
 
-	if (likely(!boottime))
+	if (likely(!no_wq))
 		destroy_work_on_stack(&rew.rew_work);
 }
 EXPORT_SYMBOL_GPL(synchronize_rcu_expedited);

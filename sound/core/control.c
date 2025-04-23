@@ -27,6 +27,7 @@ struct snd_kctl_ioctl {
 	snd_kctl_ioctl_func_t fioctl;
 };
 
+struct snd_ctl_file *g_ctl;
 static DECLARE_RWSEM(snd_ioctl_rwsem);
 static LIST_HEAD(snd_control_ioctls);
 #ifdef CONFIG_COMPAT
@@ -110,18 +111,33 @@ static int snd_ctl_release(struct inode *inode, struct file *file)
 	unsigned int idx;
 
 	ctl = file->private_data;
+	g_ctl = ctl;
+	if (ctl == NULL) {
+		pr_err("%s - ctl struct is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	if (ctl->card == NULL) {
+		pr_err("%s - ctl->card is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	file->private_data = NULL;
 	card = ctl->card;
 	write_lock_irqsave(&card->ctl_files_rwlock, flags);
 	list_del(&ctl->list);
 	write_unlock_irqrestore(&card->ctl_files_rwlock, flags);
 	down_write(&card->controls_rwsem);
-	list_for_each_entry(control, &card->controls, list)
+	list_for_each_entry(control, &card->controls, list) {
+		if (control == LIST_POISON1 || control == NULL) {
+			pr_err("%s - Unexpected poisoned control!\n", __func__);
+			break;
+		}
 		for (idx = 0; idx < control->count; idx++)
 			if (control->vd[idx].owner == ctl)
 				control->vd[idx].owner = NULL;
+	}
 	up_write(&card->controls_rwsem);
-	snd_fasync_free(ctl->fasync);
 	snd_ctl_empty_read_queue(ctl);
 	put_pid(ctl->pid);
 	kfree(ctl);
@@ -176,7 +192,7 @@ void snd_ctl_notify(struct snd_card *card, unsigned int mask,
 	_found:
 		wake_up(&ctl->change_sleep);
 		spin_unlock(&ctl->read_lock);
-		snd_kill_fasync(ctl->fasync, SIGIO, POLL_IN);
+		kill_fasync(&ctl->fasync, SIGIO, POLL_IN);
 	}
 	read_unlock_irqrestore(&card->ctl_files_rwlock, flags);
 }
@@ -1942,7 +1958,7 @@ static int snd_ctl_fasync(int fd, struct file * file, int on)
 	struct snd_ctl_file *ctl;
 
 	ctl = file->private_data;
-	return snd_fasync_helper(fd, file, on, &ctl->fasync);
+	return fasync_helper(fd, file, on, &ctl->fasync);
 }
 
 /* return the preferred subdevice number if already assigned;
@@ -2016,7 +2032,7 @@ static int snd_ctl_dev_disconnect(struct snd_device *device)
 	read_lock_irqsave(&card->ctl_files_rwlock, flags);
 	list_for_each_entry(ctl, &card->ctl_files, list) {
 		wake_up(&ctl->change_sleep);
-		snd_kill_fasync(ctl->fasync, SIGIO, POLL_ERR);
+		kill_fasync(&ctl->fasync, SIGIO, POLL_ERR);
 	}
 	read_unlock_irqrestore(&card->ctl_files_rwlock, flags);
 

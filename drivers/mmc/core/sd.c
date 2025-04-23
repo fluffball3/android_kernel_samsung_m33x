@@ -18,6 +18,8 @@
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
 
+#include <trace/hooks/mmc_core.h>
+
 #include "core.h"
 #include "card.h"
 #include "host.h"
@@ -462,6 +464,8 @@ static void sd_update_bus_speed_mode(struct mmc_card *card)
 		    SD_MODE_UHS_SDR12)) {
 			card->sd_bus_speed = UHS_SDR12_BUS_SPEED;
 	}
+
+	trace_android_vh_sd_update_bus_speed_mode(card);
 }
 
 static int sd_set_bus_speed_mode(struct mmc_card *card, u8 *status)
@@ -650,6 +654,31 @@ static int mmc_sd_init_uhs_card(struct mmc_card *card)
 		 card->host->ios.timing == MMC_TIMING_UHS_DDR50 ||
 		 card->host->ios.timing == MMC_TIMING_UHS_SDR104)) {
 		err = mmc_execute_tuning(card);
+
+		if (err && card->host->ios.timing == MMC_TIMING_UHS_SDR104) {
+			pr_warn("%s: sdr104 tuning failed so retune sdr50\n",
+				mmc_hostname(card->host));
+			card->sw_caps.sd3_bus_mode &= ~(SD_MODE_UHS_SDR104 | SD_MODE_UHS_DDR50);
+
+			sd_update_bus_speed_mode(card);
+
+			/* Set the driver strength for the card */
+			err = sd_select_driver_type(card, status);
+			if (err)
+				goto out;
+
+			/* Set current limit for the card */
+			err = sd_set_current_limit(card, status);
+			if (err)
+				goto out;
+
+			/* Set bus speed mode of the card */
+			err = sd_set_bus_speed_mode(card, status);
+			if (err)
+				goto out;
+
+			err = mmc_execute_tuning(card);
+		}
 
 		/*
 		 * As SD Specifications Part1 Physical Layer Specification
@@ -1194,6 +1223,14 @@ static void mmc_sd_detect(struct mmc_host *host)
 	 */
 	err = _mmc_detect_card_removed(host);
 
+#ifdef CONFIG_SEC_FACTORY
+	/*
+	 * In case of factory binary, Turn off sdcard power to prevent OCP issue.
+	 */
+	if (err && host->ops->get_cd && host->ops->get_cd(host) == 0)
+		mmc_power_off(host);
+#endif
+
 	mmc_put_card(host->card, NULL);
 
 	if (err) {
@@ -1395,6 +1432,10 @@ err:
 
 	pr_err("%s: error %d whilst initialising SD card\n",
 		mmc_hostname(host), err);
+	ST_LOG("%s: error %d whilst initialising SD card\n",
+		mmc_hostname(host), err);
+
+	trace_android_vh_mmc_attach_sd(host, ocr, err);
 
 	return err;
 }

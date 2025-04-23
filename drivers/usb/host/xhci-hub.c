@@ -15,6 +15,10 @@
 #include "xhci.h"
 #include "xhci-trace.h"
 
+#if IS_ENABLED(CONFIG_PHY_EXYNOS_USBDRD_EUSB)
+#define DWC3_GUSB2PHYCFG_EUSB2OPMODE	BIT(14)
+#endif
+
 #define	PORT_WAKE_BITS	(PORT_WKOC_E | PORT_WKDISC_E | PORT_WKCONN_E)
 #define	PORT_RWC_BITS	(PORT_CSC | PORT_PEC | PORT_WRC | PORT_OCC | \
 			 PORT_RC | PORT_PLC | PORT_PE)
@@ -449,7 +453,12 @@ static int xhci_stop_device(struct xhci_hcd *xhci, int slot_id, int suspend)
 	    cmd->status == COMP_COMMAND_RING_STOPPED) {
 		xhci_warn(xhci, "Timeout while waiting for stop endpoint command\n");
 		ret = -ETIME;
+		goto cmd_cleanup;
 	}
+
+	ret = xhci_vendor_sync_dev_ctx(xhci, slot_id);
+	if (ret)
+		xhci_warn(xhci, "Sync device context failed, ret=%d\n", ret);
 
 cmd_cleanup:
 	xhci_free_command(xhci, cmd);
@@ -601,6 +610,35 @@ static void xhci_set_port_power(struct xhci_hcd *xhci, struct usb_hcd *hcd,
 	spin_lock_irqsave(&xhci->lock, *flags);
 }
 
+/*  Temporarily patch to avoid abi check */
+#if IS_ENABLED(CONFIG_PHY_EXYNOS_USBDRD_EUSB)
+static int xhci_dwusb_exynos_test_set(void)
+{
+	void __iomem *sfr_base;
+	u32 reg;
+
+	sfr_base = ioremap(0x10B0C200, 0x4);
+	reg = __raw_readl(sfr_base);
+
+	reg |= DWC3_GUSB2PHYCFG_EUSB2OPMODE;
+	__raw_writel(reg, sfr_base);
+	pr_info("%s: phycfg = 0x%x\n", __func__, reg);
+	iounmap(sfr_base);
+
+	return 0;
+}
+
+int xhci_halt_nohandshake(struct xhci_hcd *xhci)
+{
+	xhci_dbg_trace(xhci, trace_xhci_dbg_init, "// Halt the HC");
+	xhci_quiesce(xhci);
+
+	xhci->xhc_state |= XHCI_STATE_HALTED;
+	xhci->cmd_ring_state = CMD_RING_STATE_STOPPED;
+	return 0;
+}
+#endif
+
 static void xhci_port_set_test_mode(struct xhci_hcd *xhci,
 	u16 test_mode, u16 wIndex)
 {
@@ -612,6 +650,7 @@ static void xhci_port_set_test_mode(struct xhci_hcd *xhci,
 	temp = readl(port->addr + PORTPMSC);
 	temp |= test_mode << PORT_TEST_MODE_SHIFT;
 	writel(temp, port->addr + PORTPMSC);
+
 	xhci->test_mode = test_mode;
 	if (test_mode == USB_TEST_FORCE_ENABLE)
 		xhci_start(xhci);
@@ -637,6 +676,10 @@ static int xhci_enter_test_mode(struct xhci_hcd *xhci,
 				 i, retval);
 	}
 	spin_lock_irqsave(&xhci->lock, *flags);
+
+#if IS_ENABLED(CONFIG_PHY_EXYNOS_USBDRD_EUSB)
+	xhci_dwusb_exynos_test_set();
+#else
 	/* Put all ports to the Disable state by clear PP */
 	xhci_dbg(xhci, "Disable all port (PP = 0)\n");
 	/* Power off USB3 ports*/
@@ -645,16 +688,22 @@ static int xhci_enter_test_mode(struct xhci_hcd *xhci,
 	/* Power off USB2 ports*/
 	for (i = 0; i < xhci->usb2_rhub.num_ports; i++)
 		xhci_set_port_power(xhci, xhci->main_hcd, i, false, flags);
+#endif
 	/* Stop the controller */
-	xhci_dbg(xhci, "Stop controller\n");
+	xhci_info(xhci, "Stop controller\n");
+#if IS_ENABLED(CONFIG_PHY_EXYNOS_USBDRD_EUSB)
+	retval = xhci_halt_nohandshake(xhci);
+#else
 	retval = xhci_halt(xhci);
+#endif
 	if (retval)
 		return retval;
+
 	/* Disable runtime PM for test mode */
 	pm_runtime_forbid(xhci_to_hcd(xhci)->self.controller);
 	/* Set PORTPMSC.PTC field to enter selected test mode */
 	/* Port is selected by wIndex. port_id = wIndex + 1 */
-	xhci_dbg(xhci, "Enter Test Mode: %d, Port_id=%d\n",
+	xhci_info(xhci, "Enter Test Mode: %d, Port_id=%d\n",
 					test_mode, wIndex + 1);
 	xhci_port_set_test_mode(xhci, test_mode, wIndex);
 	return retval;
@@ -1561,17 +1610,6 @@ int xhci_hub_status_data(struct usb_hcd *hcd, char *buf)
 
 	status = bus_state->resuming_ports;
 
-	/*
-	 * SS devices are only visible to roothub after link training completes.
-	 * Keep polling roothubs for a grace period after xHC start
-	 */
-	if (xhci->run_graceperiod) {
-		if (time_before(jiffies, xhci->run_graceperiod))
-			status = 1;
-		else
-			xhci->run_graceperiod = 0;
-	}
-
 	mask = PORT_CSC | PORT_PEC | PORT_OCC | PORT_PLC | PORT_WRC | PORT_CEC;
 
 	/* For each port, did anything change?  If so, set that bit in buf. */
@@ -1597,7 +1635,8 @@ int xhci_hub_status_data(struct usb_hcd *hcd, char *buf)
 			status = 1;
 	}
 	if (!status && !reset_change) {
-		xhci_dbg(xhci, "%s: stopping port polling.\n", __func__);
+		xhci_dbg(xhci, "%s: stopping usb%d port polling\n",
+			 __func__, hcd->self.busnum);
 		clear_bit(HCD_FLAG_POLL_RH, &hcd->flags);
 	}
 	spin_unlock_irqrestore(&xhci->lock, flags);
@@ -1629,7 +1668,8 @@ int xhci_bus_suspend(struct usb_hcd *hcd)
 		if (bus_state->resuming_ports ||	/* USB2 */
 		    bus_state->port_remote_wakeup) {	/* USB3 */
 			spin_unlock_irqrestore(&xhci->lock, flags);
-			xhci_dbg(xhci, "suspend failed because a port is resuming\n");
+			xhci_dbg(xhci, "usb%d bus suspend to fail because a port is resuming\n",
+				 hcd->self.busnum);
 			return -EBUSY;
 		}
 	}
@@ -1735,6 +1775,7 @@ retry:
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(xhci_bus_suspend);
 
 /*
  * Workaround for missing Cold Attach Status (CAS) if device re-plugged in S3.
@@ -1879,6 +1920,7 @@ int xhci_bus_resume(struct usb_hcd *hcd)
 	spin_unlock_irqrestore(&xhci->lock, flags);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(xhci_bus_resume);
 
 unsigned long xhci_get_resuming_ports(struct usb_hcd *hcd)
 {
