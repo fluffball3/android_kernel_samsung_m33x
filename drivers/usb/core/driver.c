@@ -1520,8 +1520,6 @@ static int usb_resume_both(struct usb_device *udev, pm_message_t msg)
 	struct usb_interface	*intf;
 	int			bypass = 0;
 
-	int			bypass = 0;
-
 #if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
 	if (!udev || udev->state == USB_STATE_NOTATTACHED) {
 #else

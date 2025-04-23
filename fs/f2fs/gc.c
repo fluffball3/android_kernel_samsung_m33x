@@ -1771,14 +1771,6 @@ skip:
 
 /* For record miliseconds */
 #define	GC_TIME_RECORD_UNIT	1000000
-static void f2fs_update_gc_total_time(struct f2fs_sb_info *sbi,
-		unsigned long long start, unsigned long long end, int gc_type)
-{
-	if (!((end - start) / GC_TIME_RECORD_UNIT))
-		sbi->sec_stat.gc_ttime[gc_type]++;
-	else
-		sbi->sec_stat.gc_ttime[gc_type] += ((end - start) / GC_TIME_RECORD_UNIT);
-}
 
 /* @fs.sec -- 83e29a36b9fb739ea211c0c67aefc4c8 -- */
 int __f2fs_gc(struct f2fs_sb_info *sbi, bool sync, bool background, bool force,
@@ -1794,7 +1786,7 @@ int __f2fs_gc(struct f2fs_sb_info *sbi, bool sync, bool background, bool force,
 		.iroot = RADIX_TREE_INIT(gc_list.iroot, GFP_NOFS),
 	};
 	unsigned long long last_skipped = sbi->skipped_atomic_files[FG_GC];
-	unsigned long long first_skipped, gc_start_time = 0, gc_end_time = 0;
+	unsigned long long first_skipped, gc_start_time = 0;
 	unsigned int skipped_round = 0, round = 0;
 
 	trace_f2fs_gc_begin(sbi->sb, sync, background,
