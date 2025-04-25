@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 VERSION = 5
 PATCHLEVEL = 10
-SUBLEVEL = 199
+SUBLEVEL = 236
 EXTRAVERSION =
 NAME = Dare mighty things
 
@@ -1100,6 +1100,11 @@ endif
 KBUILD_USERCFLAGS  += $(filter -m32 -m64 --target=%, $(KBUILD_CFLAGS))
 KBUILD_USERLDFLAGS += $(filter -m32 -m64 --target=%, $(KBUILD_CFLAGS))
 
+# userspace programs are linked via the compiler, use the correct linker
+ifeq ($(CONFIG_CC_IS_CLANG)$(CONFIG_LD_IS_LLD),yy)
+KBUILD_USERLDFLAGS += $(call cc-option, --ld-path=$(LD))
+endif
+
 # make the checker run with the right architecture
 CHECKFLAGS += --arch=$(ARCH)
 
@@ -1476,7 +1481,9 @@ kselftest-merge:
 # Devicetree files
 
 ifneq ($(wildcard $(srctree)/arch/$(SRCARCH)/boot/dts/),)
-dtstree := arch/$(SRCARCH)/boot/dts
+# ANDROID: allow this to be overridden by the build environment. This allows
+# one to compile a device tree that is located out-of-tree.
+dtstree ?= arch/$(SRCARCH)/boot/dts
 endif
 
 ifneq ($(dtstree),)
@@ -1953,7 +1960,9 @@ $(clean-dirs):
 
 clean: $(clean-dirs)
 	$(call cmd,rmfiles)
-	@find $(if $(KBUILD_EXTMOD), $(KBUILD_EXTMOD), .) $(RCS_FIND_IGNORE) \
+	@find $(if $(KBUILD_EXTMOD), $(KBUILD_EXTMOD), .) \
+		$(if $(filter-out arch/$(SRCARCH)/boot/dts, $(dtstree)), $(dtstree)) \
+		$(RCS_FIND_IGNORE) \
 		\( -name '*.[aios]' -o -name '*.ko' -o -name '.*.cmd' \
 		-o -name '*.ko.*' \
 		-o -name '*.dtb' -o -name '*.dtb.S' -o -name '*.dt.yaml' \
