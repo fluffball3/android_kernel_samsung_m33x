@@ -748,12 +748,6 @@ out:
 	return min(scale, util);
 }
 
-unsigned long ego_sched_cpu_util(int cpu)
-{
-	unsigned long min, max;
-	return ego_cpu_util(cpu, cpu_util_cfs(cpu_rq(cpu)), &min, &max);
-}
-
 unsigned long ego_effective_cpu_perf(struct ego_policy *egp, int cpu, unsigned long actual,
 				 unsigned long min,
 				 unsigned long max)
