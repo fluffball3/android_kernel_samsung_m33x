@@ -166,20 +166,19 @@ echo "Done!"
 echo "Building zip..."
 cd "$(pwd)/kernel_build/AnyKernel3"
 rm -f "$OUT_KERNELZIP"
-zip -r9 "$OUT_KERNELZIP" $OUT_KERNEL * -x .git README.md *placeholder boot.img
+cp "$OUT_KERNEL" Image
+lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG" > boot.img.lz4
+lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
+rm -f boot.img vendor_boot.img
+zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img.lz4
 java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
-cd "$DIR"
 
 echo "Done! Output: $OUT_SIGNEDKERNELZIP"
 echo "Building tar..."
 
-cd "$(pwd)/kernel_build"
 rm -f "$OUT_KERNELTAR"
-lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG" > boot.img.lz4
-lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
 tar -cf "$OUT_KERNELTAR" boot.img.lz4 vendor_boot.img.lz4
 cd "$DIR"
-rm -f boot.img.lz4 vendor_boot.img.lz4
 
 echo "Done! Output: $OUT_KERNELTAR"
 echo "Cleaning..."
