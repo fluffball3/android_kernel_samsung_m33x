@@ -1,17 +1,17 @@
 #!/bin/bash
 
 KERNEL_HOME="$(pwd)"
-CROSS_COMPILE="$KERNEL_HOME/../clang-r450784/bin/aarch64-linux-gnu-"
+CROSS_COMPILE="$KERNEL_HOME/../clang-r522817/bin/aarch64-linux-gnu-"
 export PATH="$(pwd)/../build-tools/path/linux-x86:$PATH"
-export PATH="$(pwd)/../clang-r450784/bin:$PATH"
-export CC="$(pwd)/../clang-r450784/bin/clang"
+export PATH="$(pwd)/../clang-r522817/bin:$PATH"
+export CC="$(pwd)/../clang-r522817/bin/clang"
 MODULES_OUTDIR="$(pwd)/modules_out"
 MODULES_DIR="$MODULES_OUTDIR/lib/modules"
 IMAGE="$(pwd)/out/arch/arm64/boot/Image"
 
 if [ ! -d "$KERNEL_HOME/../build-tools" ]; then
     echo "Please execute "build.sh" instead"
-    if [ ! -d "$KERNEL_HOME/../clang-r450784" ]; then
+    if [ ! -d "$KERNEL_HOME/../clang-r522817" ]; then
         if [ -d "$KERNEL_HOME/../build-tools" ]; then
         echo "!!"
         else
