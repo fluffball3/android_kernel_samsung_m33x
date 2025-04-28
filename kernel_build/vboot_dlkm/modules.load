@@ -20,17 +20,7 @@ clk-exynos-audss.ko
 pl330.ko
 samsung-dma.ko
 dss.ko
-debug-snapshot-debug-kinfo.ko
-debug-snapshot-sfrdump.ko
-debug-snapshot-qd.ko
-exynos-coresight.ko
 exynos-ecc-handler.ko
-hardlockup-watchdog.ko
-exynos-itmon.ko
-exynos-adv-tracer.ko
-exynos-adv-tracer-s2d.ko
-ehld.ko
-exynos-ssld.ko
 exynos-pmu-if.ko
 exynos-flexpmu-dbg.ko
 exynos-pd.ko
@@ -67,9 +57,6 @@ exynos-bcm.ko
 exynos-cm.ko
 exynos-el2.ko
 exynos-s2mpu.ko
-exynos-sdm.ko
-exynos-ppmpu.ko
-exynos-seh.ko
 secmem.ko
 hdcp2.ko
 exynos-migov.ko
