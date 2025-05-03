@@ -167,7 +167,7 @@ echo "Building zip..."
 cd "$(pwd)/kernel_build/AnyKernel3"
 rm -f "$OUT_KERNELZIP"
 cp "$OUT_KERNEL" Image
-zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img vendor_boot.img boot.img.lz4 vendor_boot.img.lz4
+zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4
 java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
 
 echo "Done! Output: $OUT_SIGNEDKERNELZIP"
