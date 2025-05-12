@@ -27,6 +27,7 @@ bool topology_scale_freq_invariant(void)
 	return cpufreq_supports_freq_invariance() ||
 	       arch_freq_counters_available(cpu_online_mask);
 }
+EXPORT_SYMBOL(topology_scale_freq_invariant);
 
 __weak bool arch_freq_counters_available(const struct cpumask *cpus)
 {
