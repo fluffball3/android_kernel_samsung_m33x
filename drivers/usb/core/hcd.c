@@ -1696,6 +1696,7 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 
 	spin_lock_irq(&bh->lock);
 	bh->running = true;
+ restart:
 	list_replace_init(&bh->head, &local_list);
 	spin_unlock_irq(&bh->lock);
 
@@ -1709,17 +1710,10 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 		bh->completing_ep = NULL;
 	}
 
-	/*
-	 * giveback new URBs next time to prevent this function
-	 * from not exiting for a long time.
-	 */
+	/* check if there are new URBs to giveback */
 	spin_lock_irq(&bh->lock);
-	if (!list_empty(&bh->head)) {
-		if (bh->high_prio)
-			tasklet_hi_schedule(&bh->bh);
-		else
-			tasklet_schedule(&bh->bh);
-	}
+	if (!list_empty(&bh->head))
+		goto restart;
 	bh->running = false;
 	spin_unlock_irq(&bh->lock);
 }
@@ -1744,7 +1738,7 @@ static void usb_giveback_urb_bh(struct tasklet_struct *t)
 void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 {
 	struct giveback_urb_bh *bh;
-	bool running;
+	bool running, high_prio_bh;
 
 	/* pass status to tasklet via unlinked */
 	if (likely(!urb->unlinked))
@@ -1755,10 +1749,13 @@ void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 		return;
 	}
 
-	if (usb_pipeisoc(urb->pipe) || usb_pipeint(urb->pipe))
+	if (usb_pipeisoc(urb->pipe) || usb_pipeint(urb->pipe)) {
 		bh = &hcd->high_prio_bh;
-	else
+		high_prio_bh = true;
+	} else {
 		bh = &hcd->low_prio_bh;
+		high_prio_bh = false;
+	}
 
 	spin_lock(&bh->lock);
 	list_add_tail(&urb->urb_list, &bh->head);
@@ -1767,7 +1764,7 @@ void usb_hcd_giveback_urb(struct usb_hcd *hcd, struct urb *urb, int status)
 
 	if (running)
 		;
-	else if (bh->high_prio)
+	else if (high_prio_bh)
 		tasklet_hi_schedule(&bh->bh);
 	else
 		tasklet_schedule(&bh->bh);
@@ -2745,7 +2742,6 @@ int usb_add_hcd(struct usb_hcd *hcd,
 
 	rhdev->rx_lanes = 1;
 	rhdev->tx_lanes = 1;
-	rhdev->ssp_rate = USB_SSP_GEN_UNKNOWN;
 
 	switch (hcd->speed) {
 	case HCD_USB11:
@@ -2763,11 +2759,8 @@ int usb_add_hcd(struct usb_hcd *hcd,
 	case HCD_USB32:
 		rhdev->rx_lanes = 2;
 		rhdev->tx_lanes = 2;
-		rhdev->ssp_rate = USB_SSP_GEN_2x2;
-		rhdev->speed = USB_SPEED_SUPER_PLUS;
-		break;
+		fallthrough;
 	case HCD_USB31:
-		rhdev->ssp_rate = USB_SSP_GEN_2x1;
 		rhdev->speed = USB_SPEED_SUPER_PLUS;
 		break;
 	default:
@@ -2811,7 +2804,6 @@ int usb_add_hcd(struct usb_hcd *hcd,
 
 	/* initialize tasklets */
 	init_giveback_urb_bh(&hcd->high_prio_bh);
-	hcd->high_prio_bh.high_prio = true;
 	init_giveback_urb_bh(&hcd->low_prio_bh);
 
 	/* enable irqs just before we start the controller,
@@ -2821,6 +2813,7 @@ int usb_add_hcd(struct usb_hcd *hcd,
 		retval = usb_hcd_request_irqs(hcd, irqnum, irqflags);
 		if (retval)
 			goto err_request_irq;
+		irq_set_affinity_hint(hcd->irq, cpumask_of(0x1));
 	}
 
 	hcd->state = HC_STATE_RUNNING;
@@ -2944,8 +2937,10 @@ void usb_remove_hcd(struct usb_hcd *hcd)
 	del_timer_sync(&hcd->rh_timer);
 
 	if (usb_hcd_is_primary_hcd(hcd)) {
-		if (hcd->irq > 0)
+		if (hcd->irq > 0) {
+			irq_set_affinity_hint(hcd->irq, NULL);
 			free_irq(hcd->irq, hcd);
+		}
 	}
 
 	usb_deregister_bus(&hcd->self);

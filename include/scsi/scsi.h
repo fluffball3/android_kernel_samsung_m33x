@@ -88,6 +88,21 @@ static inline int scsi_is_wlun(u64 lun)
 	return (lun & 0xff00) == SCSI_W_LUN_BASE;
 }
 
+/**
+ * scsi_status_is_check_condition - check the status return.
+ *
+ * @status: the status passed up from the driver (including host and
+ *          driver components)
+ *
+ * This returns true if the status code is SAM_STAT_CHECK_CONDITION.
+ */
+static inline int scsi_status_is_check_condition(int status)
+{
+	if (status < 0)
+		return false;
+	status &= 0xfe;
+	return status == SAM_STAT_CHECK_CONDITION;
+}
 
 /*
  *  MESSAGE CODES
@@ -178,17 +193,16 @@ static inline int scsi_is_wlun(u64 lun)
 /*
  * Internal return values.
  */
-enum scsi_disposition {
-	NEEDS_RETRY		= 0x2001,
-	SUCCESS			= 0x2002,
-	FAILED			= 0x2003,
-	QUEUED			= 0x2004,
-	SOFT_ERROR		= 0x2005,
-	ADD_TO_MLQUEUE		= 0x2006,
-	TIMEOUT_ERROR		= 0x2007,
-	SCSI_RETURN_NOT_HANDLED	= 0x2008,
-	FAST_IO_FAIL		= 0x2009,
-};
+
+#define NEEDS_RETRY     0x2001
+#define SUCCESS         0x2002
+#define FAILED          0x2003
+#define QUEUED          0x2004
+#define SOFT_ERROR      0x2005
+#define ADD_TO_MLQUEUE  0x2006
+#define TIMEOUT_ERROR   0x2007
+#define SCSI_RETURN_NOT_HANDLED   0x2008
+#define FAST_IO_FAIL	0x2009
 
 /*
  * Midlevel queue return values.

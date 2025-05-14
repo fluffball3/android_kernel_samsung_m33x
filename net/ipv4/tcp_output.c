@@ -39,6 +39,9 @@
 
 #include <net/tcp.h>
 #include <net/mptcp.h>
+#ifdef CONFIG_SKB_TRACER
+#include <net/skb_tracer.h>
+#endif
 
 #include <linux/compiler.h>
 #include <linux/gfp.h>
@@ -46,6 +49,10 @@
 #include <linux/static_key.h>
 
 #include <trace/events/tcp.h>
+
+#ifdef CONFIG_SKB_TRACER
+#include <net/skb_tracer.h>
+#endif
 
 /* Refresh clocks of a TCP socket,
  * ensuring monotically increasing values.
@@ -1365,6 +1372,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 #endif
 
+#ifdef CONFIG_SKB_TRACER
+	skb_tracer_mask_on_skb(sk, skb);
+#endif
+
 	/* BPF prog is the last one writing header option */
 	bpf_skops_write_hdr_opt(sk, skb, NULL, NULL, 0, &opts);
 
@@ -1416,6 +1427,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
 {
+#ifdef CONFIG_SKB_TRACER
+	skb_tracer_func_trace(sk, skb, STL_TCP_TRANSMIT_SKB);
+#endif
+
 	return __tcp_transmit_skb(sk, skb, clone_it, gfp_mask,
 				  tcp_sk(sk)->rcv_nxt);
 }
@@ -1558,7 +1573,7 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 		return -ENOMEM;
 	}
 
-	if (skb_unclone(skb, gfp))
+	if (skb_unclone_keeptruesize(skb, gfp))
 		return -ENOMEM;
 
 	/* Get a new skb... force flag on. */
@@ -1667,7 +1682,7 @@ int tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
 {
 	u32 delta_truesize;
 
-	if (skb_unclone(skb, GFP_ATOMIC))
+	if (skb_unclone_keeptruesize(skb, GFP_ATOMIC))
 		return -ENOMEM;
 
 	delta_truesize = __pskb_trim_head(skb, len);
@@ -2635,6 +2650,10 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
 
+#ifdef CONFIG_SKB_TRACER
+		skb_tracer_func_trace(sk, skb, STL_TCP_WRITE_XMIT);
+#endif
+
 		if (unlikely(tp->repair) && tp->repair_queue == TCP_SEND_QUEUE) {
 			/* "skb_mstamp_ns" is used as a start point for the retransmit timer */
 			skb->skb_mstamp_ns = tp->tcp_wstamp_ns = tp->tcp_clock_cache;
@@ -3214,7 +3233,7 @@ start:
 				 cur_mss, GFP_ATOMIC))
 			return -ENOMEM; /* We'll try again later. */
 	} else {
-		if (skb_unclone(skb, GFP_ATOMIC))
+		if (skb_unclone_keeptruesize(skb, GFP_ATOMIC))
 			return -ENOMEM;
 
 		diff = tcp_skb_pcount(skb);
@@ -3884,6 +3903,10 @@ int tcp_connect(struct sock *sk)
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
+
+#ifdef CONFIG_SKB_TRACER
+	skb_tracer_init(sk);
+#endif
 
 	/* Send off SYN; include data in Fast Open. */
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :

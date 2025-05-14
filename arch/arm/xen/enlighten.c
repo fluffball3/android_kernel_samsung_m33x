@@ -29,6 +29,7 @@
 #include <linux/cpu.h>
 #include <linux/console.h>
 #include <linux/pvclock_gtod.h>
+#include <linux/reboot.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
 #include <linux/timekeeper_internal.h>
@@ -158,6 +159,9 @@ static int xen_starting_cpu(unsigned int cpu)
 	BUG_ON(err);
 	per_cpu(xen_vcpu, cpu) = vcpup;
 
+	if (!xen_kernel_unmapped_at_usr())
+		xen_setup_runstate_info(cpu);
+
 after_register_vcpu_info:
 	enable_percpu_irq(xen_events_irq, 0);
 	return 0;
@@ -178,11 +182,18 @@ void xen_reboot(int reason)
 	BUG_ON(rc);
 }
 
-static void xen_restart(enum reboot_mode reboot_mode, const char *cmd)
+static int xen_restart(struct notifier_block *nb, unsigned long action,
+		       void *data)
 {
 	xen_reboot(SHUTDOWN_reboot);
+
+	return NOTIFY_DONE;
 }
 
+static struct notifier_block xen_restart_nb = {
+	.notifier_call = xen_restart,
+	.priority = 192,
+};
 
 static void xen_power_off(void)
 {
@@ -384,6 +395,9 @@ static int __init xen_guest_init(void)
 		return -EINVAL;
 	}
 
+	if (!xen_kernel_unmapped_at_usr())
+		xen_time_setup_guest();
+
 	if (xen_initial_domain())
 		pvclock_gtod_register_notifier(&xen_pvclock_gtod_notifier);
 
@@ -393,35 +407,22 @@ static int __init xen_guest_init(void)
 }
 early_initcall(xen_guest_init);
 
-static int xen_starting_runstate_cpu(unsigned int cpu)
-{
-	xen_setup_runstate_info(cpu);
-	return 0;
-}
-
-static int __init xen_late_init(void)
+static int __init xen_pm_init(void)
 {
 	if (!xen_domain())
 		return -ENODEV;
 
 	pm_power_off = xen_power_off;
-	arm_pm_restart = xen_restart;
+	register_restart_handler(&xen_restart_nb);
 	if (!xen_initial_domain()) {
 		struct timespec64 ts;
 		xen_read_wallclock(&ts);
 		do_settimeofday64(&ts);
 	}
 
-	if (xen_kernel_unmapped_at_usr())
-		return 0;
-
-	xen_time_setup_guest();
-
-	return cpuhp_setup_state(CPUHP_AP_ARM_XEN_RUNSTATE_STARTING,
-				 "arm/xen_runstate:starting",
-				 xen_starting_runstate_cpu, NULL);
+	return 0;
 }
-late_initcall(xen_late_init);
+late_initcall(xen_pm_init);
 
 
 /* empty stubs */

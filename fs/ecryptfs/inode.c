@@ -598,7 +598,6 @@ ecryptfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct dentry *lower_new_dir_dentry;
 	struct dentry *trap;
 	struct inode *target_inode;
-	struct renamedata rd = {};
 
 	if (flags)
 		return -EINVAL;
@@ -628,12 +627,9 @@ ecryptfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		rc = -ENOTEMPTY;
 		goto out_lock;
 	}
-
-	rd.old_dir	= d_inode(lower_old_dir_dentry);
-	rd.old_dentry	= lower_old_dentry;
-	rd.new_dir	= d_inode(lower_new_dir_dentry);
-	rd.new_dentry	= lower_new_dentry;
-	rc = vfs_rename(&rd);
+	rc = vfs_rename(d_inode(lower_old_dir_dentry), lower_old_dentry,
+			d_inode(lower_new_dir_dentry), lower_new_dentry,
+			NULL, 0);
 	if (rc)
 		goto out_lock;
 	if (target_inode)
@@ -1052,7 +1048,8 @@ ecryptfs_getxattr_lower(struct dentry *lower_dentry, struct inode *lower_inode,
 		goto out;
 	}
 	inode_lock(lower_inode);
-	rc = __vfs_getxattr(lower_dentry, lower_inode, name, value, size);
+	rc = __vfs_getxattr(lower_dentry, lower_inode, name, value, size,
+			    XATTR_NOSECURITY);
 	inode_unlock(lower_inode);
 out:
 	return rc;
@@ -1137,7 +1134,8 @@ const struct inode_operations ecryptfs_main_iops = {
 
 static int ecryptfs_xattr_get(const struct xattr_handler *handler,
 			      struct dentry *dentry, struct inode *inode,
-			      const char *name, void *buffer, size_t size)
+			      const char *name, void *buffer, size_t size,
+			      int flags)
 {
 	return ecryptfs_getxattr(dentry, inode, name, buffer, size);
 }

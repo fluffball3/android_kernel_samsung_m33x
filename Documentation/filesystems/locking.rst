@@ -128,7 +128,7 @@ prototypes::
 	bool (*list)(struct dentry *dentry);
 	int (*get)(const struct xattr_handler *handler, struct dentry *dentry,
 		   struct inode *inode, const char *name, void *buffer,
-		   size_t size);
+		   size_t size, int flags);
 	int (*set)(const struct xattr_handler *handler, struct dentry *dentry,
 		   struct inode *inode, const char *name, const void *buffer,
 		   size_t size, int flags);
@@ -433,21 +433,17 @@ prototypes::
 	void (*lm_break)(struct file_lock *); /* break_lease callback */
 	int (*lm_change)(struct file_lock **, int);
 	bool (*lm_breaker_owns_lease)(struct file_lock *);
-        bool (*lm_lock_expirable)(struct file_lock *);
-        void (*lm_expire_lock)(void);
 
 locking rules:
 
 ======================	=============	=================	=========
-ops			   flc_lock  	blocked_lock_lock	may block
+ops			inode->i_lock	blocked_lock_lock	may block
 ======================	=============	=================	=========
-lm_notify:		no      	yes			no
+lm_notify:		yes		yes			no
 lm_grant:		no		no			no
 lm_break:		yes		no			no
 lm_change		yes		no			no
-lm_breaker_owns_lease:	yes     	no			no
-lm_lock_expirable	yes		no			no
-lm_expire_lock		no		no			yes
+lm_breaker_owns_lease:	no		no			no
 ======================	=============	=================	=========
 
 buffer_head

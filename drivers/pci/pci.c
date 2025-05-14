@@ -31,7 +31,9 @@
 #include <linux/vmalloc.h>
 #include <asm/dma.h>
 #include <linux/aer.h>
-#include <linux/bitfield.h>
+#ifndef  __GENKSYMS__
+#include <trace/hooks/pci.h>
+#endif
 #include "pci.h"
 
 DEFINE_MUTEX(pci_slot_mutex);
@@ -65,12 +67,16 @@ struct pci_pme_device {
 static void pci_dev_d3_sleep(struct pci_dev *dev)
 {
 	unsigned int delay = dev->d3hot_delay;
+	int err = -EOPNOTSUPP;
 
 	if (delay < pci_pm_d3hot_delay)
 		delay = pci_pm_d3hot_delay;
 
-	if (delay)
-		msleep(delay);
+	if (delay) {
+		trace_android_rvh_pci_d3_sleep(dev, delay, &err);
+		if (err == -EOPNOTSUPP)
+			msleep(delay);
+	}
 }
 
 #ifdef CONFIG_PCI_DOMAINS
@@ -4585,10 +4591,13 @@ EXPORT_SYMBOL(pci_wait_for_pending_transaction);
  */
 bool pcie_has_flr(struct pci_dev *dev)
 {
+	u32 cap;
+
 	if (dev->dev_flags & PCI_DEV_FLAGS_NO_FLR_RESET)
 		return false;
 
-	return FIELD_GET(PCI_EXP_DEVCAP_FLR, dev->devcap) == 1;
+	pcie_capability_read_dword(dev, PCI_EXP_DEVCAP, &cap);
+	return cap & PCI_EXP_DEVCAP_FLR;
 }
 EXPORT_SYMBOL_GPL(pcie_has_flr);
 
@@ -5740,7 +5749,6 @@ int pcie_set_readrq(struct pci_dev *dev, int rq)
 {
 	u16 v;
 	int ret;
-	struct pci_host_bridge *bridge = pci_find_host_bridge(dev->bus);
 
 	if (rq < 128 || rq > 4096 || !is_power_of_2(rq))
 		return -EINVAL;
@@ -5758,15 +5766,6 @@ int pcie_set_readrq(struct pci_dev *dev, int rq)
 	}
 
 	v = (ffs(rq) - 8) << 12;
-
-	if (bridge->no_inc_mrrs) {
-		int max_mrrs = pcie_get_readrq(dev);
-
-		if (rq > max_mrrs) {
-			pci_info(dev, "can't set Max_Read_Request_Size to %d; max is %d\n", rq, max_mrrs);
-			return -EINVAL;
-		}
-	}
 
 	ret = pcie_capability_clear_and_set_word(dev, PCI_EXP_DEVCTL,
 						  PCI_EXP_DEVCTL_READRQ, v);

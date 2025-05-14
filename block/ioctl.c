@@ -145,7 +145,10 @@ static int blk_ioctl_discard(struct block_device *bdev, fmode_t mode,
 
 	if (start + len > i_size_read(bdev->bd_inode))
 		return -EINVAL;
-
+	printk("%s %d:%d %llu %llu",
+		(flags & BLKDEV_DISCARD_SECURE) ? "SECDIS" : "DIS",
+		MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev),
+		(unsigned long long)start, (unsigned long long)len);
 	err = truncate_bdev_range(bdev, mode, start, start + len - 1);
 	if (err)
 		return err;
@@ -408,11 +411,6 @@ static int blkdev_roset(struct block_device *bdev, fmode_t mode,
 		return ret;
 	if (get_user(n, (int __user *)arg))
 		return -EFAULT;
-	if (bdev->bd_disk->fops->set_read_only) {
-		ret = bdev->bd_disk->fops->set_read_only(bdev, n);
-		if (ret)
-			return ret;
-	}
 	set_device_ro(bdev, n);
 	return 0;
 }

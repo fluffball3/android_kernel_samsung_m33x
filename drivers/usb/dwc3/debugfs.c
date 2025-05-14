@@ -683,7 +683,7 @@ static int dwc3_tx_fifo_size_show(struct seq_file *s, void *unused)
 	struct dwc3_ep		*dep = s->private;
 	struct dwc3		*dwc = dep->dwc;
 	unsigned long		flags;
-	int			mdwidth;
+	u32			mdwidth;
 	u32			val;
 	int			ret;
 
@@ -695,9 +695,7 @@ static int dwc3_tx_fifo_size_show(struct seq_file *s, void *unused)
 	val = dwc3_core_fifo_space(dep, DWC3_TXFIFO);
 
 	/* Convert to bytes */
-	mdwidth = DWC3_MDWIDTH(dwc->hwparams.hwparams0);
-	if (DWC3_IP_IS(DWC32))
-		mdwidth += DWC3_GHWPARAMS6_MDWIDTH(dwc->hwparams.hwparams6);
+	mdwidth = dwc3_mdwidth(dwc);
 
 	val *= mdwidth;
 	val >>= 3;
@@ -714,7 +712,7 @@ static int dwc3_rx_fifo_size_show(struct seq_file *s, void *unused)
 	struct dwc3_ep		*dep = s->private;
 	struct dwc3		*dwc = dep->dwc;
 	unsigned long		flags;
-	int			mdwidth;
+	u32			mdwidth;
 	u32			val;
 	int			ret;
 
@@ -726,9 +724,7 @@ static int dwc3_rx_fifo_size_show(struct seq_file *s, void *unused)
 	val = dwc3_core_fifo_space(dep, DWC3_RXFIFO);
 
 	/* Convert to bytes */
-	mdwidth = DWC3_MDWIDTH(dwc->hwparams.hwparams0);
-	if (DWC3_IP_IS(DWC32))
-		mdwidth += DWC3_GHWPARAMS6_MDWIDTH(dwc->hwparams.hwparams6);
+	mdwidth = dwc3_mdwidth(dwc);
 
 	val *= mdwidth;
 	val >>= 3;

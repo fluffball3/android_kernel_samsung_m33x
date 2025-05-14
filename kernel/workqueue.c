@@ -51,8 +51,13 @@
 #include <linux/sched/isolation.h>
 #include <linux/nmi.h>
 #include <linux/kvm_para.h>
+#include <linux/sec_debug.h>
 
 #include "workqueue_internal.h"
+
+#include <trace/hooks/wqlockup.h>
+/* events/workqueue.h uses default TRACE_INCLUDE_PATH */
+#undef TRACE_INCLUDE_PATH
 
 enum {
 	/*
@@ -207,7 +212,7 @@ struct pool_workqueue {
 						/* L: nr of in_flight works */
 	int			nr_active;	/* L: nr of active works */
 	int			max_active;	/* L: max active works */
-	struct list_head	inactive_works;	/* L: inactive works */
+	struct list_head	delayed_works;	/* L: delayed works */
 	struct list_head	pwqs_node;	/* WR: node on wq->pwqs */
 	struct list_head	mayday_node;	/* MD: node on wq->maydays */
 
@@ -279,6 +284,24 @@ struct workqueue_struct {
 	struct pool_workqueue __percpu *cpu_pwqs; /* I: per-cpu pwqs */
 	struct pool_workqueue __rcu *numa_pwq_tbl[]; /* PWR: unbound pwqs indexed by node */
 };
+
+#if IS_ENABLED(CONFIG_SEC_DEBUG)
+SECDBG_DEFINE_MEMBER_TYPE(workqueue_struct_name, workqueue_struct, name);
+SECDBG_DEFINE_MEMBER_TYPE(workqueue_struct_nr_pwqs_to_flush, workqueue_struct, nr_pwqs_to_flush);
+SECDBG_DEFINE_MEMBER_TYPE(workqueue_struct_flush_color, workqueue_struct, flush_color);
+SECDBG_DEFINE_MEMBER_TYPE(workqueue_struct_pwqs, workqueue_struct, pwqs);
+SECDBG_DEFINE_MEMBER_TYPE(pool_workqueue_pwqs_node, pool_workqueue, pwqs_node);
+SECDBG_DEFINE_MEMBER_TYPE(pool_workqueue_flush_color, pool_workqueue, flush_color);
+SECDBG_DEFINE_MEMBER_TYPE(pool_workqueue_nr_in_flight, pool_workqueue, nr_in_flight);
+SECDBG_DEFINE_MEMBER_TYPE(pool_workqueue_pool, pool_workqueue, pool);
+SECDBG_DEFINE_MEMBER_TYPE(worker_pool_busy_hash, worker_pool, busy_hash);
+SECDBG_DEFINE_MEMBER_TYPE(worker_pool_manager, worker_pool, manager);
+SECDBG_DEFINE_MEMBER_TYPE(worker_hentry, worker, hentry);
+SECDBG_DEFINE_MEMBER_TYPE(worker_current_pwq, worker, current_pwq);
+SECDBG_DEFINE_MEMBER_TYPE(worker_task, worker, task);
+SECDBG_DEFINE_MEMBER_TYPE(worker_current_work, worker, current_work);
+SECDBG_DEFINE_MEMBER_TYPE(worker_current_func, worker, current_func);
+#endif
 
 static struct kmem_cache *pwq_cache;
 
@@ -361,6 +384,9 @@ static void show_pwq(struct pool_workqueue *pwq);
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/workqueue.h>
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(workqueue_execute_start);
+EXPORT_TRACEPOINT_SYMBOL_GPL(workqueue_execute_end);
 
 #define assert_rcu_or_pool_mutex()					\
 	RCU_LOCKDEP_WARN(!rcu_read_lock_held() &&			\
@@ -1148,7 +1174,7 @@ static void put_pwq_unlocked(struct pool_workqueue *pwq)
 	}
 }
 
-static void pwq_activate_inactive_work(struct work_struct *work)
+static void pwq_activate_delayed_work(struct work_struct *work)
 {
 	struct pool_workqueue *pwq = get_work_pwq(work);
 
@@ -1156,16 +1182,16 @@ static void pwq_activate_inactive_work(struct work_struct *work)
 	if (list_empty(&pwq->pool->worklist))
 		pwq->pool->watchdog_ts = jiffies;
 	move_linked_works(work, &pwq->pool->worklist, NULL);
-	__clear_bit(WORK_STRUCT_INACTIVE_BIT, work_data_bits(work));
+	__clear_bit(WORK_STRUCT_DELAYED_BIT, work_data_bits(work));
 	pwq->nr_active++;
 }
 
-static void pwq_activate_first_inactive(struct pool_workqueue *pwq)
+static void pwq_activate_first_delayed(struct pool_workqueue *pwq)
 {
-	struct work_struct *work = list_first_entry(&pwq->inactive_works,
+	struct work_struct *work = list_first_entry(&pwq->delayed_works,
 						    struct work_struct, entry);
 
-	pwq_activate_inactive_work(work);
+	pwq_activate_delayed_work(work);
 }
 
 /**
@@ -1188,10 +1214,10 @@ static void pwq_dec_nr_in_flight(struct pool_workqueue *pwq, int color)
 	pwq->nr_in_flight[color]--;
 
 	pwq->nr_active--;
-	if (!list_empty(&pwq->inactive_works)) {
-		/* one down, submit an inactive one */
+	if (!list_empty(&pwq->delayed_works)) {
+		/* one down, submit a delayed one */
 		if (pwq->nr_active < pwq->max_active)
-			pwq_activate_first_inactive(pwq);
+			pwq_activate_first_delayed(pwq);
 	}
 
 	/* is flush in progress and are we at the flushing tip? */
@@ -1293,14 +1319,14 @@ static int try_to_grab_pending(struct work_struct *work, bool is_dwork,
 		debug_work_deactivate(work);
 
 		/*
-		 * An inactive work item cannot be grabbed directly because
+		 * A delayed work item cannot be grabbed directly because
 		 * it might have linked NO_COLOR work items which, if left
-		 * on the inactive_works list, will confuse pwq->nr_active
+		 * on the delayed_list, will confuse pwq->nr_active
 		 * management later on and cause stall.  Make sure the work
 		 * item is activated before grabbing.
 		 */
-		if (*work_data_bits(work) & WORK_STRUCT_INACTIVE)
-			pwq_activate_inactive_work(work);
+		if (*work_data_bits(work) & WORK_STRUCT_DELAYED)
+			pwq_activate_delayed_work(work);
 
 		list_del_init(&work->entry);
 		pwq_dec_nr_in_flight(pwq, get_work_color(work));
@@ -1339,6 +1365,9 @@ static void insert_work(struct pool_workqueue *pwq, struct work_struct *work,
 			struct list_head *head, unsigned int extra_flags)
 {
 	struct worker_pool *pool = pwq->pool;
+
+	/* record the work call stack in order to print it in KASAN reports */
+	kasan_record_aux_stack(work);
 
 	/* we own @work, set data and link */
 	set_work_pwq(work, pwq, extra_flags);
@@ -1499,8 +1528,8 @@ retry:
 		if (list_empty(worklist))
 			pwq->pool->watchdog_ts = jiffies;
 	} else {
-		work_flags |= WORK_STRUCT_INACTIVE;
-		worklist = &pwq->inactive_works;
+		work_flags |= WORK_STRUCT_DELAYED;
+		worklist = &pwq->delayed_works;
 	}
 
 	debug_work_activate(work);
@@ -1640,7 +1669,14 @@ static void __queue_delayed_work(int cpu, struct workqueue_struct *wq,
 	struct work_struct *work = &dwork->work;
 
 	WARN_ON_ONCE(!wq);
-	WARN_ON_ONCE(timer->function != delayed_work_timer_fn);
+	/*
+	 * With CFI, timer->function can point to a jump table entry in a module,
+	 * which fails the comparison. Disable the warning if CFI and modules are
+	 * both enabled.
+	 */
+	if (!IS_ENABLED(CONFIG_CFI_CLANG) || !IS_ENABLED(CONFIG_MODULES))
+		WARN_ON_ONCE(timer->function != delayed_work_timer_fn);
+
 	WARN_ON_ONCE(timer_pending(timer));
 	WARN_ON_ONCE(!list_empty(&work->entry));
 
@@ -2537,7 +2573,7 @@ repeat:
 			/*
 			 * The above execution of rescued work items could
 			 * have created more to rescue through
-			 * pwq_activate_first_inactive() or chained
+			 * pwq_activate_first_delayed() or chained
 			 * queueing.  Let's put @pwq back on mayday list so
 			 * that such back-to-back work items, which may be
 			 * being used to relieve memory pressure, don't
@@ -2842,7 +2878,9 @@ void flush_workqueue(struct workqueue_struct *wq)
 
 	mutex_unlock(&wq->mutex);
 
+	secdbg_dtsk_built_set_data(DTYPE_WQFLUSH, wq);
 	wait_for_completion(&this_flusher.done);
+	secdbg_dtsk_built_clear_data();
 
 	/*
 	 * Wake-up-and-cascade phase
@@ -2963,7 +3001,7 @@ reflush:
 		bool drained;
 
 		raw_spin_lock_irq(&pwq->pool->lock);
-		drained = !pwq->nr_active && list_empty(&pwq->inactive_works);
+		drained = !pwq->nr_active && list_empty(&pwq->delayed_works);
 		raw_spin_unlock_irq(&pwq->pool->lock);
 
 		if (drained)
@@ -3054,7 +3092,9 @@ static bool __flush_work(struct work_struct *work, bool from_cancel)
 	lock_map_release(&work->lockdep_map);
 
 	if (start_flush_work(work, &barr, from_cancel)) {
+		secdbg_dtsk_built_set_data(DTYPE_WORK, work);
 		wait_for_completion(&barr.done);
+		secdbg_dtsk_built_clear_data();
 		destroy_work_on_stack(&barr.work);
 		return true;
 	} else {
@@ -3726,7 +3766,7 @@ static void pwq_unbound_release_workfn(struct work_struct *work)
  * @pwq: target pool_workqueue
  *
  * If @pwq isn't freezing, set @pwq->max_active to the associated
- * workqueue's saved_max_active and activate inactive work items
+ * workqueue's saved_max_active and activate delayed work items
  * accordingly.  If @pwq is freezing, clear @pwq->max_active to zero.
  */
 static void pwq_adjust_max_active(struct pool_workqueue *pwq)
@@ -3755,9 +3795,9 @@ static void pwq_adjust_max_active(struct pool_workqueue *pwq)
 
 		pwq->max_active = wq->saved_max_active;
 
-		while (!list_empty(&pwq->inactive_works) &&
+		while (!list_empty(&pwq->delayed_works) &&
 		       pwq->nr_active < pwq->max_active) {
-			pwq_activate_first_inactive(pwq);
+			pwq_activate_first_delayed(pwq);
 			kick = true;
 		}
 
@@ -3788,7 +3828,7 @@ static void init_pwq(struct pool_workqueue *pwq, struct workqueue_struct *wq,
 	pwq->wq = wq;
 	pwq->flush_color = -1;
 	pwq->refcnt = 1;
-	INIT_LIST_HEAD(&pwq->inactive_works);
+	INIT_LIST_HEAD(&pwq->delayed_works);
 	INIT_LIST_HEAD(&pwq->pwqs_node);
 	INIT_LIST_HEAD(&pwq->mayday_node);
 	INIT_WORK(&pwq->unbound_release_work, pwq_unbound_release_workfn);
@@ -4375,7 +4415,7 @@ static bool pwq_busy(struct pool_workqueue *pwq)
 
 	if ((pwq != pwq->wq->dfl_pwq) && (pwq->refcnt > 1))
 		return true;
-	if (pwq->nr_active || !list_empty(&pwq->inactive_works))
+	if (pwq->nr_active || !list_empty(&pwq->delayed_works))
 		return true;
 
 	return false;
@@ -4571,7 +4611,7 @@ bool workqueue_congested(int cpu, struct workqueue_struct *wq)
 	else
 		pwq = unbound_pwq_by_node(wq, cpu_to_node(cpu));
 
-	ret = !list_empty(&pwq->inactive_works);
+	ret = !list_empty(&pwq->delayed_works);
 	preempt_enable();
 	rcu_read_unlock();
 
@@ -4767,11 +4807,11 @@ static void show_pwq(struct pool_workqueue *pwq)
 		pr_cont("\n");
 	}
 
-	if (!list_empty(&pwq->inactive_works)) {
+	if (!list_empty(&pwq->delayed_works)) {
 		bool comma = false;
 
-		pr_info("    inactive:");
-		list_for_each_entry(work, &pwq->inactive_works, entry) {
+		pr_info("    delayed:");
+		list_for_each_entry(work, &pwq->delayed_works, entry) {
 			pr_cont_work(comma, work);
 			comma = !(*work_data_bits(work) & WORK_STRUCT_LINKED);
 		}
@@ -4801,7 +4841,7 @@ void show_workqueue_state(void)
 		bool idle = true;
 
 		for_each_pwq(pwq, wq) {
-			if (pwq->nr_active || !list_empty(&pwq->inactive_works)) {
+			if (pwq->nr_active || !list_empty(&pwq->delayed_works)) {
 				idle = false;
 				break;
 			}
@@ -4813,7 +4853,7 @@ void show_workqueue_state(void)
 
 		for_each_pwq(pwq, wq) {
 			raw_spin_lock_irqsave(&pwq->pool->lock, flags);
-			if (pwq->nr_active || !list_empty(&pwq->inactive_works))
+			if (pwq->nr_active || !list_empty(&pwq->delayed_works))
 				show_pwq(pwq);
 			raw_spin_unlock_irqrestore(&pwq->pool->lock, flags);
 			/*
@@ -4828,19 +4868,16 @@ void show_workqueue_state(void)
 	for_each_pool(pool, pi) {
 		struct worker *worker;
 		bool first = true;
-		unsigned long hung = 0;
 
 		raw_spin_lock_irqsave(&pool->lock, flags);
 		if (pool->nr_workers == pool->nr_idle)
 			goto next_pool;
 
-		/* How long the first pending work is waiting for a worker. */
-		if (!list_empty(&pool->worklist))
-			hung = jiffies_to_msecs(jiffies - pool->watchdog_ts) / 1000;
-
 		pr_info("pool %d:", pool->id);
 		pr_cont_pool_info(pool);
-		pr_cont(" hung=%lus workers=%d", hung, pool->nr_workers);
+		pr_cont(" hung=%us workers=%d",
+			jiffies_to_msecs(jiffies - pool->watchdog_ts) / 1000,
+			pool->nr_workers);
 		if (pool->manager)
 			pr_cont(" manager: %d",
 				task_pid_nr(pool->manager->task));
@@ -4901,6 +4938,7 @@ void wq_worker_comm(char *buf, size_t size, struct task_struct *task)
 
 	mutex_unlock(&wq_pool_attach_mutex);
 }
+EXPORT_SYMBOL_GPL(wq_worker_comm);
 
 #ifdef CONFIG_SMP
 
@@ -5191,7 +5229,7 @@ EXPORT_SYMBOL_GPL(work_on_cpu_safe);
  * freeze_workqueues_begin - begin freezing workqueues
  *
  * Start freezing workqueues.  After this function returns, all freezable
- * workqueues will queue new works to their inactive_works list instead of
+ * workqueues will queue new works to their delayed_works list instead of
  * pool->worklist.
  *
  * CONTEXT:
@@ -5839,17 +5877,21 @@ static void wq_watchdog_timer_fn(struct timer_list *unused)
 		/* did we stall? */
 		if (time_after(now, ts + thresh)) {
 			lockup_detected = true;
-			pr_emerg("BUG: workqueue lockup - pool");
+			pr_auto(ASL9, "BUG: workqueue lockup - pool");
 			pr_cont_pool_info(pool);
 			pr_cont(" stuck for %us!\n",
 				jiffies_to_msecs(now - pool_ts) / 1000);
+			trace_android_vh_wq_lockup_pool(pool->cpu, pool_ts);
 		}
 	}
 
 	rcu_read_unlock();
 
-	if (lockup_detected)
+	if (lockup_detected) {
 		show_workqueue_state();
+		if (IS_ENABLED(CONFIG_SEC_DEBUG_WORKQUEUE_LOCKUP_PANIC))
+			BUG();
+	}
 
 	wq_watchdog_reset_touched();
 	mod_timer(&wq_watchdog_timer, jiffies + thresh);

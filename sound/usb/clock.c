@@ -314,6 +314,14 @@ static int __uac_clock_find_source(struct snd_usb_audio *chip,
 			return -EINVAL;
 		}
 
+		if ((size_t)&selector->baCSourceID[ret - 1] >=
+				(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
+			usb_audio_err(chip,
+				"%s(): error. out of boundary, ret %d\n",
+				__func__, ret);
+			return -EINVAL;
+		}
+
 		cur = ret;
 		ret = __uac_clock_find_source(chip, fmt,
 					      selector->baCSourceID[ret - 1],
@@ -337,6 +345,14 @@ static int __uac_clock_find_source(struct snd_usb_audio *chip,
 		for (i = 1; i <= selector->bNrInPins; i++) {
 			if (i == cur)
 				continue;
+
+			if ((size_t)&selector->baCSourceID[i - 1] >=
+					(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
+				usb_audio_err(chip,
+					"%s(): error. out of boundary, i %d\n",
+					__func__, i);
+				break;
+			}
 
 			ret = __uac_clock_find_source(chip, fmt,
 						      selector->baCSourceID[i - 1],
@@ -418,6 +434,14 @@ static int __uac3_clock_find_source(struct snd_usb_audio *chip,
 			return -EINVAL;
 		}
 
+		if ((size_t)&selector->baCSourceID[ret - 1] >=
+				(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
+			usb_audio_err(chip,
+				"%s(): error. out of boundary, ret %d\n",
+				__func__, ret);
+			return -EINVAL;
+		}
+
 		cur = ret;
 		ret = __uac3_clock_find_source(chip, fmt,
 					       selector->baCSourceID[ret - 1],
@@ -437,6 +461,14 @@ static int __uac3_clock_find_source(struct snd_usb_audio *chip,
 
 			if (i == cur)
 				continue;
+
+			if ((size_t)&selector->baCSourceID[i - 1] >=
+					(size_t)(chip->ctrl_intf->extra + chip->ctrl_intf->extralen)) {
+				usb_audio_err(chip,
+					"%s(): error. out of boundary, i %d\n",
+					__func__, i);
+				break;
+			}
 
 			ret = __uac3_clock_find_source(chip, fmt,
 						       selector->baCSourceID[i - 1],
@@ -664,8 +696,13 @@ static int set_sample_rate_v2v3(struct snd_usb_audio *chip, int iface,
 	 * interface is active. */
 	if (rate != prev_rate) {
 		usb_set_interface(dev, iface, 0);
+
+		snd_vendor_set_interface(dev, alts, iface, 0);
+
 		snd_usb_set_interface_quirk(dev);
 		usb_set_interface(dev, iface, fmt->altsetting);
+
+		snd_vendor_set_interface(dev, alts, iface, fmt->altsetting);
 		snd_usb_set_interface_quirk(dev);
 	}
 

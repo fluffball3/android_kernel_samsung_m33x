@@ -32,6 +32,8 @@
 #include <linux/bpf-netns.h>
 #include <linux/rcupdate_trace.h>
 
+#include <trace/hooks/syscall_check.h>
+
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_CGROUP_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_ARRAY_OF_MAPS)
@@ -493,25 +495,6 @@ static void bpf_map_put_uref(struct bpf_map *map)
 	}
 }
 
-static void bpf_map_free_in_work(struct bpf_map *map)
-{
-	INIT_WORK(&map->work, bpf_map_free_deferred);
-	schedule_work(&map->work);
-}
-
-static void bpf_map_free_rcu_gp(struct rcu_head *rcu)
-{
-	bpf_map_free_in_work(container_of(rcu, struct bpf_map, rcu));
-}
-
-static void bpf_map_free_mult_rcu_gp(struct rcu_head *rcu)
-{
-	if (rcu_trace_implies_rcu_gp())
-		bpf_map_free_rcu_gp(rcu);
-	else
-		call_rcu(rcu, bpf_map_free_rcu_gp);
-}
-
 /* decrement map refcnt and schedule it for freeing via workqueue
  * (unrelying map implementation ops->map_free() might sleep)
  */
@@ -521,11 +504,8 @@ static void __bpf_map_put(struct bpf_map *map, bool do_idr_lock)
 		/* bpf_map_free_id() must be called first */
 		bpf_map_free_id(map, do_idr_lock);
 		btf_put(map->btf);
-
-		if (READ_ONCE(map->free_after_mult_rcu_gp))
-			call_rcu_tasks_trace(&map->rcu, bpf_map_free_mult_rcu_gp);
-		else
-			bpf_map_free_in_work(map);
+		INIT_WORK(&map->work, bpf_map_free_deferred);
+		schedule_work(&map->work);
 	}
 }
 
@@ -3929,6 +3909,7 @@ static int bpf_task_fd_query(const union bpf_attr *attr,
 	pid_t pid = attr->task_fd_query.pid;
 	u32 fd = attr->task_fd_query.fd;
 	const struct perf_event *event;
+	struct files_struct *files;
 	struct task_struct *task;
 	struct file *file;
 	int err;
@@ -3948,11 +3929,23 @@ static int bpf_task_fd_query(const union bpf_attr *attr,
 	if (!task)
 		return -ENOENT;
 
-	err = 0;
-	file = fget_task(task, fd);
+	files = get_files_struct(task);
 	put_task_struct(task);
+	if (!files)
+		return -ENOENT;
+
+	err = 0;
+	spin_lock(&files->file_lock);
+	file = fcheck_files(files, fd);
 	if (!file)
-		return -EBADF;
+		err = -EBADF;
+	else
+		get_file(file);
+	spin_unlock(&files->file_lock);
+	put_files_struct(files);
+
+	if (err)
+		goto out;
 
 	if (file->f_op == &bpf_link_fops) {
 		struct bpf_link *link = file->private_data;
@@ -3992,6 +3985,7 @@ out_not_supp:
 	err = -ENOTSUPP;
 put_file:
 	fput(file);
+out:
 	return err;
 }
 
@@ -4411,6 +4405,8 @@ SYSCALL_DEFINE3(bpf, int, cmd, union bpf_attr __user *, uattr, unsigned int, siz
 	memset(&attr, 0, sizeof(attr));
 	if (copy_from_user(&attr, uattr, size) != 0)
 		return -EFAULT;
+
+	trace_android_vh_check_bpf_syscall(cmd, &attr, size);
 
 	err = security_bpf(cmd, &attr, size);
 	if (err < 0)
