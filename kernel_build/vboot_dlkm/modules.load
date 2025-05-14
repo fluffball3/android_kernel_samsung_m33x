@@ -1,11 +1,9 @@
 exynos-chipid_v2.ko
 exynos-reboot.ko
-sec_debug_base_early.ko
 exynos_mct.ko
 exynos_tty.ko
 clk_exynos.ko
 i2c-exynos5.ko
-sec_debug_mode.ko
 ems.ko
 zsmalloc.ko
 lzo.ko
@@ -67,7 +65,6 @@ gnss_mbox.ko
 gnssif.ko
 exynos_pm_qos.ko
 exynos-bcm.ko
-exynos-ssp.ko
 exynos-cm.ko
 exynos-el2.ko
 exynos-s2mpu.ko
@@ -104,8 +101,6 @@ scsc_mmap.ko
 scsc_mx250_fm.ko
 scsc_bt.ko
 tzdev.ko
-tuihw.ko
-tuihw-inf.ko
 s2mpu13_mfd.ko
 s2mpu14_mfd.ko
 nfc_sec.ko
@@ -216,7 +211,6 @@ nanohub.ko
 exynos_devfreq.ko
 s2mpu13_adc.ko
 npu.ko
-hdm.ko
 sec_pm_debug.ko
 sec_thermistor.ko
 sec_wakeup_cpu_allocator.ko
@@ -232,20 +226,6 @@ pmic_class.ko
 dev_ril_bridge.ko
 mcd-panel.ko
 sec_vibrator.ko
-sec_debug.ko
-sec_debug_test.ko
-sec_debug_dprm.ko
-sec_debug_dprt.ko
-sec_debug_extra_info.ko
-sec_debug_hw_param.ko
-sec_debug_reset_reason.ko
-sec_debug_wdd_info.ko
-sec_debug_dtask.ko
-sec_debug_softdog.ko
-sec_debug_sched_info.ko
-sec_debug_stacktrace.ko
-sec_debug_hardlockup_info.ko
-sec_debug_sched_report.ko
 dropdump.ko
 common_muic.ko
 mcd-panel-nt36672c_m33x_01.ko
