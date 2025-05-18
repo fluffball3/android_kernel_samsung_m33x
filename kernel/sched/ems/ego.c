@@ -612,9 +612,8 @@ static unsigned int get_next_freq(struct ego_policy *egp,
 {
 	struct cpufreq_policy *policy = egp->policy;
 	unsigned int freq, org_freq, eng_freq = 0;
-	extern bool func_arch_scale_freq_invariant(void);
 
-	if (func_arch_scale_freq_invariant())
+	if (arch_scale_freq_invariant())
 		freq = policy->cpuinfo.max_freq;
 	else
 		/*
