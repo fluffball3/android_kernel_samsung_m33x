@@ -244,12 +244,6 @@ static unsigned int get_next_freq(struct sugov_policy *sg_policy,
 	return l_freq;
 }
 
-bool func_arch_scale_freq_invariant(void)
-{
-	return arch_scale_freq_invariant();
-}
-EXPORT_SYMBOL_GPL(func_arch_scale_freq_invariant);
-
 /*
  * This function computes an effective utilization for the given CPU, to be
  * used for frequency selection given the linear relation: f = u * f_max.
