@@ -745,12 +745,9 @@ static u16 phy_exynos_usb_v3p1_ssp_cr_access(struct exynos_usbphy_info *info,
 			g2phy_crparcon0 = readl(base + EXYNOS_USBCON_G2PHY_CRPARCON0);
 			g2phy_crparcon0 |= (G2PHY_CRPARCON0_CR_PARA_ADDR(addr)|(G2PHY_CRPARCON0_CR_PARA_CLK));
 
-			if (cr_op == USBCON_CR_SSP_WRITE) {
-				g2phy_crparcon2 =
-				    readl(base + EXYNOS_USBCON_G2PHY_CRPARCON2);
-				g2phy_crparcon2 |=
-				    (G2PHY_CRPARCON2_CR_PARA_WR_DATA(data) |
-				     G2PHY_CRPARCON2_CR_PARA_WR_EN);
+			if (cr_op == USBCON_CR_WRITE) {
+				g2phy_crparcon2 = readl(base + EXYNOS_USBCON_G2PHY_CRPARCON2);
+				g2phy_crparcon2 |= (G2PHY_CRPARCON2_CR_PARA_WR_DATA(data)|G2PHY_CRPARCON2_CR_PARA_WR_EN);
 
 				phy_exynos_usb_v3p1_ssp_cr_clk_up(info);	// Toggle High
 				writel(g2phy_crparcon0, base + EXYNOS_USBCON_G2PHY_CRPARCON0);	// write addr
@@ -769,14 +766,19 @@ static u16 phy_exynos_usb_v3p1_ssp_cr_access(struct exynos_usbphy_info *info,
 			g2phy_crparcon0 &= ~(0x1 << phy_exynos_usb_v3p1_ssp_cr_clk_down(info));	// Toggle Low
 
 		} else if (loop_cnt == 2) {
-			if (cr_op == USBCON_CR_SSP_WRITE) {
-				/* Do nothing */
+			if (cr_op == USBCON_CR_WRITE) {
+				//g2phy_crparcon2 = readl(base + EXYNOS_USBCON_G2PHY_CRPARCON2);
+				//g2phy_crparcon2 &= ~(G2PHY_CRPARCON2_CR_PARA_WR_EN);
+
+				//phy_exynos_usb_v3p1_ssp_cr_clk_up(info);	// Toggle High
+				//writel(g2phy_crparcon2, base + EXYNOS_USBCON_G2PHY_CRPARCON2);
 			} else {
-				/* cr_op==USBCON_CR_READ */
-				g2phy_crparcon1 =
-				    readl(base + EXYNOS_USBCON_G2PHY_CRPARCON1);
-				g2phy_crparcon1 &=
-				    ~(G2PHY_CRPARCON1_CR_PARA_RD_EN);
+				// cr_op==USBCON_CR_READ
+				g2phy_crparcon1 = readl(base + EXYNOS_USBCON_G2PHY_CRPARCON1);
+				g2phy_crparcon1 &= ~(G2PHY_CRPARCON1_CR_PARA_RD_EN);
+
+				g2phy_crparcon0 |= phy_exynos_usb_v3p1_ssp_cr_clk_up(info);	// Toggle High
+				writel(g2phy_crparcon1, base + EXYNOS_USBCON_G2PHY_CRPARCON1); // read EN: Low
 			}
 
 			g2phy_crparcon0 &= ~(0x1 << phy_exynos_usb_v3p1_ssp_cr_clk_down(info));	// Toggle Low
