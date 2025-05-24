@@ -23,6 +23,7 @@
   blk_queue_physical_block_size
   bpf_trace_run2
   bpf_trace_run3
+  blk_mq_quiesce_queue_nowait
   bt_err
   bt_info
   bt_warn
@@ -1106,6 +1107,7 @@
   bpf_prog_add
   bpf_prog_put
   bpf_prog_sub
+  bpf_redirect_info
   bpf_stats_enabled_key
   bpf_warn_invalid_xdp_action
   build_skb

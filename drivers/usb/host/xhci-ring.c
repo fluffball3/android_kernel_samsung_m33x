@@ -389,7 +389,8 @@ static void xhci_handle_stopped_cmd_ring(struct xhci_hcd *xhci,
 		xhci_info(xhci, "xhci->xhc_state 0x%x\n", xhci->xhc_state);
 #endif
 		xhci->current_cmd = cur_cmd;
-		xhci_mod_cmd_timer(xhci, XHCI_CMD_DEFAULT_TIMEOUT);
+		if (cur_cmd)
+			xhci_mod_cmd_timer(xhci, XHCI_CMD_DEFAULT_TIMEOUT);
 		xhci_ring_cmd_db(xhci);
 	}
 }
@@ -1787,6 +1788,14 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 
 	trace_xhci_handle_command(xhci->cmd_ring, &cmd_trb->generic);
 
+	cmd_comp_code = GET_COMP_CODE(le32_to_cpu(event->status));
+
+	/* If CMD ring stopped we own the trbs between enqueue and dequeue */
+	if (cmd_comp_code == COMP_COMMAND_RING_STOPPED) {
+		complete_all(&xhci->cmd_ring_stop_completion);
+		return;
+	}
+
 	cmd_dequeue_dma = xhci_trb_virt_to_dma(xhci->cmd_ring->deq_seg,
 			cmd_trb);
 	/*
@@ -1802,18 +1811,6 @@ static void handle_cmd_completion(struct xhci_hcd *xhci,
 	cmd = list_first_entry(&xhci->cmd_list, struct xhci_command, cmd_list);
 
 	cancel_delayed_work(&xhci->cmd_timer);
-
-	cmd_comp_code = GET_COMP_CODE(le32_to_cpu(event->status));
-
-	/* If CMD ring stopped we own the trbs between enqueue and dequeue */
-	if (cmd_comp_code == COMP_COMMAND_RING_STOPPED) {
-#ifdef CONFIG_USB_DEBUG_DETAILED_LOG
-		xhci_info(xhci,
-			 "cmd_comp_code == COMP_COMMAND_RING_STOPPED\n");
-#endif
-		complete_all(&xhci->cmd_ring_stop_completion);
-		return;
-	}
 
 	if (cmd->command_trb != xhci->cmd_ring->dequeue) {
 		xhci_err(xhci,
