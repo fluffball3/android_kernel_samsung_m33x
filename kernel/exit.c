@@ -70,7 +70,6 @@
 #include <asm/unistd.h>
 #include <asm/mmu_context.h>
 #include <trace/hooks/mm.h>
-#include <trace/hooks/dtask.h>
 
 /*
  * The default value should be high enough to not crash a system that randomly
@@ -481,6 +480,7 @@ assign_new_owner:
 		goto retry;
 	}
 	WRITE_ONCE(mm->owner, c);
+	lru_gen_migrate_mm(mm);
 	task_unlock(c);
 	put_task_struct(c);
 }

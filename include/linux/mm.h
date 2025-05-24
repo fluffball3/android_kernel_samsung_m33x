@@ -1109,6 +1109,8 @@ vm_fault_t finish_mkwrite_fault(struct vm_fault *vmf);
 #define ZONES_PGOFF		(NODES_PGOFF - ZONES_WIDTH)
 #define LAST_CPUPID_PGOFF	(ZONES_PGOFF - LAST_CPUPID_WIDTH)
 #define KASAN_TAG_PGOFF		(LAST_CPUPID_PGOFF - KASAN_TAG_WIDTH)
+#define LRU_GEN_PGOFF		(KASAN_TAG_PGOFF - LRU_GEN_WIDTH)
+#define LRU_REFS_PGOFF		(LRU_GEN_PGOFF - LRU_REFS_WIDTH)
 
 /*
  * Define the bit shifts to access each section.  For non-existent
@@ -2695,16 +2697,16 @@ extern struct vm_area_struct *__vma_merge(struct mm_struct *mm,
 	struct vm_area_struct *prev, unsigned long addr, unsigned long end,
 	unsigned long vm_flags, struct anon_vma *anon, struct file *file,
 	pgoff_t pgoff, struct mempolicy *mpol, struct vm_userfaultfd_ctx uff,
-	const char __user *user, bool keep_locked);
+	struct anon_vma_name *, bool keep_locked);
 
 static inline struct vm_area_struct *vma_merge(struct mm_struct *mm,
 	struct vm_area_struct *prev, unsigned long addr, unsigned long end,
 	unsigned long vm_flags, struct anon_vma *anon, struct file *file,
 	pgoff_t off, struct mempolicy *pol, struct vm_userfaultfd_ctx uff,
-	const char __user *user)
+	struct anon_vma_name *anon_name)
 {
 	return __vma_merge(mm, prev, addr, end, vm_flags, anon, file, off,
-			   pol, uff, user, false);
+			   pol, uff, anon_name, false);
 }
 
 extern struct anon_vma *find_mergeable_anon_vma(struct vm_area_struct *);
@@ -3390,6 +3392,7 @@ unsigned long wp_shared_mapping_range(struct address_space *mapping,
 extern int sysctl_nr_trim_pages;
 extern bool pte_map_lock_addr(struct vm_fault *vmf, unsigned long addr);
 extern int reclaim_shmem_address_space(struct address_space *mapping);
+extern int reclaim_pages_from_list(struct list_head *page_list);
 
 /**
  * seal_check_future_write - Check for F_SEAL_FUTURE_WRITE flag and handle it
@@ -3458,6 +3461,17 @@ enum rbin_stat_item {
 };
 extern int rbin_oem_func(int cmd, int *stats);
 extern unsigned long rbin_total;
+
+#ifdef CONFIG_ANON_VMA_NAME
+int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
+			  unsigned long len_in,
+			  struct anon_vma_name *anon_name);
+#else
+static inline int
+madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
+		      unsigned long len_in, struct anon_vma_name *anon_name) {
+	return 0;
+}
 #endif
 
 #endif /* __KERNEL__ */

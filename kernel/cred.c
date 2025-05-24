@@ -150,6 +150,7 @@ void __put_cred(struct cred *cred)
 #else
 	BUG_ON(atomic_read(&cred->usage) != 0);
 #endif
+
 #ifdef CONFIG_DEBUG_CREDENTIALS
 	BUG_ON(read_cred_subscribers(cred) != 0);
 	cred->magic = CRED_MAGIC_DEAD;

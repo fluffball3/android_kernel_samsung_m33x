@@ -543,6 +543,28 @@ static struct dma_heap_ops system_uncached_heap_ops = {
 	.allocate = system_uncached_heap_not_initialized,
 };
 
+static struct dma_buf *system_uncached_heap_allocate(struct dma_heap *heap,
+						     unsigned long len,
+						     unsigned long fd_flags,
+						     unsigned long heap_flags)
+{
+	return system_heap_do_allocate(heap, len, fd_flags, heap_flags, true);
+}
+
+/* Dummy function to be used until we can call coerce_mask_and_coherent */
+static struct dma_buf *system_uncached_heap_not_initialized(struct dma_heap *heap,
+							    unsigned long len,
+							    unsigned long fd_flags,
+							    unsigned long heap_flags)
+{
+	return ERR_PTR(-EBUSY);
+}
+
+static struct dma_heap_ops system_uncached_heap_ops = {
+	/* After system_heap_create is complete, we will swap this */
+	.allocate = system_uncached_heap_not_initialized,
+};
+
 static int set_heap_dev_dma(struct device *heap_dev)
 {
 	int err = 0;
@@ -573,7 +595,7 @@ static int set_heap_dev_dma(struct device *heap_dev)
 static int system_heap_create(void)
 {
 	struct dma_heap_export_info exp_info;
-	int i, err = 0;
+	int i;
 
 	for (i = 0; i < NUM_ORDERS; i++) {
 		pools[i] = dmabuf_page_pool_create(order_flags[i], orders[i]);
@@ -604,10 +626,7 @@ static int system_heap_create(void)
 	if (IS_ERR(sys_uncached_heap))
 		return PTR_ERR(sys_uncached_heap);
 
-	err = set_heap_dev_dma(dma_heap_get_dev(sys_uncached_heap));
-	if (err)
-		return err;
-
+	dma_coerce_mask_and_coherent(dma_heap_get_dev(sys_uncached_heap), DMA_BIT_MASK(64));
 	mb(); /* make sure we only set allocate after dma_mask is set */
 	system_uncached_heap_ops.allocate = system_uncached_heap_allocate;
 

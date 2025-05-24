@@ -85,8 +85,8 @@ int f2fs_init_casefolded_name(const struct inode *dir,
 
 	if (IS_CASEFOLDED(dir) &&
 	    !is_dot_dotdot(fname->usr_fname->name, fname->usr_fname->len)) {
-		fname->cf_name.name = kmem_cache_alloc(f2fs_cf_name_slab,
-								GFP_NOFS);
+		fname->cf_name.name = f2fs_kmem_cache_alloc(f2fs_cf_name_slab,
+					GFP_NOFS, false, F2FS_SB(sb));
 		if (!fname->cf_name.name)
 			return -ENOMEM;
 		fname->cf_name.len = utf8_casefold(sb->s_encoding,

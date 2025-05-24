@@ -2726,10 +2726,10 @@ extern int __ext4_check_dir_entry(const char *, unsigned int, struct inode *,
 				  struct file *,
 				  struct ext4_dir_entry_2 *,
 				  struct buffer_head *, char *, int,
-				  ext4_lblk_t, unsigned int);
-#define ext4_check_dir_entry(dir, filp, de, bh, buf, size, lblk, offset) \
+				  unsigned int);
+#define ext4_check_dir_entry(dir, filp, de, bh, buf, size, offset) \
 	unlikely(__ext4_check_dir_entry(__func__, __LINE__, (dir), (filp), \
-				(de), (bh), (buf), (size), (lblk), (offset)))
+				(de), (bh), (buf), (size), (offset)))
 extern int ext4_htree_store_dirent(struct file *dir_file, __u32 hash,
 				__u32 minor_hash,
 				struct ext4_dir_entry_2 *dirent,

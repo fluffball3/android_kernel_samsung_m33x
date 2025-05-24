@@ -72,6 +72,7 @@
 #include <linux/page_idle.h>
 #include <linux/memremap.h>
 #include <linux/userfaultfd_k.h>
+#include <linux/mm_inline.h>
 
 #include <asm/tlbflush.h>
 
@@ -566,6 +567,12 @@ struct anon_vma *page_lock_anon_vma_read(struct page *page,
 		goto out;
 	}
 
+	if (rwc && rwc->try_lock) {
+		anon_vma = NULL;
+		rwc->contended = true;
+		goto out;
+	}
+
 	/* trylock failed, we got to sleep */
 	if (!atomic_inc_not_zero(&anon_vma->refcount)) {
 		anon_vma = NULL;
@@ -802,7 +809,12 @@ static bool page_referenced_one(struct page *page, struct vm_area_struct *vma,
 		}
 
 		if (pvmw.pte) {
-			trace_android_vh_look_around(&pvmw, page, vma, &referenced);
+			if (lru_gen_enabled() && pte_young(*pvmw.pte) &&
+			    !(vma->vm_flags & (VM_SEQ_READ | VM_RAND_READ))) {
+				lru_gen_look_around(&pvmw);
+				referenced++;
+			}
+
 			if (ptep_clear_flush_young_notify(vma, address,
 						pvmw.pte)) {
 				/*
@@ -2030,22 +2042,15 @@ static void rmap_walk_file(struct page *page, struct rmap_walk_control *rwc,
 	pgoff_start = page_to_pgoff(page);
 	pgoff_end = pgoff_start + thp_nr_pages(page) - 1;
 	if (!locked) {
-		trace_android_vh_do_page_trylock(page,
-					&mapping->i_mmap_rwsem, &got_lock, &success);
-		if (success) {
-			if (!got_lock)
-				return;
-		} else {
-			if (i_mmap_trylock_read(mapping))
-				goto lookup;
+		if (i_mmap_trylock_read(mapping))
+			goto lookup;
 
-			if (rwc->try_lock) {
-				rwc->contended = true;
-				return;
-			}
-
-			i_mmap_lock_read(mapping);
+		if (rwc->try_lock) {
+			rwc->contended = true;
+			return;
 		}
+
+		i_mmap_lock_read(mapping);
 	}
 lookup:
 	vma_interval_tree_foreach(vma, &mapping->i_mmap,

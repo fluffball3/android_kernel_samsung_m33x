@@ -988,11 +988,15 @@ out:
 	return 0;
 }
 
-static void dwc3_remove_requests(struct dwc3 *dwc, struct dwc3_ep *dep, int status)
+void dwc3_remove_requests(struct dwc3 *dwc, struct dwc3_ep *dep, int status)
 {
 	struct dwc3_request		*req;
 
 	dwc3_stop_active_transfer(dep, true, false);
+
+	/* If endxfer is delayed, avoid unmapping requests */
+	if (dep->flags & DWC3_EP_DELAY_STOP)
+		return;
 
 	/* - giveback all requests to gadget driver */
 	while (!list_empty(&dep->started_list)) {
@@ -2621,8 +2625,14 @@ static int dwc3_gadget_pullup(struct usb_gadget *g, int is_on)
 	int			ret;
 
 	is_on = !!is_on;
-
 	vdwc->softconnect = is_on;
+
+	/*
+	 * Per databook, when we want to stop the gadget, if a control transfer
+	 * is still in process, complete it and get the core into setup phase.
+	 */
+	if (!is_on && dwc->ep0state != EP0_SETUP_PHASE) {
+		reinit_completion(&dwc->ep0_in_setup);
 
 	pr_info("%s +++\n", __func__);
 	mutex_lock(&dwc->mutex);
@@ -2898,6 +2908,9 @@ static int dwc3_gadget_stop(struct usb_gadget *g)
 
 	mutex_lock(&dwc->mutex);
 	spin_lock_irqsave(&dwc->lock, flags);
+	dwc->gadget_driver	= NULL;
+	dwc->max_cfg_eps = 0;
+	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	dwc->gadget_driver	= NULL;
 	dwc->max_cfg_eps = 0;
@@ -4158,6 +4171,7 @@ static void dwc3_gadget_wakeup_interrupt(struct dwc3 *dwc)
 	 * implemented.
 	 */
 	dwc->link_state = DWC3_LINK_STATE_RESUME;
+
 	if (dwc->async_callbacks && dwc->gadget_driver->resume) {
 		spin_unlock(&dwc->lock);
 		dwc->gadget_driver->resume(dwc->gadget);
@@ -4700,9 +4714,10 @@ int dwc3_gadget_suspend(struct dwc3 *dwc)
 
 int dwc3_gadget_resume(struct dwc3 *dwc)
 {
+	struct dwc3_vendor	*vdwc = container_of(dwc, struct dwc3_vendor, dwc);
 	int			ret;
 
-	if (!dwc->gadget_driver || !dwc->gadget->connected)
+	if (!dwc->gadget_driver || !vdwc->softconnect)
 		return 0;
 
 	if (dwc->gadget->deactivated) {

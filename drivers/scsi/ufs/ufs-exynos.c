@@ -17,6 +17,11 @@
 #include "ufs-cal-if.h"
 #include "ufs-vs-mmio.h"
 #include "ufs-vs-regs.h"
+#include <linux/mfd/syscon.h>
+#include <linux/phy/phy.h>
+#include <linux/platform_device.h>
+#include <linux/regmap.h>
+
 #include "ufshcd.h"
 #include "ufshcd-crypto.h"
 #include "ufshci.h"
@@ -58,6 +63,112 @@ static int ufs_host_index = 0;
 static const char *res_token[2] = {
 	"passes",
 	"fails",
+
+	/*
+ * Exynos's Vendor specific registers for UFSHCI
+ */
+#define HCI_TXPRDT_ENTRY_SIZE	0x00
+#define PRDT_PREFECT_EN		BIT(31)
+#define PRDT_SET_SIZE(x)	((x) & 0x1F)
+#define HCI_RXPRDT_ENTRY_SIZE	0x04
+#define HCI_1US_TO_CNT_VAL	0x0C
+#define CNT_VAL_1US_MASK	0x3FF
+#define HCI_UTRL_NEXUS_TYPE	0x40
+#define HCI_UTMRL_NEXUS_TYPE	0x44
+#define HCI_SW_RST		0x50
+#define UFS_LINK_SW_RST		BIT(0)
+#define UFS_UNIPRO_SW_RST	BIT(1)
+#define UFS_SW_RST_MASK		(UFS_UNIPRO_SW_RST | UFS_LINK_SW_RST)
+#define HCI_DATA_REORDER	0x60
+#define HCI_UNIPRO_APB_CLK_CTRL	0x68
+#define UNIPRO_APB_CLK(v, x)	(((v) & ~0xF) | ((x) & 0xF))
+#define HCI_AXIDMA_RWDATA_BURST_LEN	0x6C
+#define HCI_GPIO_OUT		0x70
+#define HCI_ERR_EN_PA_LAYER	0x78
+#define HCI_ERR_EN_DL_LAYER	0x7C
+#define HCI_ERR_EN_N_LAYER	0x80
+#define HCI_ERR_EN_T_LAYER	0x84
+#define HCI_ERR_EN_DME_LAYER	0x88
+#define HCI_CLKSTOP_CTRL	0xB0
+#define REFCLKOUT_STOP		BIT(4)
+#define REFCLK_STOP		BIT(2)
+#define UNIPRO_MCLK_STOP	BIT(1)
+#define UNIPRO_PCLK_STOP	BIT(0)
+#define CLK_STOP_MASK		(REFCLKOUT_STOP | REFCLK_STOP |\
+				 UNIPRO_MCLK_STOP |\
+				 UNIPRO_PCLK_STOP)
+#define HCI_MISC		0xB4
+#define REFCLK_CTRL_EN		BIT(7)
+#define UNIPRO_PCLK_CTRL_EN	BIT(6)
+#define UNIPRO_MCLK_CTRL_EN	BIT(5)
+#define HCI_CORECLK_CTRL_EN	BIT(4)
+#define CLK_CTRL_EN_MASK	(REFCLK_CTRL_EN |\
+				 UNIPRO_PCLK_CTRL_EN |\
+				 UNIPRO_MCLK_CTRL_EN)
+/* Device fatal error */
+#define DFES_ERR_EN		BIT(31)
+#define DFES_DEF_L2_ERRS	(UIC_DATA_LINK_LAYER_ERROR_RX_BUF_OF |\
+				 UIC_DATA_LINK_LAYER_ERROR_PA_INIT)
+#define DFES_DEF_L3_ERRS	(UIC_NETWORK_UNSUPPORTED_HEADER_TYPE |\
+				 UIC_NETWORK_BAD_DEVICEID_ENC |\
+				 UIC_NETWORK_LHDR_TRAP_PACKET_DROPPING)
+#define DFES_DEF_L4_ERRS	(UIC_TRANSPORT_UNSUPPORTED_HEADER_TYPE |\
+				 UIC_TRANSPORT_UNKNOWN_CPORTID |\
+				 UIC_TRANSPORT_NO_CONNECTION_RX |\
+				 UIC_TRANSPORT_BAD_TC)
+
+/* FSYS UFS Shareability */
+#define UFS_WR_SHARABLE		BIT(2)
+#define UFS_RD_SHARABLE		BIT(1)
+#define UFS_SHARABLE		(UFS_WR_SHARABLE | UFS_RD_SHARABLE)
+#define UFS_SHAREABILITY_OFFSET	0x710
+
+/* Multi-host registers */
+#define MHCTRL			0xC4
+#define MHCTRL_EN_VH_MASK	(0xE)
+#define MHCTRL_EN_VH(vh)	(vh << 1)
+#define PH2VH_MBOX		0xD8
+
+#define MH_MSG_MASK		(0xFF)
+
+#define MH_MSG(id, msg)		((id << 8) | (msg & 0xFF))
+#define MH_MSG_PH_READY		0x1
+#define MH_MSG_VH_READY		0x2
+
+#define ALLOW_INQUIRY		BIT(25)
+#define ALLOW_MODE_SELECT	BIT(24)
+#define ALLOW_MODE_SENSE	BIT(23)
+#define ALLOW_PRE_FETCH		GENMASK(22, 21)
+#define ALLOW_READ_CMD_ALL	GENMASK(20, 18)	/* read_6/10/16 */
+#define ALLOW_READ_BUFFER	BIT(17)
+#define ALLOW_READ_CAPACITY	GENMASK(16, 15)
+#define ALLOW_REPORT_LUNS	BIT(14)
+#define ALLOW_REQUEST_SENSE	BIT(13)
+#define ALLOW_SYNCHRONIZE_CACHE	GENMASK(8, 7)
+#define ALLOW_TEST_UNIT_READY	BIT(6)
+#define ALLOW_UNMAP		BIT(5)
+#define ALLOW_VERIFY		BIT(4)
+#define ALLOW_WRITE_CMD_ALL	GENMASK(3, 1)	/* write_6/10/16 */
+
+#define ALLOW_TRANS_VH_DEFAULT	(ALLOW_INQUIRY | ALLOW_MODE_SELECT | \
+				 ALLOW_MODE_SENSE | ALLOW_PRE_FETCH | \
+				 ALLOW_READ_CMD_ALL | ALLOW_READ_BUFFER | \
+				 ALLOW_READ_CAPACITY | ALLOW_REPORT_LUNS | \
+				 ALLOW_REQUEST_SENSE | ALLOW_SYNCHRONIZE_CACHE | \
+				 ALLOW_TEST_UNIT_READY | ALLOW_UNMAP | \
+				 ALLOW_VERIFY | ALLOW_WRITE_CMD_ALL)
+
+#define HCI_MH_ALLOWABLE_TRAN_OF_VH		0x30C
+#define HCI_MH_IID_IN_TASK_TAG			0X308
+
+#define PH_READY_TIMEOUT_MS			(5 * MSEC_PER_SEC)
+
+enum {
+	UNIPRO_L1_5 = 0,/* PHY Adapter */
+	UNIPRO_L2,	/* Data Link */
+	UNIPRO_L3,	/* Network */
+	UNIPRO_L4,	/* Transport */
+	UNIPRO_DME,	/* DME */
 };
 
 enum {
@@ -84,6 +195,14 @@ static const int __cport_log_type = 0x22;
 
 /* Functions to map registers or to something by other modules */
 static void ufs_udelay(u32 n)
+
+#define CNTR_DIV_VAL 40
+
+static struct exynos_ufs_drv_data exynos_ufs_drvs;
+static void exynos_ufs_auto_ctrl_hcc(struct exynos_ufs *ufs, bool en);
+static void exynos_ufs_ctrl_clkstop(struct exynos_ufs *ufs, bool en);
+
+static inline void exynos_ufs_enable_auto_ctrl_hcc(struct exynos_ufs *ufs)
 {
 	udelay(n);
 }
@@ -2160,6 +2279,7 @@ static void __ufs_resume_async(struct work_struct *work)
 	if (atomic_dec_and_test(&hba->scsi_block_reqs_cnt))
 		scsi_unblock_requests(hba->host);
 }
+
 static int exynos_ufs_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;

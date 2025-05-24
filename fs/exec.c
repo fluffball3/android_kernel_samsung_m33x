@@ -74,6 +74,9 @@
 #include "internal.h"
 
 #include <trace/events/sched.h>
+#include <trace/hooks/sched.h>
+
+EXPORT_TRACEPOINT_SYMBOL_GPL(task_rename);
 
 #ifdef CONFIG_SECURITY_DEFEX
 #include <linux/defex.h>
@@ -1034,12 +1037,14 @@ static int exec_mmap(struct mm_struct *mm)
 	if (IS_ENABLED(CONFIG_ARCH_WANT_IRQS_OFF_ACTIVATE_MM))
 		local_irq_enable();
 	tsk->mm->vmacache_seqnum = 0;
+	lru_gen_add_mm(mm);
 	vmacache_flush(tsk);
 #ifdef CONFIG_KDP_CRED
 	if (kdp_enable)
 		uh_call(UH_APP_KDP, SET_CRED_PGD, (u64)current_cred(), (u64)mm->pgd, 0, 0);
 #endif
 	task_unlock(tsk);
+	lru_gen_use_mm(mm);
 	if (old_mm) {
 		mmap_read_unlock(old_mm);
 		BUG_ON(active_mm != old_mm);
@@ -1245,6 +1250,7 @@ void __set_task_comm(struct task_struct *tsk, const char *buf, bool exec)
 	strlcpy(tsk->comm, buf, sizeof(tsk->comm));
 	task_unlock(tsk);
 	perf_event_comm(tsk, exec);
+	trace_android_vh_set_task_comm(tsk);
 }
 
 /*

@@ -1524,6 +1524,7 @@ static int scmi_remove(struct platform_device *pdev)
 {
 	int ret = 0, id;
 	struct scmi_info *info = platform_get_drvdata(pdev);
+	struct idr *idr = &info->tx_idr;
 	struct device_node *child;
 
 	mutex_lock(&scmi_list_mutex);

@@ -42,7 +42,6 @@
 						struct f2fs_comp_option)
 #define F2FS_IOC_DECOMPRESS_FILE	_IO(F2FS_IOCTL_MAGIC, 23)
 #define F2FS_IOC_COMPRESS_FILE		_IO(F2FS_IOCTL_MAGIC, 24)
-
 #define F2FS_IOC_GET_VALID_NODE_COUNT	_IOR(F2FS_IOCTL_MAGIC, 32, __u32)
 #define F2FS_IOC_STAT_COMPRESS_FILE	_IOWR(F2FS_IOCTL_MAGIC, 33, \
 								struct f2fs_sec_stat_compfile)

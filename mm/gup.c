@@ -25,6 +25,9 @@
 
 #include "internal.h"
 
+#undef CREATE_TRACE_POINTS
+#include <trace/hooks/gup.h>
+
 struct follow_page_context {
 	struct dev_pagemap *pgmap;
 	unsigned int page_mask;
@@ -116,11 +119,14 @@ static __maybe_unused struct page *try_grab_compound_head(struct page *page,
 							  int refs,
 							  unsigned int flags)
 {
+	bool vendor_ret = false;
+
+	trace_android_vh_try_grab_compound_head(page, refs, flags, &vendor_ret);
+	if (vendor_ret)
+		return NULL;
+
 	if (flags & FOLL_GET) {
-		struct page *head = try_get_compound_head(page, refs);
-		if (head)
-			set_page_pinner(head, compound_order(head));
-		return head;
+		return try_get_compound_head(page, refs);
 	} else if (flags & FOLL_PIN) {
 		int orig_refs = refs;
 
@@ -206,13 +212,7 @@ bool __must_check try_grab_page(struct page *page, unsigned int flags)
 	WARN_ON_ONCE((flags & (FOLL_GET | FOLL_PIN)) == (FOLL_GET | FOLL_PIN));
 
 	if (flags & FOLL_GET) {
-		bool ret = try_get_page(page);
-
-		if (ret) {
-			page = compound_head(page);
-			set_page_pinner(page, compound_order(page));
-		}
-		return ret;
+		return try_get_page(page);
 	} else if (flags & FOLL_PIN) {
 		int refs = 1;
 
@@ -1772,6 +1772,10 @@ static long __get_user_pages_remote(struct mm_struct *mm,
 				    unsigned int gup_flags, struct page **pages,
 				    struct vm_area_struct **vmas, int *locked)
 {
+	unsigned int orig_gup_flags = gup_flags;
+
+	trace_android_vh___get_user_pages_remote(locked, &gup_flags, pages);
+
 	/*
 	 * Parts of FOLL_LONGTERM behavior are incompatible with
 	 * FAULT_FLAG_ALLOW_RETRY because of the FS DAX check requirement on
@@ -1779,16 +1783,24 @@ static long __get_user_pages_remote(struct mm_struct *mm,
 	 * callers that do request FOLL_LONGTERM, but do not set locked. So,
 	 * allow what we can.
 	 */
+retry:
 	if (gup_flags & FOLL_LONGTERM) {
+		long ret;
+
 		if (WARN_ON_ONCE(locked))
 			return -EINVAL;
 		/*
 		 * This will check the vmas (even if our vmas arg is NULL)
 		 * and return -ENOTSUPP if DAX isn't allowed in this case:
 		 */
-		return __gup_longterm_locked(mm, start, nr_pages, pages,
+		ret = __gup_longterm_locked(mm, start, nr_pages, pages,
 					     vmas, gup_flags | FOLL_TOUCH |
 					     FOLL_REMOTE);
+		if (ret < 0 && orig_gup_flags != gup_flags) {
+			gup_flags = orig_gup_flags;
+			goto retry;
+		} else
+			return ret;
 	}
 
 	return __get_user_pages_locked(mm, start, nr_pages, pages, vmas,
@@ -1907,11 +1919,23 @@ long get_user_pages(unsigned long start, unsigned long nr_pages,
 		unsigned int gup_flags, struct page **pages,
 		struct vm_area_struct **vmas)
 {
+	long ret;
+	unsigned int orig_gup_flags;
+
 	if (!is_valid_gup_flags(gup_flags))
 		return -EINVAL;
 
-	return __gup_longterm_locked(current->mm, start, nr_pages,
+	orig_gup_flags = gup_flags;
+	trace_android_vh_get_user_pages(&gup_flags, pages);
+retry:
+	ret = __gup_longterm_locked(current->mm, start, nr_pages,
 				     pages, vmas, gup_flags | FOLL_TOUCH);
+	if (ret < 0 && orig_gup_flags != gup_flags) {
+		gup_flags = orig_gup_flags;
+		goto retry;
+	}
+
+	return ret;
 }
 EXPORT_SYMBOL(get_user_pages);
 
@@ -2715,6 +2739,7 @@ static int internal_get_user_pages_fast(unsigned long start,
 	unsigned long len, end;
 	unsigned long nr_pinned;
 	int ret;
+	unsigned long orig_gup_flags = gup_flags;
 
 	if (WARN_ON_ONCE(gup_flags & ~(FOLL_WRITE | FOLL_LONGTERM |
 				       FOLL_FORCE | FOLL_PIN | FOLL_GET |
@@ -2741,8 +2766,15 @@ static int internal_get_user_pages_fast(unsigned long start,
 	/* Slow path: try to get the remaining pages with get_user_pages */
 	start += nr_pinned << PAGE_SHIFT;
 	pages += nr_pinned;
+	trace_android_vh_internal_get_user_pages_fast(&gup_flags, pages);
+retry:
 	ret = __gup_longterm_unlocked(start, nr_pages - nr_pinned, gup_flags,
 				      pages);
+	if (ret < 0 && orig_gup_flags != gup_flags) {
+		gup_flags = orig_gup_flags;
+		goto retry;
+	}
+
 	if (ret < 0) {
 		/*
 		 * The caller has to unpin the pages we already pinned so
@@ -2966,6 +2998,7 @@ long pin_user_pages(unsigned long start, unsigned long nr_pages,
 		return -EINVAL;
 
 	gup_flags |= FOLL_PIN;
+	trace_android_vh_pin_user_pages(&gup_flags, pages);
 	return __gup_longterm_locked(current->mm, start, nr_pages,
 				     pages, vmas, gup_flags);
 }

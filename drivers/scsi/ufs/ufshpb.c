@@ -13,7 +13,6 @@
 #include <linux/async.h>
 
 #include "ufshcd.h"
-#include "ufshcd-add-info.h"
 #include "ufshpb.h"
 #include "../sd.h"
 
@@ -43,13 +42,13 @@ static inline struct ufshpb_dev_info *ufs_hba_to_hpb(struct ufs_hba *hba)
 
 bool ufshpb_is_allowed(struct ufs_hba *hba)
 {
-	return !(ufs_hba_to_hpb(hba)->hpb_disabled);
+	return !(hba->ufshpb_dev.hpb_disabled);
 }
 
 /* HPB version 1.0 is called as legacy version. */
 bool ufshpb_is_legacy(struct ufs_hba *hba)
 {
-	return ufs_hba_to_hpb(hba)->is_legacy;
+	return hba->ufshpb_dev.is_legacy;
 }
 
 static struct ufshpb_lu *ufshpb_get_hpb_data(struct scsi_device *sdev)
@@ -76,13 +75,13 @@ static int ufshpb_is_valid_srgn(struct ufshpb_region *rgn,
 
 static bool ufshpb_is_read_cmd(struct scsi_cmnd *cmd)
 {
-	return req_op(cmd->request) == REQ_OP_READ;
+	return req_op(scsi_cmd_to_rq(cmd)) == REQ_OP_READ;
 }
 
 static bool ufshpb_is_write_or_discard(struct scsi_cmnd *cmd)
 {
-	return op_is_write(req_op(cmd->request)) ||
-	       op_is_discard(req_op(cmd->request));
+	return op_is_write(req_op(scsi_cmd_to_rq(cmd))) ||
+	       op_is_discard(req_op(scsi_cmd_to_rq(cmd)));
 }
 
 static bool ufshpb_is_supported_chunk(struct ufshpb_lu *hpb, int transfer_len)
@@ -184,19 +183,9 @@ next_srgn:
 		set_bit_len = cnt;
 
 	spin_lock_irqsave(&hpb->rgn_state_lock, flags);
-	if (rgn->rgn_state != HPB_RGN_INACTIVE) {
-		if (set_dirty) {
-		    if (srgn->srgn_state == HPB_SRGN_VALID)
-			    bitmap_set(srgn->mctx->ppn_dirty, srgn_offset,
-				       set_bit_len);
-		} else if (hpb->is_hcm) {
-			/* rewind the read timer for lru regions */
-			rgn->read_timeout = ktime_add_ms(ktime_get(),
-					rgn->hpb->params.read_timeout_ms);
-			rgn->read_timeout_expiries =
-				rgn->hpb->params.read_timeout_expiries;
-		}
-	}
+	if (set_dirty && rgn->rgn_state != HPB_RGN_INACTIVE &&
+	    srgn->srgn_state == HPB_SRGN_VALID)
+		bitmap_set(srgn->mctx->ppn_dirty, srgn_offset, set_bit_len);
 	spin_unlock_irqrestore(&hpb->rgn_state_lock, flags);
 
 	if (hpb->is_hcm && prev_srgn != srgn) {
@@ -339,21 +328,20 @@ ufshpb_get_pos_from_lpn(struct ufshpb_lu *hpb, unsigned long lpn, int *rgn_idx,
 }
 
 static void
-ufshpb_set_hpb_read_to_upiu(struct ufs_hba *hba, struct ufshpb_lu *hpb,
-			    struct ufshcd_lrb *lrbp, u32 lpn, __be64 ppn,
-			    u8 transfer_len, int read_id)
+ufshpb_set_hpb_read_to_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp,
+			    __be64 ppn, u8 transfer_len)
 {
 	unsigned char *cdb = lrbp->cmd->cmnd;
 	__be64 ppn_tmp = ppn;
 	cdb[0] = UFSHPB_READ;
 
 	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SWAP_L2P_ENTRY_FOR_HPB_READ)
-		ppn_tmp = swab64(ppn);
+		ppn_tmp = (__force __be64)swab64((__force u64)ppn);
 
 	/* ppn value is stored as big-endian in the host memory */
 	memcpy(&cdb[6], &ppn_tmp, sizeof(__be64));
 	cdb[14] = transfer_len;
-	cdb[15] = read_id;
+	cdb[15] = 0;
 
 	lrbp->cmd->cmd_len = UFS_CDB_SIZE;
 }
@@ -616,7 +604,6 @@ int ufshpb_prep(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 	__be64 ppn;
 	unsigned long flags;
 	int transfer_len, rgn_idx, srgn_idx, srgn_offset;
-	int read_id = 0;
 	int err = 0;
 
 	hpb = ufshpb_get_hpb_data(cmd->device);
@@ -632,17 +619,17 @@ int ufshpb_prep(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		return -ENODEV;
 	}
 
-	if (blk_rq_is_scsi(cmd->request) ||
+	if (blk_rq_is_scsi(scsi_cmd_to_rq(cmd)) ||
 	    (!ufshpb_is_write_or_discard(cmd) &&
 	     !ufshpb_is_read_cmd(cmd)))
 		return 0;
 
 	transfer_len = sectors_to_logical(cmd->device,
-					  blk_rq_sectors(cmd->request));
+					  blk_rq_sectors(scsi_cmd_to_rq(cmd)));
 	if (unlikely(!transfer_len))
 		return 0;
 
-	lpn = sectors_to_logical(cmd->device, blk_rq_pos(cmd->request));
+	lpn = sectors_to_logical(cmd->device, blk_rq_pos(scsi_cmd_to_rq(cmd)));
 	ufshpb_get_pos_from_lpn(hpb, lpn, &rgn_idx, &srgn_idx, &srgn_offset);
 	rgn = hpb->rgn_tbl + rgn_idx;
 	srgn = rgn->srgn_tbl + srgn_idx;
@@ -656,8 +643,6 @@ int ufshpb_prep(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 
 	if (!ufshpb_is_supported_chunk(hpb, transfer_len))
 		return 0;
-
-	WARN_ON_ONCE(transfer_len > HPB_MULTI_CHUNK_HIGH);
 
 	if (hpb->is_hcm) {
 		/*
@@ -693,25 +678,7 @@ int ufshpb_prep(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		return err;
 	}
 
-	if (!ufshpb_is_legacy(hba) &&
-	    ufshpb_is_required_wb(hpb, transfer_len)) {
-		err = ufshpb_issue_pre_req(hpb, cmd, &read_id);
-		if (err) {
-			unsigned long timeout;
-
-			timeout = cmd->jiffies_at_alloc + msecs_to_jiffies(
-				  hpb->params.requeue_timeout_ms);
-
-			if (time_before(jiffies, timeout))
-				return -EAGAIN;
-
-			hpb->stats.miss_cnt++;
-			return 0;
-		}
-	}
-
-	ufshpb_set_hpb_read_to_upiu(hba, hpb, lrbp, lpn, ppn, transfer_len,
-				    read_id);
+	ufshpb_set_hpb_read_to_upiu(hba, lrbp, ppn, transfer_len);
 
 	hpb->stats.hit_cnt++;
 	return 0;
@@ -763,7 +730,6 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 {
 	struct ufshpb_req *map_req;
 	struct bio *bio;
-	unsigned long flags;
 
 	if (hpb->is_hcm &&
 	    hpb->num_inflight_map_req >= hpb->params.inflight_map_req) {
@@ -788,10 +754,7 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 
 	map_req->rb.srgn_idx = srgn->srgn_idx;
 	map_req->rb.mctx = srgn->mctx;
-
-	spin_lock_irqsave(&hpb->param_lock, flags);
 	hpb->num_inflight_map_req++;
-	spin_unlock_irqrestore(&hpb->param_lock, flags);
 
 	return map_req;
 }
@@ -799,14 +762,9 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 static void ufshpb_put_map_req(struct ufshpb_lu *hpb,
 			       struct ufshpb_req *map_req)
 {
-	unsigned long flags;
-
 	bio_put(map_req->bio);
 	ufshpb_put_req(hpb, map_req);
-
-	spin_lock_irqsave(&hpb->param_lock, flags);
 	hpb->num_inflight_map_req--;
-	spin_unlock_irqrestore(&hpb->param_lock, flags);
 }
 
 static int ufshpb_clear_dirty_bitmap(struct ufshpb_lu *hpb,
@@ -1849,16 +1807,11 @@ static void ufshpb_lu_parameter_init(struct ufs_hba *hba,
 	u32 entries_per_rgn;
 	u64 rgn_mem_size, tmp;
 
-	/* for pre_req */
-	hpb->pre_req_min_tr_len = hpb_dev_info->max_hpb_single_cmd + 1;
-
 	if (ufshpb_is_legacy(hba))
 		hpb->pre_req_max_tr_len = HPB_LEGACY_CHUNK_HIGH;
 	else
-		hpb->pre_req_max_tr_len = HPB_MULTI_CHUNK_HIGH;
+		hpb->pre_req_max_tr_len = hpb_dev_info->max_hpb_single_cmd;
 
-
-	hpb->cur_read_id = 0;
 
 	hpb->lu_pinned_start = hpb_lu_info->pinned_start;
 	hpb->lu_pinned_end = hpb_lu_info->num_pinned ?
@@ -2406,7 +2359,6 @@ static int ufshpb_lu_hpb_init(struct ufs_hba *hba, struct ufshpb_lu *hpb)
 
 	spin_lock_init(&hpb->rgn_state_lock);
 	spin_lock_init(&hpb->rsp_list_lock);
-	spin_lock_init(&hpb->param_lock);
 
 	INIT_LIST_HEAD(&hpb->lru_info.lh_lru_rgn);
 	INIT_LIST_HEAD(&hpb->lh_act_srgn);
@@ -2775,7 +2727,8 @@ void ufshpb_init_hpb_lu(struct ufs_hba *hba, struct scsi_device *sdev)
 	if (ret)
 		goto out;
 
-	hpb = ufshpb_alloc_hpb_lu(hba, sdev, ufs_hba_to_hpb(hba), &hpb_lu_info);
+	hpb = ufshpb_alloc_hpb_lu(hba, sdev, &hba->ufshpb_dev,
+				  &hpb_lu_info);
 	if (!hpb)
 		goto out;
 
@@ -2784,7 +2737,7 @@ void ufshpb_init_hpb_lu(struct ufs_hba *hba, struct scsi_device *sdev)
 
 out:
 	/* All LUs are initialized */
-	if (atomic_dec_and_test(&ufs_hba_to_hpb(hba)->slave_conf_cnt))
+	if (atomic_dec_and_test(&hba->ufshpb_dev.slave_conf_cnt))
 		ufshpb_hpb_lu_prepared(hba);
 }
 
@@ -2841,7 +2794,7 @@ release_mctx_cache:
 
 void ufshpb_get_geo_info(struct ufs_hba *hba, u8 *geo_buf)
 {
-	struct ufshpb_dev_info *hpb_info = ufs_hba_to_hpb(hba);
+	struct ufshpb_dev_info *hpb_info = &hba->ufshpb_dev;
 	int max_active_rgns = 0;
 	int hpb_num_lu;
 
@@ -2867,13 +2820,13 @@ void ufshpb_get_geo_info(struct ufs_hba *hba, u8 *geo_buf)
 
 void ufshpb_get_dev_info(struct ufs_hba *hba, u8 *desc_buf)
 {
-	struct ufshpb_dev_info *hpb_dev_info = ufs_hba_to_hpb(hba);
+	struct ufshpb_dev_info *hpb_dev_info = &hba->ufshpb_dev;
 	int version, ret;
-	u32 max_hpb_single_cmd = HPB_MULTI_CHUNK_LOW;
+	int max_single_cmd;
 
 	hpb_dev_info->control_mode = desc_buf[DEVICE_DESC_PARAM_HPB_CONTROL];
 
-	version = get_unaligned_be16(desc_buf + DEVICE_DESC_PARAM_HPB_VER) & HPB_MAJOR_VERSION_MASK;
+	version = get_unaligned_be16(desc_buf + DEVICE_DESC_PARAM_HPB_VER);
 	if ((version != HPB_SUPPORT_VERSION) &&
 	    (version != HPB_SUPPORT_LEGACY_VERSION)) {
 		dev_err(hba->dev, "%s: HPB %x version is not supported.\n",
@@ -2885,26 +2838,29 @@ void ufshpb_get_dev_info(struct ufs_hba *hba, u8 *desc_buf)
 	if (version == HPB_SUPPORT_LEGACY_VERSION)
 		hpb_dev_info->is_legacy = true;
 
-	pm_runtime_get_sync(hba->dev);
-	ret = ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_READ_ATTR,
-		QUERY_ATTR_IDN_MAX_HPB_SINGLE_CMD, 0, 0, &max_hpb_single_cmd);
-	pm_runtime_put_sync(hba->dev);
-
-	if (ret)
-		dev_err(hba->dev, "%s: idn: read max size of single hpb cmd query request failed",
-			__func__);
-	hpb_dev_info->max_hpb_single_cmd = max_hpb_single_cmd;
-
 	/*
 	 * Get the number of user logical unit to check whether all
 	 * scsi_device finish initialization
 	 */
 	hpb_dev_info->num_lu = desc_buf[DEVICE_DESC_PARAM_NUM_LU];
+
+	if (hpb_dev_info->is_legacy)
+		return;
+
+	pm_runtime_get_sync(hba->dev);
+	ret = ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_READ_ATTR,
+		QUERY_ATTR_IDN_MAX_HPB_SINGLE_CMD, 0, 0, &max_single_cmd);
+	pm_runtime_put_sync(hba->dev);
+
+	if (ret)
+		hpb_dev_info->max_hpb_single_cmd = HPB_LEGACY_CHUNK_HIGH;
+	else
+		hpb_dev_info->max_hpb_single_cmd = min(max_single_cmd + 1, HPB_MULTI_CHUNK_HIGH);
 }
 
 void ufshpb_init(struct ufs_hba *hba)
 {
-	struct ufshpb_dev_info *hpb_dev_info = ufs_hba_to_hpb(hba);
+	struct ufshpb_dev_info *hpb_dev_info = &hba->ufshpb_dev;
 	int try;
 	int ret;
 

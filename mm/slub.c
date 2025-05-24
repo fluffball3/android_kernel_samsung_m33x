@@ -321,12 +321,14 @@ static inline void set_freepointer(struct kmem_cache *s, void *object, void *fp)
 #endif
 
 	freeptr_addr = (unsigned long)kasan_reset_tag((void *)freeptr_addr);
+
 #ifdef CONFIG_KDP
 	if (kdp_enable && is_kdp_kmem_cache(s))
 		uh_call(UH_APP_KDP, SET_FREEPTR, (u64)object, (u64)s->offset, (u64)fp,
 				(u64)freelist_ptr(s, fp, freeptr_addr));
 	else
 #endif
+
 	*(void **)freeptr_addr = freelist_ptr(s, fp, freeptr_addr);
 }
 
@@ -3070,11 +3072,13 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	s = slab_pre_alloc_hook(s, &objcg, 1, gfpflags);
 	if (!s)
 		return NULL;
+
 #ifdef CONFIG_KDP
 	/* kdp does not want to alloc from kfence */
 	if (is_kdp_kmem_cache(s))
 		goto redo;
 #endif
+
 	object = kfence_alloc(s, orig_size, gfpflags);
 	if (unlikely(object))
 		goto out;
@@ -5020,6 +5024,7 @@ static void process_slab(struct loc_track *t, struct kmem_cache *s,
 	for_each_object(p, s, addr, page->objects)
 		if (!test_bit(__obj_to_index(s, addr, p), obj_map))
 			add_location(t, s, get_track(s, p, alloc));
+	put_map(map);
 }
 #endif	/* CONFIG_DEBUG_FS */
 #endif	/* CONFIG_SLUB_DEBUG */
@@ -6019,16 +6024,9 @@ static int slab_debug_trace_open(struct inode *inode, struct file *filep)
 	struct loc_track *t = __seq_open_private(filep, &slab_debugfs_sops,
 						sizeof(struct loc_track));
 	struct kmem_cache *s = file_inode(filep)->i_private;
-	unsigned long *obj_map;
 
 	if (!t)
 		return -ENOMEM;
-
-	obj_map = bitmap_alloc(oo_objects(s->oo), GFP_KERNEL);
-	if (!obj_map) {
-		seq_release_private(inode, filep);
-		return -ENOMEM;
-	}
 
 	if (strcmp(filep->f_path.dentry->d_name.name, "alloc_traces") == 0)
 		alloc = TRACK_ALLOC;
@@ -6036,7 +6034,6 @@ static int slab_debug_trace_open(struct inode *inode, struct file *filep)
 		alloc = TRACK_FREE;
 
 	if (!alloc_loc_track(t, PAGE_SIZE / sizeof(struct location), GFP_KERNEL)) {
-		bitmap_free(obj_map);
 		seq_release_private(inode, filep);
 		return -ENOMEM;
 	}
@@ -6053,13 +6050,12 @@ static int slab_debug_trace_open(struct inode *inode, struct file *filep)
 
 		spin_lock_irqsave(&n->list_lock, flags);
 		list_for_each_entry(page, &n->partial, slab_list)
-			process_slab(t, s, page, alloc, obj_map);
+			process_slab(t, s, page, alloc);
 		list_for_each_entry(page, &n->full, slab_list)
-			process_slab(t, s, page, alloc, obj_map);
+			process_slab(t, s, page, alloc);
 		spin_unlock_irqrestore(&n->list_lock, flags);
 	}
 
-	bitmap_free(obj_map);
 	return 0;
 }
 

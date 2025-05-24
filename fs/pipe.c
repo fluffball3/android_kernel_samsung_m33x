@@ -653,6 +653,9 @@ pipe_poll(struct file *filp, poll_table *wait)
 	struct pipe_inode_info *pipe = filp->private_data;
 	unsigned int head, tail;
 
+	/* Epoll has some historical nasty semantics, this enables them */
+	WRITE_ONCE(pipe->poll_usage, 1);
+
 	/*
 	 * Reading pipe state only -- no need for acquiring the semaphore.
 	 *

@@ -9,7 +9,7 @@ __modfinal:
 include $(objtree)/include/config/auto.conf
 include $(srctree)/scripts/Kbuild.include
 
-# for c_flags and objtool_args
+# for c_flags and mod-prelink-ext
 include $(srctree)/scripts/Makefile.lib
 
 # find all modules listed in modules.order
@@ -75,7 +75,7 @@ cmd_ld_ko_o += ;							\
 	fi
 endif
 
-$(modules): %.ko: %$(prelink-ext).o %.mod.o scripts/module.lds FORCE
+$(modules): %.ko: %$(mod-prelink-ext).o %.mod.o scripts/module.lds FORCE
 	+$(call if_changed,ld_ko_o)
 
 targets += $(modules) $(modules:.ko=.mod.o)

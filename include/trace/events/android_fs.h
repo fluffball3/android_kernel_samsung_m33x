@@ -26,7 +26,6 @@ DEFINE_EVENT(android_fs_data_end_template, android_fs_datawrite_end,
 	TP_PROTO(struct inode *inode, loff_t offset, int bytes),
 	     TP_ARGS(inode, offset, bytes));
 
-
 #ifdef CONFIG_F2FS_ML_BASED_STREAM_SEPARATION
 DEFINE_EVENT(android_fs_separation_template,
 			android_fs_separation_start,

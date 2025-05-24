@@ -1307,6 +1307,7 @@ int do_send_sig_info(int sig, struct kernel_siginfo *info, struct task_struct *p
  		sig_report(p, sig != SIGIO);
  	}
 #endif
+
 	trace_android_vh_do_send_sig_info(sig, current, p);
 	if (lock_task_sighand(p, &flags)) {
 		ret = send_signal(sig, info, p, type);
@@ -1437,7 +1438,6 @@ int group_send_sig_info(int sig, struct kernel_siginfo *info,
 			bool reap = false;
 
 			trace_android_vh_process_killed(current, &reap);
-			trace_android_vh_killed_process(current, p, &reap);
 			if (reap)
 				add_to_oom_reaper(p);
 		}

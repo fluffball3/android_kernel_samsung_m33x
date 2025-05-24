@@ -349,7 +349,7 @@ static struct extent_node *__attach_extent_node(struct f2fs_sb_info *sbi,
 	struct extent_tree_info *eti = &sbi->extent_tree[et->type];
 	struct extent_node *en;
 
-	en = kmem_cache_alloc(extent_node_slab, GFP_ATOMIC);
+	en = f2fs_kmem_cache_alloc(extent_node_slab, GFP_ATOMIC, false, sbi);
 	if (!en)
 		return NULL;
 
@@ -408,8 +408,9 @@ static struct extent_tree *__grab_extent_tree(struct inode *inode,
 	mutex_lock(&eti->extent_tree_lock);
 	et = radix_tree_lookup(&eti->extent_tree_root, ino);
 	if (!et) {
-		et = f2fs_kmem_cache_alloc(extent_tree_slab, GFP_NOFS);
-		f2fs_radix_tree_insert(&eti->extent_tree_root, ino, et);
+		et = f2fs_kmem_cache_alloc(extent_tree_slab,
+					GFP_NOFS, true, NULL);
+		f2fs_radix_tree_insert(&sbi->extent_tree_root, ino, et);
 		memset(et, 0, sizeof(struct extent_tree));
 		et->ino = ino;
 		et->type = type;
@@ -817,9 +818,47 @@ out_read_extent_cache:
 }
 
 #ifdef CONFIG_F2FS_FS_COMPRESSION
-void f2fs_update_read_extent_tree_range_compressed(struct inode *inode,
+void f2fs_update_extent_tree_range_compressed(struct inode *inode,
 				pgoff_t fofs, block_t blkaddr, unsigned int llen,
 				unsigned int c_len)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct extent_tree *et = F2FS_I(inode)->extent_tree;
+	struct extent_node *en = NULL;
+	struct extent_node *prev_en = NULL, *next_en = NULL;
+	struct extent_info ei;
+	struct rb_node **insert_p = NULL, *insert_parent = NULL;
+	bool leftmost = false;
+
+	trace_f2fs_update_extent_tree_range(inode, fofs, blkaddr, llen);
+
+	/* it is safe here to check FI_NO_EXTENT w/o et->lock in ro image */
+	if (is_inode_flag_set(inode, FI_NO_EXTENT))
+		return;
+
+	write_lock(&et->lock);
+
+	en = (struct extent_node *)f2fs_lookup_rb_tree_ret(&et->root,
+				(struct rb_entry *)et->cached_en, fofs,
+				(struct rb_entry **)&prev_en,
+				(struct rb_entry **)&next_en,
+				&insert_p, &insert_parent, false,
+				&leftmost);
+	if (en)
+		goto unlock_out;
+
+	set_extent_info(&ei, fofs, blkaddr, llen);
+	ei.c_len = c_len;
+
+	if (!__try_merge_extent_node(sbi, et, &ei, prev_en, next_en))
+		__insert_extent_tree(sbi, et, &ei,
+				insert_p, insert_parent, leftmost);
+unlock_out:
+	write_unlock(&et->lock);
+}
+#endif
+
+unsigned int f2fs_shrink_extent_tree(struct f2fs_sb_info *sbi, int nr_shrink)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 	struct extent_tree *et = F2FS_I(inode)->extent_tree[EX_READ];

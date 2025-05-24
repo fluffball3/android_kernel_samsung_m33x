@@ -96,6 +96,9 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/pagefault.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/pagefault.h>
+
 #if defined(LAST_CPUPID_NOT_IN_PAGE_FLAGS) && !defined(CONFIG_COMPILE_TEST)
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_cpupid.
 #endif
@@ -132,15 +135,15 @@ int randomize_va_space __read_mostly =
 					2;
 #endif
 
-#ifndef arch_faults_on_old_pte
-static inline bool arch_faults_on_old_pte(void)
+#ifndef arch_wants_old_prefaulted_pte
+static inline bool arch_wants_old_prefaulted_pte(void)
 {
 	/*
-	 * Those arches which don't have hw access flag feature need to
-	 * implement their own helper. By default, "true" means pagefault
-	 * will be hit on old pte.
+	 * Transitioning a PTE from 'old' to 'young' can be expensive on
+	 * some architectures, even if it's performed in hardware. By
+	 * default, "false" means prefaulted entries will be 'young'.
 	 */
-	return true;
+	return false;
 }
 #endif
 
@@ -1292,15 +1295,18 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 	pte_t *start_pte;
 	pte_t *pte;
 	swp_entry_t entry;
+	int v_ret = 0;
 
 	tlb_change_page_size(tlb, PAGE_SIZE);
 again:
+	trace_android_vh_zap_pte_range_tlb_start(&v_ret);
 	init_rss_vec(rss);
 	start_pte = pte_offset_map_lock(mm, pmd, addr, &ptl);
 	pte = start_pte;
 	flush_tlb_batched_pending(mm);
 	arch_enter_lazy_mmu_mode();
 	do {
+		bool flush = false;
 		pte_t ptent = *pte;
 		if (pte_none(ptent))
 			continue;
@@ -1341,8 +1347,9 @@ again:
 			page_remove_rmap(page, false);
 			if (unlikely(page_mapcount(page) < 0))
 				print_bad_pte(vma, addr, ptent, page);
+			trace_android_vh_zap_pte_range_tlb_force_flush(page, &flush);
 			if (unlikely(__tlb_remove_page(tlb, page)) ||
-				     lru_cache_disabled()) {
+				     lru_cache_disabled() || flush) {
 				force_flush = 1;
 				addr += PAGE_SIZE;
 				break;
@@ -1410,6 +1417,7 @@ again:
 		tlb_flush_mmu(tlb);
 	}
 
+	trace_android_vh_zap_pte_range_tlb_end(&v_ret);
 	if (addr != end) {
 		cond_resched();
 		goto again;
@@ -2932,7 +2940,7 @@ static inline bool cow_user_page(struct page *dst, struct page *src,
 	 * On architectures with software "accessed" bits, we would
 	 * take a double page fault, so mark it accessed here.
 	 */
-	if (arch_faults_on_old_pte() && !pte_young(vmf->orig_pte)) {
+	if (!arch_has_hw_pte_young() && !pte_young(vmf->orig_pte)) {
 		pte_t entry;
 
 		vmf->pte = pte_offset_map_lock(mm, vmf->pmd, addr, &vmf->ptl);
@@ -3686,7 +3694,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		if ((data_race(si->flags & SWP_SYNCHRONOUS_IO) || skip_swapcache) &&
 		    __swap_count(entry) == 1) {
 			/* skip swapcache */
-			gfp_t flags = GFP_HIGHUSER_MOVABLE;
+			gfp_t flags = GFP_HIGHUSER_MOVABLE | __GFP_CMA;
 
 			trace_android_rvh_set_skip_swapcache_flags(&flags);
 			page = alloc_page_vma(flags, vma, vmf->address);
@@ -3726,7 +3734,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 			ret = VM_FAULT_RETRY;
 			goto out;
 		} else {
-			page = swapin_readahead(entry, GFP_HIGHUSER_MOVABLE,
+			page = swapin_readahead(entry, GFP_HIGHUSER_MOVABLE | __GFP_CMA,
 						vmf);
 			swapcache = page;
 		}
@@ -4257,7 +4265,7 @@ vm_fault_t finish_fault(struct vm_fault *vmf)
 			spin_unlock(vmf->ptl);
 		} else if (unlikely(pte_alloc(vma->vm_mm, vmf->pmd))) {
 			return VM_FAULT_OOM;
-	}
+		}
 	}
 
 	/*
@@ -4401,6 +4409,7 @@ static vm_fault_t do_read_fault(struct vm_fault *vmf)
 			if (ret)
 				return ret;
 		}
+
 #ifdef CONFIG_PAGE_BOOST_RECORDING
 	} else if (vma->vm_ops->map_pages && fault_around_bytes >> PAGE_SHIFT == 1) {
 		record_io_info(vma->vm_file, vmf->pgoff, 1);
@@ -5305,6 +5314,320 @@ bool can_reuse_spf_vma(struct vm_area_struct *vma, unsigned long address)
 }
 #endif /* CONFIG_SPECULATIVE_PAGE_FAULT */
 
+static void lru_gen_enter_fault(struct vm_area_struct *vma);
+static void lru_gen_exit_fault(void);
+
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
+
+#ifndef CONFIG_ARCH_HAS_PTE_SPECIAL
+/* This is required by vm_normal_page() */
+#error "Speculative page fault handler requires CONFIG_ARCH_HAS_PTE_SPECIAL"
+#endif
+/*
+ * vm_normal_page() adds some processing which should be done while
+ * hodling the mmap_sem.
+ */
+
+/*
+ * Tries to handle the page fault in a speculative way, without grabbing the
+ * mmap_sem.
+ * When VM_FAULT_RETRY is returned, the vma pointer is valid and this vma must
+ * be checked later when the mmap_sem has been grabbed by calling
+ * can_reuse_spf_vma().
+ * This is needed as the returned vma is kept in memory until the call to
+ * can_reuse_spf_vma() is made.
+ */
+static vm_fault_t ___handle_speculative_fault(struct mm_struct *mm,
+				unsigned long address, unsigned int flags,
+				struct vm_area_struct *vma)
+{
+	struct vm_fault vmf = {
+		.address = address,
+		.pgoff = linear_page_index(vma, address),
+		.vma = vma,
+		.gfp_mask = __get_fault_gfp_mask(vma),
+		.flags = flags,
+	};
+#ifdef CONFIG_NUMA
+	struct mempolicy *pol;
+#endif
+	pgd_t *pgd, pgdval;
+	p4d_t *p4d, p4dval;
+	pud_t pudval;
+	int seq;
+	vm_fault_t ret;
+	bool uffd_missing_sigbus = false;
+
+	/* Clear flags that may lead to release the mmap_sem to retry */
+	flags &= ~(FAULT_FLAG_ALLOW_RETRY|FAULT_FLAG_KILLABLE);
+	flags |= FAULT_FLAG_SPECULATIVE;
+
+	/* rmb <-> seqlock,vma_rb_erase() */
+	seq = raw_read_seqcount(&vmf.vma->vm_sequence);
+	if (seq & 1) {
+		trace_spf_vma_changed(_RET_IP_, vmf.vma, address);
+		return VM_FAULT_RETRY;
+	}
+
+	vmf.vma_flags = READ_ONCE(vmf.vma->vm_flags);
+	vmf.vma_page_prot = READ_ONCE(vmf.vma->vm_page_prot);
+	vmf.sequence = seq;
+
+#ifdef CONFIG_USERFAULTFD
+	/*
+	 * Only support SPF for SIGBUS+MISSING userfaults in private anonymous
+	 * VMAs. Rest all should be retried with mmap_lock.
+	 */
+	if (unlikely(vmf.vma_flags & __VM_UFFD_FLAGS)) {
+		uffd_missing_sigbus = vma_is_anonymous(vmf.vma) &&
+					(vmf.vma_flags & VM_UFFD_MISSING) &&
+					userfaultfd_using_sigbus(&vmf);
+		if (!uffd_missing_sigbus) {
+			trace_spf_vma_notsup(_RET_IP_, vmf.vma, address);
+			return VM_FAULT_RETRY;
+		}
+		/* Not having anon_vma implies that the PTE is missing */
+		if (!vmf.vma->anon_vma)
+			return VM_FAULT_SIGBUS;
+	}
+#endif
+
+	if (!vmf_allows_speculation(&vmf))
+		return VM_FAULT_RETRY;
+
+	if (vmf.vma_flags & VM_GROWSDOWN || vmf.vma_flags & VM_GROWSUP) {
+		/*
+		 * This could be detected by the check address against VMA's
+		 * boundaries but we want to trace it as not supported instead
+		 * of changed.
+		 */
+		trace_spf_vma_notsup(_RET_IP_, vmf.vma, address);
+		return VM_FAULT_RETRY;
+	}
+
+	if (address < READ_ONCE(vmf.vma->vm_start)
+	    || READ_ONCE(vmf.vma->vm_end) <= address) {
+		trace_spf_vma_changed(_RET_IP_, vmf.vma, address);
+		return VM_FAULT_RETRY;
+	}
+
+	if (!arch_vma_access_permitted(vmf.vma, flags & FAULT_FLAG_WRITE,
+				       flags & FAULT_FLAG_INSTRUCTION,
+				       flags & FAULT_FLAG_REMOTE))
+		goto out_segv;
+
+	/* This is one is required to check that the VMA has write access set */
+	if (flags & FAULT_FLAG_WRITE) {
+		if (unlikely(!(vmf.vma_flags & VM_WRITE)))
+			goto out_segv;
+	} else if (unlikely(!(vmf.vma_flags & (VM_READ|VM_EXEC|VM_WRITE))))
+		goto out_segv;
+
+#ifdef CONFIG_NUMA
+	/*
+	 * MPOL_INTERLEAVE implies additional checks in
+	 * mpol_misplaced() which are not compatible with the
+	 *speculative page fault processing.
+	 */
+	pol = __get_vma_policy(vmf.vma, address);
+	if (!pol)
+		pol = get_task_policy(current);
+	if (pol && pol->mode == MPOL_INTERLEAVE) {
+		trace_spf_vma_notsup(_RET_IP_, vmf.vma, address);
+		return VM_FAULT_RETRY;
+	}
+#endif
+
+	/*
+	 * Do a speculative lookup of the PTE entry.
+	 */
+	local_irq_disable();
+	pgd = pgd_offset(mm, address);
+	pgdval = READ_ONCE(*pgd);
+	if (pgd_none(pgdval) || unlikely(pgd_bad(pgdval)))
+		goto out_walk;
+
+	p4d = p4d_offset(pgd, address);
+	if (pgd_val(READ_ONCE(*pgd)) != pgd_val(pgdval))
+		goto out_walk;
+	p4dval = READ_ONCE(*p4d);
+	if (p4d_none(p4dval) || unlikely(p4d_bad(p4dval)))
+		goto out_walk;
+
+	vmf.pud = pud_offset(p4d, address);
+	if (p4d_val(READ_ONCE(*p4d)) != p4d_val(p4dval))
+		goto out_walk;
+	pudval = READ_ONCE(*vmf.pud);
+	if (pud_none(pudval) || unlikely(pud_bad(pudval)))
+		goto out_walk;
+
+	/* Huge pages at PUD level are not supported. */
+	if (unlikely(pud_trans_huge(pudval)))
+		goto out_walk;
+
+	vmf.pmd = pmd_offset(vmf.pud, address);
+	if (pud_val(READ_ONCE(*vmf.pud)) != pud_val(pudval))
+		goto out_walk;
+	vmf.orig_pmd = READ_ONCE(*vmf.pmd);
+	/*
+	 * pmd_none could mean that a hugepage collapse is in progress
+	 * in our back as collapse_huge_page() mark it before
+	 * invalidating the pte (which is done once the IPI is catched
+	 * by all CPU and we have interrupt disabled).
+	 * For this reason we cannot handle THP in a speculative way since we
+	 * can't safely indentify an in progress collapse operation done in our
+	 * back on that PMD.
+	 * Regarding the order of the following checks, see comment in
+	 * pmd_devmap_trans_unstable()
+	 */
+	if (unlikely(pmd_devmap(vmf.orig_pmd) ||
+		     pmd_none(vmf.orig_pmd) || pmd_trans_huge(vmf.orig_pmd) ||
+		     is_swap_pmd(vmf.orig_pmd)))
+		goto out_walk;
+
+	/*
+	 * The above does not allocate/instantiate page-tables because doing so
+	 * would lead to the possibility of instantiating page-tables after
+	 * free_pgtables() -- and consequently leaking them.
+	 *
+	 * The result is that we take at least one !speculative fault per PMD
+	 * in order to instantiate it.
+	 */
+
+	vmf.pte = pte_offset_map(vmf.pmd, address);
+	if (pmd_val(READ_ONCE(*vmf.pmd)) != pmd_val(vmf.orig_pmd)) {
+		pte_unmap(vmf.pte);
+		vmf.pte = NULL;
+		goto out_walk;
+	}
+	vmf.orig_pte = READ_ONCE(*vmf.pte);
+	barrier(); /* See comment in handle_pte_fault() */
+	if (pte_none(vmf.orig_pte)) {
+		pte_unmap(vmf.pte);
+		vmf.pte = NULL;
+	}
+
+	vmf.flags = flags;
+
+	local_irq_enable();
+
+	if (!vmf.pte && uffd_missing_sigbus)
+		return VM_FAULT_SIGBUS;
+
+	/*
+	 * We need to re-validate the VMA after checking the bounds, otherwise
+	 * we might have a false positive on the bounds.
+	 */
+	if (read_seqcount_retry(&vmf.vma->vm_sequence, seq)) {
+		trace_spf_vma_changed(_RET_IP_, vmf.vma, address);
+		return VM_FAULT_RETRY;
+	}
+
+	mem_cgroup_enter_user_fault();
+	lru_gen_enter_fault(vmf.vma);
+	ret = handle_pte_fault(&vmf);
+	lru_gen_exit_fault();
+	mem_cgroup_exit_user_fault();
+
+	if (ret != VM_FAULT_RETRY) {
+		if (vma_is_anonymous(vmf.vma))
+			count_vm_event(SPECULATIVE_PGFAULT_ANON);
+		else
+			count_vm_event(SPECULATIVE_PGFAULT_FILE);
+	}
+
+	/*
+	 * The task may have entered a memcg OOM situation but
+	 * if the allocation error was handled gracefully (no
+	 * VM_FAULT_OOM), there is no need to kill anything.
+	 * Just clean up the OOM state peacefully.
+	 */
+	if (task_in_memcg_oom(current) && !(ret & VM_FAULT_OOM))
+		mem_cgroup_oom_synchronize(false);
+	return ret;
+
+out_walk:
+	trace_spf_vma_notsup(_RET_IP_, vmf.vma, address);
+	local_irq_enable();
+	/*
+	 * Failing page-table walk is similar to page-missing so give an
+	 * opportunity to SIGBUS+MISSING userfault to handle it before retrying
+	 * with mmap_lock
+	 */
+	return uffd_missing_sigbus ? VM_FAULT_SIGBUS : VM_FAULT_RETRY;
+
+out_segv:
+	trace_spf_vma_access(_RET_IP_, vmf.vma, address);
+	return VM_FAULT_SIGSEGV;
+}
+
+vm_fault_t __handle_speculative_fault(struct mm_struct *mm,
+				unsigned long address, unsigned int flags,
+				struct vm_area_struct **vma,
+				struct pt_regs *regs)
+{
+	vm_fault_t ret;
+
+	check_sync_rss_stat(current);
+
+	*vma = get_vma(mm, address);
+	if (!*vma)
+		return VM_FAULT_RETRY;
+
+	ret = ___handle_speculative_fault(mm, address, flags, *vma);
+
+	/*
+	 * If there is no need to retry, don't return the vma to the caller.
+	 */
+	if (ret != VM_FAULT_RETRY) {
+		put_vma(*vma);
+		*vma = NULL;
+		mm_account_fault(regs, address, flags, ret);
+	}
+
+	return ret;
+}
+
+/*
+ * This is used to know if the vma fetch in the speculative page fault handler
+ * is still valid when trying the regular fault path while holding the
+ * mmap_sem.
+ * The call to put_vma(vma) must be made after checking the vma's fields, as
+ * the vma may be freed by put_vma(). In such a case it is expected that false
+ * is returned.
+ */
+bool can_reuse_spf_vma(struct vm_area_struct *vma, unsigned long address)
+{
+	bool ret;
+
+	ret = !RB_EMPTY_NODE(&vma->vm_rb) &&
+		vma->vm_start <= address && address < vma->vm_end;
+	put_vma(vma);
+	return ret;
+}
+#endif /* CONFIG_SPECULATIVE_PAGE_FAULT */
+
+#ifdef CONFIG_LRU_GEN
+static void lru_gen_enter_fault(struct vm_area_struct *vma)
+{
+	/* the LRU algorithm doesn't apply to sequential or random reads */
+	current->in_lru_fault = !(vma->vm_flags & (VM_SEQ_READ | VM_RAND_READ));
+}
+
+static void lru_gen_exit_fault(void)
+{
+	current->in_lru_fault = false;
+}
+#else
+static void lru_gen_enter_fault(struct vm_area_struct *vma)
+{
+}
+
+static void lru_gen_exit_fault(void)
+{
+}
+#endif /* CONFIG_LRU_GEN */
+
 /*
  * By the time we get here, we already hold the mm semaphore
  *
@@ -5336,10 +5659,14 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	if (flags & FAULT_FLAG_USER)
 		mem_cgroup_enter_user_fault();
 
+	lru_gen_enter_fault(vma);
+
 	if (unlikely(is_vm_hugetlb_page(vma)))
 		ret = hugetlb_fault(vma->vm_mm, vma, address, flags);
 	else
 		ret = __handle_mm_fault(vma, address, flags);
+
+	lru_gen_exit_fault();
 
 	if (flags & FAULT_FLAG_USER) {
 		mem_cgroup_exit_user_fault();

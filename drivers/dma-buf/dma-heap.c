@@ -23,6 +23,7 @@
 #include <linux/jiffies.h>
 #include <linux/sched/cputime.h>
 #include <linux/vmstat.h>
+#include <trace/hooks/dmabuf.h>
 
 #define DEVNAME "dma_heap"
 
@@ -126,17 +127,15 @@ struct dma_buf *dma_heap_buffer_alloc(struct dma_heap *heap, size_t len,
 				      unsigned int fd_flags,
 				      unsigned int heap_flags)
 {
-	struct dma_buf *dma_buf;
-	unsigned long jiffies_s = jiffies;
-	u64 utime, stime_s, stime_e, stime_d;
-	static DEFINE_RATELIMIT_STATE(show_mem_ratelimit, HZ * 10, 1);
-	unsigned long vm_events_before[ARRAY_SIZE(vm_events_item)];
-	unsigned long vm_events_after[ARRAY_SIZE(vm_events_item)];
+	bool vh_valid = false;
+
+	trace_android_vh_dmabuf_heap_flags_validation(heap,
+		len, fd_flags, heap_flags, &vh_valid);
 
 	if (fd_flags & ~DMA_HEAP_VALID_FD_FLAGS)
 		return ERR_PTR(-EINVAL);
 
-	if (heap_flags & ~DMA_HEAP_VALID_HEAP_FLAGS)
+	if (heap_flags & ~DMA_HEAP_VALID_HEAP_FLAGS && !vh_valid)
 		return ERR_PTR(-EINVAL);
 	/*
 	 * Allocations from all heaps have to begin

@@ -131,7 +131,7 @@ struct f2fs_super_block {
 	__le16  s_encoding;		/* Filename charset encoding */
 	__le16  s_encoding_flags;	/* Filename charset encoding flags */
 	__u8 s_stop_reason[MAX_STOP_REASON];	/* stop checkpoint reason */
-	__u8 reserved[210];		/* valid reserved region */
+	__u8 reserved[274];		/* valid reserved region */
 	__u8 mount_opts[64];            /* default mount option for SEC */
 	__le32 crc;			/* checksum of superblock */
 } __packed;

@@ -56,6 +56,7 @@
 #include "workqueue_internal.h"
 
 #include <trace/hooks/wqlockup.h>
+#include <trace/hooks/workqueue.h>
 /* events/workqueue.h uses default TRACE_INCLUDE_PATH */
 #undef TRACE_INCLUDE_PATH
 
@@ -1367,7 +1368,7 @@ static void insert_work(struct pool_workqueue *pwq, struct work_struct *work,
 	struct worker_pool *pool = pwq->pool;
 
 	/* record the work call stack in order to print it in KASAN reports */
-	kasan_record_aux_stack(work);
+	kasan_record_aux_stack_noalloc(work);
 
 	/* we own @work, set data and link */
 	set_work_pwq(work, pwq, extra_flags);
@@ -1980,6 +1981,7 @@ static struct worker *create_worker(struct worker_pool *pool)
 	if (IS_ERR(worker->task))
 		goto fail;
 
+	trace_android_vh_create_worker(worker, pool->attrs);
 	set_user_nice(worker->task, pool->attrs->nice);
 	kthread_bind_mask(worker->task, pool->attrs->cpumask);
 

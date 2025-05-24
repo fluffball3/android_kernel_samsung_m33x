@@ -602,7 +602,6 @@ static struct usb_descriptor_header *ss_audio_desc[] = {
 
 	(struct usb_descriptor_header *)&ss_ep_int_desc,
 	(struct usb_descriptor_header *)&ss_ep_int_desc_comp,
-
 	(struct usb_descriptor_header *)&std_as_out_if0_desc,
 	(struct usb_descriptor_header *)&std_as_out_if1_desc,
 
@@ -833,7 +832,6 @@ static void setup_headers(struct f_uac2_opts *opts,
 				headers[i++] = USBDHDR(epin_fback_desc_comp);
 		}
 	}
-
 	if (EPIN_EN(opts)) {
 		headers[i++] = USBDHDR(&std_as_in_if0_desc);
 		headers[i++] = USBDHDR(&std_as_in_if1_desc);
@@ -1200,6 +1198,15 @@ afunc_bind(struct usb_configuration *cfg, struct usb_function *fn)
 					__func__, __LINE__);
 				ret = -ENODEV;
 				goto err_free_fu;
+			}
+		}
+		if (EPOUT_FBACK_IN_EN(uac2_opts)) {
+			agdev->in_ep_fback = usb_ep_autoconfig(gadget,
+						       &fs_epin_fback_desc);
+			if (!agdev->in_ep_fback) {
+				dev_err(dev, "%s:%d Error!\n",
+					__func__, __LINE__);
+				return -ENODEV;
 			}
 		}
 	}

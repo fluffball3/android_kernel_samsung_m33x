@@ -1643,6 +1643,7 @@ static void configfs_composite_disconnect(struct usb_gadget *gadget)
 	 */
 	acc_disconnect();
 #endif
+
 	gi = container_of(cdev, struct gadget_info, cdev);
 	spin_lock_irqsave(&gi->spinlock, flags);
 	cdev = get_gadget_data(gadget);

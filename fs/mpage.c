@@ -34,6 +34,7 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/android_fs.h>
+
 EXPORT_TRACEPOINT_SYMBOL(android_fs_datawrite_start);
 EXPORT_TRACEPOINT_SYMBOL(android_fs_datawrite_end);
 EXPORT_TRACEPOINT_SYMBOL(android_fs_dataread_start);
@@ -42,6 +43,7 @@ EXPORT_TRACEPOINT_SYMBOL(android_fs_dataread_end);
 EXPORT_TRACEPOINT_SYMBOL(android_fs_datawrite_start_wb);
 EXPORT_TRACEPOINT_SYMBOL(android_fs_separation_start);
 #endif
+
 /*
  * I/O completion handler for multipage BIOs.
  *
@@ -342,9 +344,7 @@ alloc_new:
 				goto out;
 		}
 		args->bio = mpage_alloc(bdev, blocks[0] << (blkbits - 9),
-					min_t(int, args->nr_pages,
-					      BIO_MAX_PAGES),
-					gfp);
+					bio_max_segs(args->nr_pages), gfp);
 		if (args->bio == NULL)
 			goto confused;
 	}

@@ -62,14 +62,6 @@ extern void show_map_pad_vma(struct vm_area_struct *vma,
 
 extern void split_pad_vma(struct vm_area_struct *vma, struct vm_area_struct *new,
 			  unsigned long addr, int new_below);
-
-extern unsigned long vma_pad_fixup_flags(struct vm_area_struct *vma,
-					 unsigned long newflags);
-
-extern bool is_mergable_pad_vma(struct vm_area_struct *vma,
-				unsigned long vm_flags);
-
-extern unsigned long vma_data_pages(struct vm_area_struct *vma);
 #else /* PAGE_SIZE != SZ_4K || !defined(CONFIG_64BIT) */
 static inline void vma_set_pad_pages(struct vm_area_struct *vma,
 				     unsigned long nr_pages)
@@ -106,22 +98,36 @@ static inline void split_pad_vma(struct vm_area_struct *vma, struct vm_area_stru
 				 unsigned long addr, int new_below)
 {
 }
-
-static inline unsigned long vma_pad_fixup_flags(struct vm_area_struct *vma,
-						unsigned long newflags)
-{
-	return newflags;
-}
-
-static inline bool is_mergable_pad_vma(struct vm_area_struct *vma,
-				       unsigned long vm_flags)
-{
-	return true;
-}
+#endif /* PAGE_SIZE == SZ_4K && defined(CONFIG_64BIT) */
 
 static inline unsigned long vma_data_pages(struct vm_area_struct *vma)
 {
-	return vma_pages(vma);
+	return vma_pages(vma) - vma_pad_pages(vma);
 }
-#endif /* PAGE_SIZE == SZ_4K && defined(CONFIG_64BIT) */
+
+/*
+ * Sets the correct padding bits / flags for a VMA split.
+ */
+static inline unsigned long vma_pad_fixup_flags(struct vm_area_struct *vma,
+						unsigned long newflags)
+{
+	if (newflags & VM_PAD_MASK)
+		return (newflags & ~VM_PAD_MASK) | (vma->vm_flags & VM_PAD_MASK);
+	else
+		return newflags;
+}
+
+/*
+ * Merging of padding VMAs is uncommon, as padding is only allowed
+ * from the linker context.
+ *
+ * To simplify the semantics, adjacent VMAs with padding are not
+ * allowed to merge.
+ */
+static inline bool is_mergable_pad_vma(struct vm_area_struct *vma,
+				       unsigned long vm_flags)
+{
+	/* Padding VMAs cannot be merged with other padding or real VMAs */
+	return !((vma->vm_flags | vm_flags) & VM_PAD_MASK);
+}
 #endif /* _LINUX_PAGE_SIZE_MIGRATION_H */

@@ -497,7 +497,7 @@ void kmem_cache_destroy(struct kmem_cache *s)
 {
 	int err;
 
-	if (unlikely(!s))
+	if (unlikely(!s) || !kasan_check_byte(s))
 		return;
 
 	get_online_cpus();
@@ -949,6 +949,7 @@ static void print_slabinfo_header(struct seq_file *m)
 	seq_puts(m, " : globalstat <listallocs> <maxobjs> <grown> <reaped> <error> <maxfreeable> <nodeallocs> <remotefrees> <alienoverflow>");
 	seq_puts(m, " : cpustat <allochit> <allocmiss> <freehit> <freemiss>");
 #endif
+	trace_android_vh_print_slabinfo_header(m);
 	seq_putc(m, '\n');
 }
 
@@ -984,6 +985,7 @@ static void cache_show(struct kmem_cache *s, struct seq_file *m)
 	seq_printf(m, " : slabdata %6lu %6lu %6lu",
 		   sinfo.active_slabs, sinfo.num_slabs, sinfo.shared_avail);
 	slabinfo_show_stats(m, s);
+	trace_android_vh_cache_show(m, &sinfo, s);
 	seq_putc(m, '\n');
 }
 

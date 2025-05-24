@@ -1558,6 +1558,8 @@ __nf_conntrack_alloc(struct net *net,
 #endif
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
+	trace_android_rvh_nf_conn_alloc(ct);
+
 	/* Because we use RCU lookups, we set ct_general.use to zero before
 	 * this is inserted in any list.
 	 */
@@ -1592,6 +1594,7 @@ void nf_conntrack_free(struct nf_conn *ct)
 	nf_ct_ext_destroy(ct);
 	kmem_cache_free(nf_conntrack_cachep, ct);
 	smp_mb__before_atomic();
+
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
 #ifdef CONFIG_KNOX_NCM
 	spin_lock_irqsave(&knox_nf_conntrack,flags);
@@ -1602,6 +1605,8 @@ void nf_conntrack_free(struct nf_conn *ct)
 	spin_unlock_irqrestore(&knox_nf_conntrack,flags);
 #endif
 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
+
+	trace_android_rvh_nf_conn_free(ct);
 	atomic_dec(&net->ct.count);
 }
 EXPORT_SYMBOL_GPL(nf_conntrack_free);

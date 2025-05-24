@@ -243,16 +243,11 @@ void vmpressure(gfp_t gfp, struct mem_cgroup *memcg, bool tree,
 		unsigned long scanned, unsigned long reclaimed)
 {
 	struct vmpressure *vmpr;
-	bool bypass = false;
 
 	if (mem_cgroup_disabled())
 		return;
 
 	vmpr = memcg_to_vmpressure(memcg);
-
-	trace_android_vh_vmpressure(memcg, &bypass);
-	if (unlikely(bypass))
-		return;
 
 	/*
 	 * Here we only want to account pressure that userland is able to

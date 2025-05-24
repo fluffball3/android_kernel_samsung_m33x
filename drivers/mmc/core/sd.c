@@ -1437,5 +1437,7 @@ err:
 
 	trace_android_vh_mmc_attach_sd(host, ocr, err);
 
+	trace_android_vh_mmc_attach_sd(host, ocr, err);
+
 	return err;
 }

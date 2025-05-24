@@ -24,8 +24,6 @@
 
 #include <trace/hooks/sched.h>
 
-EXPORT_TRACEPOINT_SYMBOL_GPL(sched_stat_runtime);
-
 /*
  * Targeted preemption latency for CPU-bound tasks:
  *
@@ -3139,6 +3137,7 @@ void reweight_task(struct task_struct *p, int prio)
 	reweight_entity(cfs_rq, se, weight);
 	load->inv_weight = sched_prio_to_wmult[prio];
 }
+EXPORT_SYMBOL_GPL(reweight_task);
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 #ifdef CONFIG_SMP
@@ -3765,6 +3764,8 @@ static void attach_entity_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
 	else
 		se->avg.load_sum = 1;
 
+	trace_android_rvh_attach_entity_load_avg(cfs_rq, se);
+
 	enqueue_load_avg(cfs_rq, se);
 	cfs_rq->avg.util_avg += se->avg.util_avg;
 	cfs_rq->avg.util_sum += se->avg.util_sum;
@@ -3788,6 +3789,8 @@ static void attach_entity_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
  */
 static void detach_entity_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
+	trace_android_rvh_detach_entity_load_avg(cfs_rq, se);
+
 	dequeue_load_avg(cfs_rq, se);
 	sub_positive(&cfs_rq->avg.util_avg, se->avg.util_avg);
 	sub_positive(&cfs_rq->avg.util_sum, se->avg.util_sum);
@@ -3826,6 +3829,8 @@ static inline void update_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
 
 	decayed  = update_cfs_rq_load_avg(now, cfs_rq);
 	decayed |= propagate_entity_load_avg(se);
+
+	trace_android_rvh_update_load_avg(now, cfs_rq, se);
 
 	if (!se->avg.last_update_time && (flags & DO_ATTACH)) {
 
@@ -3900,6 +3905,8 @@ static void remove_entity_load_avg(struct sched_entity *se)
 
 	sync_entity_load_avg(se);
 
+	trace_android_rvh_remove_entity_load_avg(cfs_rq, se);
+
 	raw_spin_lock_irqsave(&cfs_rq->removed.lock, flags);
 	++cfs_rq->removed.nr;
 	cfs_rq->removed.util_avg	+= se->avg.util_avg;
@@ -3936,6 +3943,31 @@ static inline unsigned long task_util_est(struct task_struct *p)
 {
 	return max(task_util(p), _task_util_est(p));
 }
+
+#ifdef CONFIG_UCLAMP_TASK
+static inline unsigned long uclamp_task_util(struct task_struct *p,
+					     unsigned long uclamp_min,
+					     unsigned long uclamp_max)
+{
+	unsigned long min_util = uclamp_eff_value(p, UCLAMP_MIN);
+	unsigned long max_util = uclamp_eff_value(p, UCLAMP_MAX);
+	unsigned long task_util = task_util_est(p);
+	unsigned long ret = 0;
+
+	trace_android_rvh_uclamp_task_util(task_util, min_util, max_util, &ret);
+	if (ret)
+		return ret;
+
+	return clamp(task_util, uclamp_min, uclamp_max);
+}
+#else
+static inline unsigned long uclamp_task_util(struct task_struct *p,
+					     unsigned long uclamp_min,
+					     unsigned long uclamp_max)
+{
+	return task_util_est(p);
+}
+#endif
 
 static inline void util_est_enqueue(struct cfs_rq *cfs_rq,
 				    struct task_struct *p)
@@ -4776,6 +4808,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 
 	if (cfs_rq->nr_running > 1)
 		check_preempt_tick(cfs_rq, curr);
+	trace_android_rvh_entity_tick(cfs_rq, curr);
 }
 
 
@@ -6885,7 +6918,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu, int sy
 	if (!sd)
 		goto fail;
 
-	if (!task_util_est(p) && p_util_min == 0)
+	if (!uclamp_task_util(p, p_util_min, p_util_max))
 		goto unlock;
 
 	latency_sensitive = uclamp_latency_sensitive(p);
@@ -7262,8 +7295,12 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	int scale = cfs_rq->nr_running >= sched_nr_latency;
 	int next_buddy_marked = 0;
 	bool preempt = false, nopreempt = false;
+	bool ignore = false;
 
 	if (unlikely(se == pse))
+		return;
+	trace_android_rvh_check_preempt_wakeup_ignore(curr, &ignore);
+	if (ignore)
 		return;
 
 	/*
@@ -8287,6 +8324,8 @@ static bool __update_blocked_fair(struct rq *rq, bool *done)
 	bool decayed = false;
 	int cpu = cpu_of(rq);
 
+	trace_android_rvh_update_blocked_fair(rq);
+
 	/*
 	 * Iterates the task_group tree in a bottom up fashion, see
 	 * list_add_leaf_cfs_rq() for details.
@@ -8505,7 +8544,6 @@ static void update_cpu_capacity(struct sched_domain *sd, int cpu)
 	if (!capacity)
 		capacity = 1;
 
-	trace_android_rvh_update_cpu_capacity(cpu, &capacity);
 	cpu_rq(cpu)->cpu_capacity = capacity;
 	trace_sched_cpu_capacity_tp(cpu_rq(cpu));
 
@@ -9588,6 +9626,16 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	 */
 	update_sd_lb_stats(env, &sds);
 
+	/* There is no busy sibling group to pull tasks from */
+	if (!sds.busiest)
+		goto out_balanced;
+
+	busiest = &sds.busiest_stat;
+
+	/* Misfit tasks should be dealt with regardless of the avg load */
+	if (busiest->group_type == group_misfit_task)
+		goto force_balance;
+
 	if (sched_energy_enabled()) {
 		struct root_domain *rd = env->dst_rq->rd;
 		int out_balance = 1;
@@ -9598,17 +9646,6 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 					&& out_balance)
 			goto out_balanced;
 	}
-
-	local = &sds.local_stat;
-	busiest = &sds.busiest_stat;
-
-	/* There is no busy sibling group to pull tasks from */
-	if (!sds.busiest)
-		goto out_balanced;
-
-	/* Misfit tasks should be dealt with regardless of the avg load */
-	if (busiest->group_type == group_misfit_task)
-		goto force_balance;
 
 	/* ASYM feature bypasses nice load balance check */
 	if (busiest->group_type == group_asym_packing)
@@ -9621,6 +9658,8 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	 */
 	if (busiest->group_type == group_imbalanced)
 		goto force_balance;
+
+	local = &sds.local_stat;
 
 	/*
 	 * If the local group is busier than the selected busiest group

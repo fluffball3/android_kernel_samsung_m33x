@@ -631,14 +631,12 @@ void __mmu_notifier_invalidate_range(struct mm_struct *mm,
 
 static inline void mmu_notifier_write_lock(struct mm_struct *mm)
 {
-	percpu_down_write(
-		&mm->notifier_subscriptions->hdr.mmu_notifier_lock->rw_sem);
+	percpu_down_write(mm->mmu_notifier_lock);
 }
 
 static inline void mmu_notifier_write_unlock(struct mm_struct *mm)
 {
-	percpu_up_write(
-		&mm->notifier_subscriptions->hdr.mmu_notifier_lock->rw_sem);
+	percpu_up_write(mm->mmu_notifier_lock);
 }
 
 #else /* CONFIG_SPECULATIVE_PAGE_FAULT */
@@ -647,16 +645,6 @@ static inline void mmu_notifier_write_lock(struct mm_struct *mm) {}
 static inline void mmu_notifier_write_unlock(struct mm_struct *mm) {}
 
 #endif /* CONFIG_SPECULATIVE_PAGE_FAULT */
-
-static void init_subscriptions(struct mmu_notifier_subscriptions *subscriptions)
-{
-	INIT_HLIST_HEAD(&subscriptions->list);
-	spin_lock_init(&subscriptions->lock);
-	subscriptions->invalidate_seq = 2;
-	subscriptions->itree = RB_ROOT_CACHED;
-	init_waitqueue_head(&subscriptions->wq);
-	INIT_HLIST_HEAD(&subscriptions->deferred_list);
-}
 
 /*
  * Same as mmu_notifier_register but here the caller must hold the mmap_lock in

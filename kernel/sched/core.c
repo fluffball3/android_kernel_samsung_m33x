@@ -49,6 +49,7 @@ EXPORT_TRACEPOINT_SYMBOL_GPL(sched_util_est_se_tp);
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_update_nr_running_tp);
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_switch);
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_waking);
+EXPORT_TRACEPOINT_SYMBOL_GPL(sched_wakeup);
 #ifdef CONFIG_SCHEDSTATS
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_stat_sleep);
 EXPORT_TRACEPOINT_SYMBOL_GPL(sched_stat_wait);
@@ -269,6 +270,7 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
  * to sched_rt_avg_update. But I don't trust it...
  */
 	s64 __maybe_unused steal = 0, irq_delta = 0;
+	bool ret = false;
 
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
 	irq_delta = irq_time_read(cpu_of(rq)) - rq->prev_irq_time;
@@ -313,7 +315,9 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
 	if ((irq_delta + steal) && sched_feat(NONTASK_CAPACITY))
 		update_irq_load_avg(rq, irq_delta + steal);
 #endif
-	update_rq_clock_pelt(rq, delta);
+	trace_android_rvh_update_rq_clock_pelt(rq, delta, &ret);
+	if (!ret)
+		update_rq_clock_pelt(rq, delta);
 }
 
 void update_rq_clock(struct rq *rq)
@@ -1475,6 +1479,12 @@ static int uclamp_validate(struct task_struct *p,
 {
 	int util_min = p->uclamp_req[UCLAMP_MIN].value;
 	int util_max = p->uclamp_req[UCLAMP_MAX].value;
+	bool done = false;
+	int ret = 0;
+
+	trace_android_vh_uclamp_validate(p, attr, &ret, &done);
+	if (done)
+		return ret;
 
 	if (attr->sched_flags & SCHED_FLAG_UTIL_CLAMP_MIN) {
 		util_min = attr->sched_util_min;
@@ -1988,7 +1998,7 @@ static int __set_cpus_allowed_ptr_locked(struct task_struct *p,
 {
 	const struct cpumask *cpu_valid_mask = cpu_active_mask;
 	const struct cpumask *cpu_allowed_mask = task_cpu_possible_mask(p);
-	unsigned int dest_cpu;
+	unsigned int dest_cpu = nr_cpu_ids;
 	int ret = 0;
 
 	update_rq_clock(rq);
@@ -2020,10 +2030,14 @@ static int __set_cpus_allowed_ptr_locked(struct task_struct *p,
 	 * for groups of tasks (ie. cpuset), so that load balancing is not
 	 * immediately required to distribute the tasks within their new mask.
 	 */
-	dest_cpu = cpumask_any_and_distribute(cpu_valid_mask, new_mask);
+	trace_android_rvh_cpumask_any_and_distribute(p, cpu_valid_mask, new_mask, &dest_cpu);
+
 	if (dest_cpu >= nr_cpu_ids) {
-		ret = -EINVAL;
-		goto out;
+		dest_cpu = cpumask_any_and_distribute(cpu_valid_mask, new_mask);
+		if (dest_cpu >= nr_cpu_ids) {
+			ret = -EINVAL;
+			goto out;
+		}
 	}
 
 	do_set_cpus_allowed(p, new_mask);
@@ -3548,7 +3562,6 @@ void sched_cgroup_fork(struct task_struct *p, struct kernel_clone_args *kargs)
 #ifdef CONFIG_CGROUP_SCHED
 	if (1) {
 		struct task_group *tg;
-
 		tg = container_of(kargs->cset->subsys[cpu_cgrp_id],
 				  struct task_group, css);
 		tg = autogroup_task_group(p, tg);
@@ -4030,6 +4043,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		 * finish_task_switch()'s mmdrop().
 		 */
 		switch_mm_irqs_off(prev->active_mm, next->mm, next);
+		lru_gen_use_mm(next->mm);
 
 		if (!prev->mm) {                        // from kernel
 			/* will mmdrop() in finish_task_switch(). */
@@ -5259,6 +5273,10 @@ void set_user_nice(struct task_struct *p, long nice)
 	 */
 	rq = task_rq_lock(p, &rf);
 	update_rq_clock(rq);
+
+	trace_android_rvh_set_user_nice_locked(p, &nice);
+	if (task_nice(p) == nice)
+		goto out_unlock;
 
 	/*
 	 * The RT priorities are set via sched_setscheduler(), but we still

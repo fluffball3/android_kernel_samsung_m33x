@@ -41,8 +41,6 @@ DECLARE_EVENT_CLASS(android_fs_data_start_template,
 		  (unsigned long) __entry->ino)
 );
 
-
-
 #ifdef CONFIG_F2FS_ML_BASED_STREAM_SEPARATION
 DECLARE_EVENT_CLASS(android_fs_data_wb_template,
 	TP_PROTO(struct inode *inode, loff_t offset, int bytes,
@@ -182,6 +180,7 @@ DECLARE_EVENT_CLASS(android_fs_separation_template,
 
 );
 #endif
+
 DECLARE_EVENT_CLASS(android_fs_data_end_template,
 	TP_PROTO(struct inode *inode, loff_t offset, int bytes),
 	TP_ARGS(inode, offset, bytes),

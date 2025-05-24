@@ -7,23 +7,11 @@
 #if !defined(_TRACE_HOOK_RPROC_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _TRACE_HOOK_RPROC_H
 
-#include <linux/tracepoint.h>
 #include <trace/hooks/vendor_hooks.h>
 
-#ifdef __GENKSYMS__
 struct rproc;
-#else
-/* struct rproc */
-#include <linux/remoteproc.h>
-#endif /* __GENKSYMS__ */
 
-/* When recovery succeeds */
 DECLARE_HOOK(android_vh_rproc_recovery,
-	TP_PROTO(struct rproc *rproc),
-	TP_ARGS(rproc));
-
-/* When recovery mode is enabled or disabled by sysfs */
-DECLARE_HOOK(android_vh_rproc_recovery_set,
 	TP_PROTO(struct rproc *rproc),
 	TP_ARGS(rproc));
 

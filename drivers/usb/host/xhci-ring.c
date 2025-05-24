@@ -1168,7 +1168,6 @@ static void xhci_handle_cmd_stop_ep(struct xhci_hcd *xhci, int slot_id,
 			command = xhci_alloc_command(xhci, false, GFP_ATOMIC);
 			if (!command)
 				xhci_stop_watchdog_timer_in_irq(xhci, ep);
-
 			mod_timer(&ep->stop_cmd_timer,
 				  jiffies + XHCI_STOP_EP_CMD_TIMEOUT * HZ);
 			xhci_queue_stop_endpoint(xhci, command, slot_id, ep_index, 0);
