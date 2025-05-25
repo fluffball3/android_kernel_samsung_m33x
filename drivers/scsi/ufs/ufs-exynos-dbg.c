@@ -15,7 +15,7 @@
 
 #include "ufshcd.h"
 #include <soc/samsung/exynos-smc.h>
-#include <soc/samsung/memlogger.h>
+#include <soc/samsung/exynos/memlogger.h>
 #include "ufs-vs-mmio.h"
 #include "ufs-vs-regs.h"
 #include "ufs-dump.h"
@@ -108,7 +108,6 @@ struct ufs_log_cport {
         u8 buf[CPORT_BUF_SIZE];
 } ufs_log_cport;
 
-#define DBG_NUM_OF_HOSTS	1
 struct ufs_dbg_mgr {
 	struct ufs_vs_handle *handle;
 	int active;
@@ -128,9 +127,8 @@ struct ufs_dbg_mgr {
 	struct exynos_ufs_memlog *mem_log;
 	struct ufs_stats ufs_stats;
 };
-static struct ufs_dbg_mgr ufs_dbg[DBG_NUM_OF_HOSTS];
-static struct exynos_ufs_memlog ufs_memlog[DBG_NUM_OF_HOSTS];
-static int ufs_dbg_mgr_idx = 0;
+static struct ufs_dbg_mgr ufs_dbg;
+static struct exynos_ufs_memlog ufs_memlog;
 
 static void __ufs_get_sfr(struct ufs_dbg_mgr *mgr,
 					struct exynos_ufs_sfr_log* cfg)
@@ -162,6 +160,10 @@ static void __ufs_get_sfr(struct ufs_dbg_mgr *mgr,
 			*pval = std_readl(handle, cfg->offset);
 		else if (sel_api == LOG_VS_HCI_SFR)
 			*pval = hci_readl(handle, cfg->offset);
+#ifdef CONFIG_EXYNOS_SMC_LOGGING
+		else if (sel_api == LOG_FMP_SFR)
+			*pval = exynos_smc(SMC_CMD_FMP_SMU_DUMP, 0, 0, cfg->offset);
+#endif
 		else if (sel_api == LOG_UNIPRO_SFR)
 			*pval = unipro_readl(handle, cfg->offset);
 		else if (sel_api == LOG_PMA_SFR)
@@ -187,6 +189,7 @@ static u32 __read_pcs(struct ufs_vs_handle *handle, int lane,
 		      UNIP_COMP_AXI_AUX_FIELD);
 	return unipro_readl(handle, PCS_TRSV_OFFSET(cfg->mib));
 }
+
 static void __ufs_get_attr(struct ufs_dbg_mgr *mgr,
 					struct exynos_ufs_attr_log* cfg)
 {
@@ -210,23 +213,36 @@ static void __ufs_get_attr(struct ufs_dbg_mgr *mgr,
 		}
 
 		cfg->val[ATTR_VAL_H_0_L_1] = 0xFFFFFFFF;
-		if (sel_api == DBG_ATTR_UNIPRO) {
+		switch (sel_api) {
+		case DBG_ATTR_UNIPRO:
 			*pval = unipro_readl(handle, cfg->offset);
-		} else if (sel_api == DBG_ATTR_PCS_CMN) {
+			break;
+		case DBG_ATTR_PCS_CMN:
 			*pval = unipro_readl(handle, PCS_CMN_OFFSET(cfg->mib));
-		} else if (sel_api == DBG_ATTR_PCS_TX) {
+			break;
+		case DBG_ATTR_PCS_TX:
 			for (i = 0 ; i < mgr->lanes; i++) {
 				val = __read_pcs(handle, TX_LANE_0 + i, cfg);
 				*(pval + i) = val;
 			}
-		} else if (sel_api == DBG_ATTR_PCS_RX) {
+			break;
+		case DBG_ATTR_PCS_RX:
 			for (i = 0 ; i < mgr->lanes; i++) {
 				val = __read_pcs(handle, RX_LANE_0 + i, cfg);
 				*(pval + i) = val;
 			}
-		} else
-			// TODO:
+			break;
+		case DBG_ATTR_DIRECT_PCS_TX:
+		case DBG_ATTR_DIRECT_PCS_RX:
+			*pval = pcs_readl(handle, cfg->offset);
+			break;
+		case DBG_ATTR_PCS_START:
+		case DBG_ATTR_PCS_END:
+			pcs_writel(handle, cfg->mib, cfg->offset);
+			break;
+		default:
 			;
+		}
 
 		/* Keep the first contexts permanently */
 		if (mgr->first_time == 0ULL) {
@@ -576,7 +592,7 @@ static void __ufs_put_cmd_log(struct ufs_dbg_mgr *mgr, struct cmd_data *cmd_data
 	spin_lock_irqsave(&mgr->cmd_lock, flags);
 	pdata = &cmd_info->data[cmd_info->last];
 	++cmd_info->total;
-	cmd_info->last = (cmd_info->last + 1) % MAX_CMD_LOGS;
+	cmd_info->last = (++cmd_info->last) % MAX_CMD_LOGS;
 	spin_unlock_irqrestore(&mgr->cmd_lock, flags);
 
 	pdata->op = cmd_data->op;
@@ -688,7 +704,7 @@ void exynos_ufs_cmd_log_start(struct ufs_vs_handle *handle,
 
 	cmd_log->start_time = cpu_clock(cpu);
 	cmd_log->op = cmd->cmnd[0];
-	cmd_log->tag = cmd->request->tag;
+	cmd_log->tag = scsi_cmd_to_rq(cmd)->tag;
 	/* This function runtime is protected by spinlock from outside */
 	cmd_log->outstanding_reqs = hba->outstanding_reqs;
 
@@ -712,11 +728,6 @@ void exynos_ufs_cmd_log_end(struct ufs_vs_handle *handle,
 	if (mgr->active == 0)
 		return;
 
-	if (!cmd_info->pdata[tag]) {
-		pr_err("%s: there is no cmd logging inform about tag: %d\n",
-				__func__, tag);
-		return;
-	}
 	cmd_info->pdata[tag]->end_time = cpu_clock(cpu);
 }
 
@@ -770,7 +781,7 @@ static const struct memlog_ops ufs_memlog_ops = {
 
 int exynos_ufs_init_mem_log(struct platform_device *pdev)
 {
-	struct exynos_ufs_memlog *memlog = &ufs_memlog[ufs_dbg_mgr_idx];
+	struct exynos_ufs_memlog *memlog = &ufs_memlog;
 	struct memlog *desc;
 	struct memlog_obj *log_obj;
 	int ret;
@@ -786,11 +797,7 @@ int exynos_ufs_init_mem_log(struct platform_device *pdev)
 	memlog->desc = desc;
 	desc->ops = ufs_memlog_ops;
 
-	log_obj = memlog_alloc_printf(desc,
-					SZ_512K,
-					NULL,
-					"log-mem",
-					0);
+	log_obj = memlog_alloc_printf(desc, SZ_512K, NULL, "log-mem", 0);
 
 	if (log_obj) {
 		memlog->log_obj = log_obj;
@@ -808,14 +815,9 @@ int exynos_ufs_init_mem_log(struct platform_device *pdev)
 int exynos_ufs_init_dbg(struct ufs_vs_handle *handle)
 {
 	struct ufs_dbg_mgr *mgr;
-	int ret = -1;
 
-	if (ufs_dbg_mgr_idx >= DBG_NUM_OF_HOSTS)
-		goto out;
-
-	mgr = &ufs_dbg[ufs_dbg_mgr_idx];
-	mgr->mem_log = &ufs_memlog[ufs_dbg_mgr_idx];
-	ufs_dbg_mgr_idx++;
+	mgr = &ufs_dbg;
+	mgr->mem_log = &ufs_memlog;
 
 	handle->private = (void *)mgr;
 	mgr->handle = handle;
@@ -823,9 +825,8 @@ int exynos_ufs_init_dbg(struct ufs_vs_handle *handle)
 
 	/* cmd log */
 	spin_lock_init(&mgr->cmd_lock);
-	ret = 0;
-out:
-	return ret;
+
+	return 0;
 }
 MODULE_AUTHOR("Kiwoong Kim <kwmad.kim@samsung.com>");
 MODULE_DESCRIPTION("Exynos UFS debug information");

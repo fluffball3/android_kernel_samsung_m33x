@@ -23,15 +23,17 @@
 #include <trace/events/ufs_exynos_perf.h>
 
 /* control knob */
-static int __ctrl_dvfs(struct ufs_perf *perf, enum ctrl_op op)
+static int __ctrl_dvfs(struct ufs_perf *perf, ctrl_op op)
 {
 	trace_ufs_perf_lock("dvfs", op);
 #if IS_ENABLED(CONFIG_EXYNOS_PM_QOS) || IS_ENABLED(CONFIG_EXYNOS_PM_QOS_MODULE)
 	if (op == CTRL_OP_UP) {
 		if (perf->val_pm_qos_int)
-			exynos_pm_qos_update_request(&perf->pm_qos_int, perf->val_pm_qos_int);
+			exynos_pm_qos_update_request(&perf->pm_qos_int,
+					perf->val_pm_qos_int);
 		if (perf->val_pm_qos_mif)
-			exynos_pm_qos_update_request(&perf->pm_qos_mif, perf->val_pm_qos_mif);
+			exynos_pm_qos_update_request(&perf->pm_qos_mif,
+					perf->val_pm_qos_mif);
 	} else if (op == CTRL_OP_DOWN) {
 		if (perf->val_pm_qos_int)
 			exynos_pm_qos_update_request(&perf->pm_qos_int, 0);
@@ -41,17 +43,18 @@ static int __ctrl_dvfs(struct ufs_perf *perf, enum ctrl_op op)
 		return -1;
 	}
 #endif
-#if IS_ENABLED(CONFIG_ARM_EXYNOS_ACME) || IS_ENABLED(CONFIG_ARM_FREQ_QOS_TRACER)
-	if (unlikely(!perf->val_pm_qos_cluster0))
-		ufs_init_cpufreq_request(perf, false);
 
+#if IS_ENABLED(CONFIG_ARM_EXYNOS_ACME) || IS_ENABLED(CONFIG_ARM_FREQ_QOS_TRACER)
 	if (op == CTRL_OP_UP) {
 		if (perf->val_pm_qos_cluster0)
-			freq_qos_update_request(&perf->pm_qos_cluster0, perf->val_pm_qos_cluster0);
+			freq_qos_update_request(&perf->pm_qos_cluster0,
+					perf->val_pm_qos_cluster0);
 		if (perf->val_pm_qos_cluster1)
-			freq_qos_update_request(&perf->pm_qos_cluster1, perf->val_pm_qos_cluster1);
+			freq_qos_update_request(&perf->pm_qos_cluster1,
+					perf->val_pm_qos_cluster1);
 		if (perf->val_pm_qos_cluster2)
-			freq_qos_update_request(&perf->pm_qos_cluster2, perf->val_pm_qos_cluster2);
+			freq_qos_update_request(&perf->pm_qos_cluster2,
+					perf->val_pm_qos_cluster2);
 	} else if (op == CTRL_OP_DOWN) {
 		if (perf->val_pm_qos_cluster0)
 			freq_qos_update_request(&perf->pm_qos_cluster0, 0);
@@ -66,37 +69,97 @@ static int __ctrl_dvfs(struct ufs_perf *perf, enum ctrl_op op)
 	return 0;
 }
 
+static inline u8 __wb_get_query_index(struct ufs_hba *hba)
+{
+	if (hba->dev_info.wb_buffer_type == WB_BUF_MODE_LU_DEDICATED)
+		return hba->dev_info.wb_dedicated_lu;
+	return 0;
+}
+
+/*
+   As ufshcd_wb_ctrl is not exported in mainline, make it one more..
+   The action of function itself is totally same with ufshcd_wb_ctrl().
+ */
+static int __wb_ctrl(struct ufs_hba *hba, bool enable)
+{
+	int ret;
+	u8 index;
+	enum query_opcode opcode;
+
+	if (!(hba->caps & UFSHCD_CAP_WB_EN))
+		return 0;
+
+	if (!(enable ^ hba->dev_info.wb_enabled))
+		return 0;
+	if (enable)
+		opcode = UPIU_QUERY_OPCODE_SET_FLAG;
+	else
+		opcode = UPIU_QUERY_OPCODE_CLEAR_FLAG;
+
+	index = __wb_get_query_index(hba);
+	ret = ufshcd_query_flag_retry(hba, opcode,
+				      QUERY_FLAG_IDN_WB_EN, index, NULL);
+	if (ret) {
+		dev_err(hba->dev, "%s write booster %s failed %d\n",
+			__func__, enable ? "enable" : "disable", ret);
+		return ret;
+	}
+
+	hba->dev_info.wb_enabled = enable;
+	dev_dbg(hba->dev, "%s write booster %s %d\n",
+			__func__, enable ? "enable" : "disable", ret);
+
+	return ret;
+
+}
+
+static int __ctrl_wb(struct ufs_perf *perf, ctrl_op op)
+{
+	if (op == CTRL_OP_UP)
+		__wb_ctrl(perf->hba, true);
+	else if (op == CTRL_OP_DOWN)
+		__wb_ctrl(perf->hba, false);
+	else
+		return -1;
+
+	return 0;
+}
+
 /* policy */
-static enum policy_res __policy_heavy(struct ufs_perf *perf, u32 i_policy)
+static policy_res __policy_heavy(struct ufs_perf *perf, u32 i_policy)
 {
 	int index;
-	enum ctrl_op op;
+	ctrl_op op;
 	unsigned long flags;
 	struct ufs_perf_stat_v1 *stat = &perf->stat_v1;
-	enum policy_res res = R_OK;
+	policy_res res = R_OK;
 	int mapped = 0;
 
 	/* for up, ORed. for down, ANDed */
 	if (stat->hat_state == HAT_REACH || stat->freq_state == FREQ_REACH)
 		op = CTRL_OP_UP;
-	else if ((stat->hat_state == HAT_DWELL || stat->hat_state == HAT_PRE_RARE) &&
-		stat->freq_state != FREQ_DROP)
+	else if ((stat->hat_state == HAT_DWELL ||
+			stat->hat_state == HAT_PRE_RARE) &&
+			stat->freq_state != FREQ_DROP)
 		op = CTRL_OP_NONE;
-	else if ((stat->freq_state == FREQ_DWELL || stat->freq_state == FREQ_PRE_RARE) &&
-		stat->hat_state != HAT_DROP)
+	else if ((stat->freq_state == FREQ_DWELL ||
+			stat->freq_state == FREQ_PRE_RARE) &&
+			stat->hat_state != HAT_DROP)
 		op = CTRL_OP_NONE;
-	else if ((stat->freq_state == FREQ_RARE || stat->freq_state == FREQ_DROP) &&
-		stat->hat_state == HAT_DROP)
+	else if ((stat->freq_state == FREQ_RARE ||
+			stat->freq_state == FREQ_DROP) &&
+			stat->hat_state == HAT_DROP)
 		op = CTRL_OP_DOWN;
-	else if ((stat->hat_state == HAT_RARE || stat->hat_state == HAT_DROP) &&
-		stat->freq_state == FREQ_DROP)
+	else if ((stat->hat_state == HAT_RARE ||
+			stat->hat_state == HAT_DROP) &&
+			stat->freq_state == FREQ_DROP)
 		op = CTRL_OP_DOWN;
 	else
 		op = CTRL_OP_NONE;
 
 	/* put request */
 	spin_lock_irqsave(&perf->lock_handle, flags);
-	for (index = 0; index <= __CTRL_REQ_WB; index++) {
+	for (index = 0; index < __CTRL_REQ_MAX; index++) {
 		if (!(BIT(index) & stat->req_bits[i_policy]) ||
 		    op == CTRL_OP_NONE || perf->ctrl_handle[index] == op)
 			continue;
@@ -110,13 +173,14 @@ static enum policy_res __policy_heavy(struct ufs_perf *perf, u32 i_policy)
 	return res;
 }
 
-static enum policy_res (*__policy_set[__POLICY_MAX])(struct ufs_perf *perf, u32 i_policy) = {
+static policy_res (*__policy_set[__POLICY_MAX])(struct ufs_perf *perf,
+		u32 i_policy) = {
 	__policy_heavy,
 };
 
 /* updater(stat) */
 static void __transit_for_count(struct ufs_perf_stat_v1 *stat,
-				enum __traffic traffic, s64 time)
+				traffic traffic, s64 time)
 {
 	s64 diff;
 	bool transit = false;
@@ -171,7 +235,7 @@ static void __transit_for_count(struct ufs_perf_stat_v1 *stat,
 }
 
 static void __transit_for_hat(struct ufs_perf_stat_v1 *stat,
-			      enum __traffic traffic, s64 time)
+			      traffic traffic, s64 time)
 {
 	s64 diff;
 	bool transit = false;
@@ -242,7 +306,7 @@ static void __transit_for_hat(struct ufs_perf_stat_v1 *stat,
 static void __update_v1_queued(struct ufs_perf_stat_v1 *stat, u32 qd)
 {
 	ktime_t time = ktime_get();
-	enum __traffic traffic = 0;
+	traffic traffic = 0;
 	s64 diff;
 
 	/*
@@ -259,8 +323,6 @@ static void __update_v1_queued(struct ufs_perf_stat_v1 *stat, u32 qd)
 	/* stats for hat */
 	if (qd >= stat->th_qd_max)
 		traffic = TRAFFIC_HIGH;
-	else if (qd <= stat->th_qd_min)
-		traffic = TRAFFIC_LOW;
 	__transit_for_hat(stat, traffic, time);
 
 	/* stats for random */
@@ -300,11 +362,11 @@ static void __update_v1_reset(struct ufs_perf_stat_v1 *stat)
 		  jiffies + msecs_to_jiffies(stat->th_reset_in_ms));
 }
 
-static enum policy_res __do_policy(struct ufs_perf *perf)
+static policy_res __do_policy(struct ufs_perf *perf)
 {
 	struct ufs_perf_stat_v1 *stat = &perf->stat_v1;
-	enum policy_res res = R_OK;
-	enum policy_res res_t;
+	policy_res res = R_OK;
+	policy_res res_t;
 	int index;
 
 	for (index = 0; index < __POLICY_MAX; index++) {
@@ -318,10 +380,11 @@ static enum policy_res __do_policy(struct ufs_perf *perf)
 	return res;
 }
 
-static enum policy_res __update_v1(struct ufs_perf *perf, u32 qd, enum ufs_perf_op op, enum ufs_perf_entry entry)
+static policy_res __update_v1(struct ufs_perf *perf, u32 qd, ufs_perf_op op,
+		ufs_perf_entry entry)
 {
 	struct ufs_perf_stat_v1 *stat = &perf->stat_v1;
-	enum policy_res res = R_OK;
+	policy_res res = R_OK;
 	unsigned long flags;
 
 	/* sync case, freeze state for count */
@@ -365,7 +428,7 @@ static void __reset_timer(struct timer_list *t)
 	spin_unlock_irqrestore(&stat->lock, flags);
 
 	/* wake-up handler */
-	ufs_perf_complete(perf);
+	ufs_perf_wakeup(perf);
 
 	trace_ufs_perf_update_v1("reset", stat->count,
 				stat->hat_state, stat->freq_state,
@@ -421,8 +484,10 @@ const static struct attribute *__sysfs_attrs[] = {
 static ssize_t __sysfs_show(struct kobject *kobj,
 				     struct attribute *attr, char *buf)
 {
-	struct ufs_perf_stat_v1 *stat = container_of(kobj, struct ufs_perf_stat_v1, sysfs_kobj);
-	struct __sysfs_attr *param = container_of(attr, struct __sysfs_attr, attr);
+	struct ufs_perf_stat_v1 *stat = container_of(kobj,
+			struct ufs_perf_stat_v1, sysfs_kobj);
+	struct __sysfs_attr *param = container_of(attr,
+			struct __sysfs_attr, attr);
 
 	return param->show(stat, buf);
 }
@@ -431,8 +496,10 @@ static ssize_t __sysfs_store(struct kobject *kobj,
 				      struct attribute *attr,
 				      const char *buf, size_t length)
 {
-	struct ufs_perf_stat_v1 *stat = container_of(kobj, struct ufs_perf_stat_v1, sysfs_kobj);
-	struct __sysfs_attr *param = container_of(attr, struct __sysfs_attr, attr);
+	struct ufs_perf_stat_v1 *stat = container_of(kobj,
+			struct ufs_perf_stat_v1, sysfs_kobj);
+	struct __sysfs_attr *param = container_of(attr,
+			struct __sysfs_attr, attr);
 	u32 val;
 	int ret = 0;
 
@@ -459,18 +526,17 @@ static int __sysfs_init(struct ufs_perf_stat_v1 *stat)
 
 	/* create a path of /sys/kernel/ufs_perf_x */
 	kobject_init(&stat->sysfs_kobj, &__sysfs_ktype);
-	error = kobject_add(&stat->sysfs_kobj, kernel_kobj, "ufs_perf_v1_%c", (char)('0'));	//
+	error = kobject_add(&stat->sysfs_kobj, kernel_kobj, "ufs_perf_v1_%c",
+			(char)('0'));
 	if (error) {
-		pr_err("%s register sysfs directory: %d\n",
-		       __res_token[__TOKEN_FAIL], error);
+		pr_err("Fail to register sysfs directory: %d\n", error);
 		goto fail_kobj;
 	}
 
 	/* create attributes */
 	error = sysfs_create_files(&stat->sysfs_kobj, __sysfs_attrs);
 	if (error) {
-		pr_err("%s create sysfs files: %d\n",
-		       __res_token[__TOKEN_FAIL], error);
+		pr_err("Fail to create sysfs files: %d\n", error);
 		goto fail_kobj;
 	}
 
@@ -495,11 +561,12 @@ int ufs_perf_init_v1(struct ufs_perf *perf)
 	/* register callbacks */
 	perf->update[__UPDATE_V1] = __update_v1;
 	perf->ctrl[__CTRL_REQ_DVFS] = __ctrl_dvfs;
+	perf->ctrl[__CTRL_REQ_WB] = __ctrl_wb;
 
 	/* default thresholds for stats */
 	stat->th_qd_max = 14;
 	stat->th_qd_min = 2;
-	stat->th_dwell_in_high = 1;
+	stat->th_dwell_in_high = 5;
 	stat->th_reach_up_to_high = 30;
 
 	stat->th_duration = 1;

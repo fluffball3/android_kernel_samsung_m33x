@@ -34,22 +34,7 @@
 #define REFCLK_ACK                  BIT(1)
 
 #define REFCLK_REQ_TIMEOUT_US       3000
-
-/*
- * Vendor specific pre-defined parameters
- */
-#define UFS_MTK_LIMIT_NUM_LANES_RX  2
-#define UFS_MTK_LIMIT_NUM_LANES_TX  2
-#define UFS_MTK_LIMIT_HSGEAR_RX     UFS_HS_G4
-#define UFS_MTK_LIMIT_HSGEAR_TX     UFS_HS_G4
-#define UFS_MTK_LIMIT_PWMGEAR_RX    UFS_PWM_G4
-#define UFS_MTK_LIMIT_PWMGEAR_TX    UFS_PWM_G4
-#define UFS_MTK_LIMIT_RX_PWR_PWM    SLOW_MODE
-#define UFS_MTK_LIMIT_TX_PWR_PWM    SLOW_MODE
-#define UFS_MTK_LIMIT_RX_PWR_HS     FAST_MODE
-#define UFS_MTK_LIMIT_TX_PWR_HS     FAST_MODE
-#define UFS_MTK_LIMIT_HS_RATE       PA_HS_MODE_B
-#define UFS_MTK_LIMIT_DESIRED_MODE  UFS_HS_MODE
+#define REFCLK_DEFAULT_WAIT_US      32
 
 /*
  * Other attributes

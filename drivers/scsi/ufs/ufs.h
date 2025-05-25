@@ -14,6 +14,7 @@
 #include <linux/mutex.h>
 #include <linux/types.h>
 #include <linux/android_kabi.h>
+#include <linux/android_vendor.h>
 #include <uapi/scsi/scsi_bsg_ufs.h>
 
 #define GENERAL_UPIU_REQUEST_SIZE (sizeof(struct utp_upiu_req))
@@ -43,12 +44,6 @@
 
 /* WriteBooster buffer is available only for the logical unit from 0 to 7 */
 #define UFS_UPIU_MAX_WB_LUN_ID	8
-
-/*
- * WriteBooster buffer lifetime has a limit setted by vendor.
- * If it is over the limit, WriteBooster feature will be disabled.
- */
-#define UFS_WB_EXCEED_LIFETIME		0x0B
 
 /* Well known logical unit id in LUN field of UPIU */
 enum {
@@ -612,8 +607,6 @@ struct ufs_dev_info {
 	u8	*model;
 	u16	wspecversion;
 	u32	clk_gating_wait_us;
-	u32 d_ext_ufs_feature_sup;
-	u32 d_wb_alloc_units;
 
 	/* UFS HPB related flag */
 	bool	hpb_enabled;
@@ -626,8 +619,9 @@ struct ufs_dev_info {
 
 	bool	b_rpm_dev_flush_capable;
 	u8	b_presrv_uspc_en;
-
 	ANDROID_KABI_RESERVE(1);
+
+	ANDROID_OEM_DATA(1);
 };
 
 /*

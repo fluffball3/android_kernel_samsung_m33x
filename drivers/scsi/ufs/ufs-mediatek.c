@@ -761,7 +761,6 @@ static int ufs_mtk_pre_pwr_change(struct ufs_hba *hba,
 {
 	struct ufs_mtk_host *host = ufshcd_get_variant(hba);
 	struct ufs_dev_params host_cap;
-	u32 adapt_val;
 	int ret;
 
 	ufshcd_init_pwr_dev_param(&host_cap);

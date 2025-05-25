@@ -13,6 +13,8 @@
 #include "ufs-cal-if.h"
 #include "ufs-exynos.h"
 
+#define RV_SUCCESS 0
+
 struct ufs_hba *hba_srpmb;
 
 int exynos_ufs_srpmb_config(struct ufs_hba *hba)
@@ -32,6 +34,9 @@ struct scsi_device *exynos_ufs_srpmb_sdev(void)
 	if (!hba_srpmb->sdev_ufs_device)
 		return NULL;
 
-	return hba_srpmb->sdev_ufs_device;
+	if (!hba_srpmb->sdev_rpmb)
+		return NULL;
+
+	return hba_srpmb->sdev_rpmb;
 }
 EXPORT_SYMBOL(exynos_ufs_srpmb_sdev);

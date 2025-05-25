@@ -82,6 +82,7 @@ static ssize_t rpm_target_dev_state_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct ufs_hba *hba = dev_get_drvdata(dev);
+
 	return sysfs_emit(buf, "%s\n", ufshcd_ufs_dev_pwr_mode_to_string(
 			ufs_pm_lvl_states[hba->rpm_lvl].dev_state));
 }
