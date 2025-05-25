@@ -192,7 +192,7 @@ static int uart_port_startup(struct tty_struct *tty, struct uart_state *state,
 	 * Initialise and allocate the transmit and temporary
 	 * buffer.
 	 */
-	page = __get_free_pages(GFP_KERNEL|__GFP_ZERO|__GFP_COMP, 2);
+	page = get_zeroed_page(GFP_KERNEL);
 	if (!page)
 		return -ENOMEM;
 
@@ -207,14 +207,18 @@ static int uart_port_startup(struct tty_struct *tty, struct uart_state *state,
 		 * Do not free() the page under the port lock, see
 		 * uart_shutdown().
 		 */
-		free_pages(page, 2);
+		free_page(page);
 	}
 
 	retval = uport->ops->startup(uport);
 	if (retval == 0) {
 		if (uart_console(uport) && uport->cons->cflag) {
 			tty->termios.c_cflag = uport->cons->cflag;
+			tty->termios.c_ispeed = uport->cons->ispeed;
+			tty->termios.c_ospeed = uport->cons->ospeed;
 			uport->cons->cflag = 0;
+			uport->cons->ispeed = 0;
+			uport->cons->ospeed = 0;
 		}
 		/*
 		 * Initialise the hardware port settings.
@@ -315,7 +319,7 @@ static void uart_shutdown(struct tty_struct *tty, struct uart_state *state)
 	uart_port_unlock(uport, flags);
 
 	if (xmit_buf)
-		free_pages((unsigned long)xmit_buf, 2);
+		free_page((unsigned long)xmit_buf);
 }
 
 /**
@@ -2181,8 +2185,11 @@ uart_set_options(struct uart_port *port, struct console *co,
 	 * Allow the setting of the UART parameters with a NULL console
 	 * too:
 	 */
-	if (co)
+	if (co) {
 		co->cflag = termios.c_cflag;
+		co->ispeed = termios.c_ispeed;
+		co->ospeed = termios.c_ospeed;
+	}
 
 	return 0;
 }
@@ -2317,6 +2324,8 @@ int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 		 */
 		memset(&termios, 0, sizeof(struct ktermios));
 		termios.c_cflag = uport->cons->cflag;
+		termios.c_ispeed = uport->cons->ispeed;
+		termios.c_ospeed = uport->cons->ospeed;
 
 		/*
 		 * If that's unset, use the tty termios setting.

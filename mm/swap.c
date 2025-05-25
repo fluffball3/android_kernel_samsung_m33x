@@ -833,20 +833,6 @@ void lru_add_drain(void)
 	local_unlock(&lru_pvecs.lock);
 }
 
-/*
- * It's called from per-cpu workqueue context in SMP case so
- * lru_add_drain_cpu and invalidate_bh_lrus_cpu should run on
- * the same cpu. It shouldn't be a problem in !SMP case since
- * the core is only one and the locks will disable preemption.
- */
-static void lru_add_and_bh_lrus_drain(void)
-{
-	local_lock(&lru_pvecs.lock);
-	lru_add_drain_cpu(smp_processor_id());
-	local_unlock(&lru_pvecs.lock);
-	invalidate_bh_lrus_cpu();
-}
-
 void lru_add_drain_cpu_zone(struct zone *zone)
 {
 	local_lock(&lru_pvecs.lock);
@@ -861,7 +847,7 @@ static DEFINE_PER_CPU(struct work_struct, lru_add_drain_work);
 
 static void lru_add_drain_per_cpu(struct work_struct *dummy)
 {
-	lru_add_and_bh_lrus_drain();
+	lru_add_drain();
 }
 
 /*

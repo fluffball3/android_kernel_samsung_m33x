@@ -65,7 +65,6 @@ struct pci_pme_device {
 static void pci_dev_d3_sleep(struct pci_dev *dev)
 {
 	unsigned int delay = dev->d3hot_delay;
-	int err = -EOPNOTSUPP;
 
 	if (delay < pci_pm_d3hot_delay)
 		delay = pci_pm_d3hot_delay;

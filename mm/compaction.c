@@ -47,11 +47,6 @@ static inline void count_compact_events(enum vm_event_item item, long delta)
 #undef CREATE_TRACE_POINTS
 #include <trace/hooks/mm.h>
 
-#undef CREATE_TRACE_POINTS
-#ifndef __GENKSYMS__
-#include <trace/hooks/mm.h>
-#endif
-
 #define block_start_pfn(pfn, order)	round_down(pfn, 1UL << (order))
 #define block_end_pfn(pfn, order)	ALIGN((pfn) + 1, 1UL << (order))
 #define pageblock_start_pfn(pfn)	block_start_pfn(pfn, pageblock_order)
@@ -1929,28 +1924,20 @@ static bool kswapd_is_running(pg_data_t *pgdat)
 
 /*
  * A zone's fragmentation score is the external fragmentation wrt to the
- * COMPACTION_HPAGE_ORDER. It returns a value in the range [0, 100].
- */
-static unsigned int fragmentation_score_zone(struct zone *zone)
-{
-	return extfrag_for_order(zone, COMPACTION_HPAGE_ORDER);
-}
-
-/*
- * A weighted zone's fragmentation score is the external fragmentation
- * wrt to the COMPACTION_HPAGE_ORDER scaled by the zone's size. It
- * returns a value in the range [0, 100].
+ * COMPACTION_HPAGE_ORDER scaled by the zone's size. It returns a value
+ * in the range [0, 100].
  *
  * The scaling factor ensures that proactive compaction focuses on larger
  * zones like ZONE_NORMAL, rather than smaller, specialized zones like
  * ZONE_DMA32. For smaller zones, the score value remains close to zero,
  * and thus never exceeds the high threshold for proactive compaction.
  */
-static unsigned int fragmentation_score_zone_weighted(struct zone *zone)
+static unsigned int fragmentation_score_zone(struct zone *zone)
 {
 	unsigned long score;
 
-	score = zone->present_pages * fragmentation_score_zone(zone);
+	score = zone->present_pages *
+			extfrag_for_order(zone, COMPACTION_HPAGE_ORDER);
 	return div64_ul(score, zone->zone_pgdat->node_present_pages + 1);
 }
 
@@ -1970,7 +1957,7 @@ static unsigned int fragmentation_score_node(pg_data_t *pgdat)
 		struct zone *zone;
 
 		zone = &pgdat->node_zones[zoneid];
-		score += fragmentation_score_zone_weighted(zone);
+		score += fragmentation_score_zone(zone);
 	}
 
 	return score;
@@ -2005,7 +1992,6 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 	unsigned int order;
 	const int migratetype = cc->migratetype;
 	int ret;
-	bool abort_compact = false;
 
 	/* Compaction run completes if the migrate and free scanner meet */
 	if (compact_scanners_met(cc)) {
@@ -2105,8 +2091,7 @@ static enum compact_result __compact_finished(struct compact_control *cc)
 	}
 
 out:
-	trace_android_vh_compact_finished(&abort_compact);
-	if (cc->contended || fatal_signal_pending(current) || abort_compact)
+	if (cc->contended || fatal_signal_pending(current))
 		ret = COMPACT_CONTENDED;
 
 	return ret;
@@ -2627,14 +2612,15 @@ static void proactive_compact_node(pg_data_t *pgdat)
 	}
 }
 
-static void __compact_node(int nid, bool sync)
+/* Compact all zones within a node */
+static void compact_node(int nid)
 {
 	pg_data_t *pgdat = NODE_DATA(nid);
 	int zoneid;
 	struct zone *zone;
 	struct compact_control cc = {
 		.order = -1,
-		.mode = sync ? MIGRATE_SYNC : MIGRATE_ASYNC,
+		.mode = MIGRATE_SYNC,
 		.ignore_skip_hint = true,
 		.whole_zone = true,
 		.gfp_mask = GFP_KERNEL,
@@ -2656,26 +2642,8 @@ static void __compact_node(int nid, bool sync)
 	}
 }
 
-#ifdef CONFIG_HUGEPAGE_POOL
-void compact_node_async(void)
-{
-	/* hugepage pool and kzerod assumes there is only one node */
-	__compact_node(0, false);
-}
-#endif
-
-/* Compact all zones within a node */
-static void compact_node(int nid)
-{
-	__compact_node(nid, true);
-}
-
 /* Compact all nodes in the system */
-#ifdef CONFIG_HUGEPAGE_POOL
-void compact_nodes(void)
-#else
 static void compact_nodes(void)
-#endif
 {
 	int nid;
 

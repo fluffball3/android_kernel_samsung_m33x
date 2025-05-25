@@ -181,8 +181,6 @@ static void put_compound_head(struct page *page, int refs, unsigned int flags)
 			refs *= GUP_PIN_COUNTING_BIAS;
 	}
 
-	if (flags & FOLL_GET)
-		reset_page_pinner(page, compound_order(page));
 	put_page_refs(page, refs);
 }
 
@@ -254,24 +252,6 @@ void unpin_user_page(struct page *page)
 	put_compound_head(compound_head(page), 1, FOLL_PIN);
 }
 EXPORT_SYMBOL(unpin_user_page);
-
-/*
- * put_user_page() - release a page obtained using get_user_pages() or
- *                   follow_page(FOLL_GET)
- * @page:            pointer to page to be released
- *
- * Pages that were obtained via get_user_pages()/follow_page(FOLL_GET) must be
- * released via put_user_page.
- * note: If it's not a page from GUP or follow_page(FOLL_GET), it's harmless.
- */
-void put_user_page(struct page *page)
-{
-	struct page *head = compound_head(page);
-
-	reset_page_pinner(head, compound_order(head));
-	put_page(page);
-}
-EXPORT_SYMBOL(put_user_page);
 
 /**
  * unpin_user_pages_dirty_lock() - release and optionally dirty gup-pinned pages
