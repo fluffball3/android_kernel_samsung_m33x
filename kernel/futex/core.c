@@ -597,7 +597,7 @@ again:
 		lock_page(page);
 		shmem_swizzled = PageSwapCache(page) || page->mapping;
 		unlock_page(page);
-		put_user_page(page);
+		put_page(page);
 
 		if (shmem_swizzled)
 			goto again;
@@ -647,7 +647,7 @@ again:
 
 		if (READ_ONCE(page->mapping) != mapping) {
 			rcu_read_unlock();
-			put_user_page(page);
+			put_page(page);
 
 			goto again;
 		}
@@ -655,7 +655,7 @@ again:
 		inode = READ_ONCE(mapping->host);
 		if (!inode) {
 			rcu_read_unlock();
-			put_user_page(page);
+			put_page(page);
 
 			goto again;
 		}
@@ -667,7 +667,7 @@ again:
 	}
 
 out:
-	put_user_page(page);
+	put_page(page);
 	return err;
 }
 
@@ -1604,7 +1604,6 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
 	struct futex_q *this, *next;
 	union futex_key key = FUTEX_KEY_INIT;
 	int ret;
-	int target_nr;
 	DEFINE_WAKE_Q(wake_q);
 
 	if (!bitset)
@@ -1622,7 +1621,6 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
 
 	spin_lock(&hb->lock);
 
-	trace_android_vh_futex_wake_traverse_plist(&hb->chain, &target_nr, key, bitset);
 	plist_for_each_entry_safe(this, next, &hb->chain, list) {
 		if (match_futex (&this->key, &key)) {
 			if (this->pi_state || this->rt_waiter) {
@@ -1634,7 +1632,6 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
 			if (!(this->bitset & bitset))
 				continue;
 
-			trace_android_vh_futex_wake_this(ret, nr_wake, target_nr, this->task);
 			mark_wake_futex(&wake_q, this);
 			if (++ret >= nr_wake)
 				break;
@@ -1643,7 +1640,6 @@ futex_wake(u32 __user *uaddr, unsigned int flags, int nr_wake, u32 bitset)
 
 	spin_unlock(&hb->lock);
 	wake_up_q(&wake_q);
-	trace_android_vh_futex_wake_up_q_finish(nr_wake, target_nr);
 	return ret;
 }
 
@@ -2621,10 +2617,8 @@ static void futex_wait_queue_me(struct futex_hash_bucket *hb, struct futex_q *q,
 		 * flagged for rescheduling. Only call schedule if there
 		 * is no timeout, or if it has yet to expire.
 		 */
-		if (!timeout || timeout->task) {
-			trace_android_vh_futex_sleep_start(current);
+		if (!timeout || timeout->task)
 			freezable_schedule();
-		}
 	}
 	__set_current_state(TASK_RUNNING);
 }
@@ -2713,7 +2707,6 @@ static int futex_wait(u32 __user *uaddr, unsigned int flags, u32 val,
 	if (!bitset)
 		return -EINVAL;
 	q.bitset = bitset;
-	trace_android_vh_futex_wait_start(flags, bitset);
 
 	to = futex_setup_timer(abs_time, &timeout, flags,
 			       current->timer_slack_ns);
@@ -2763,7 +2756,6 @@ out:
 		hrtimer_cancel(&to->timer);
 		destroy_hrtimer_on_stack(&to->timer);
 	}
-	trace_android_vh_futex_wait_end(flags, bitset);
 	return ret;
 }
 
@@ -3757,7 +3749,6 @@ long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 			return -ENOSYS;
 	}
 
-	trace_android_vh_do_futex(cmd, &flags, uaddr2);
 	switch (cmd) {
 	case FUTEX_WAIT:
 		val3 = FUTEX_BITSET_MATCH_ANY;

@@ -256,6 +256,33 @@ static int z_erofs_lz4_decompress_mem(struct z_erofs_decompress_req *rq,
 	return ret;
 }
 
+static void copy_from_pcpubuf(struct page **out, const char *dst,
+			      unsigned short pageofs_out,
+			      unsigned int outputsize)
+{
+	const char *end = dst + outputsize;
+	const unsigned int righthalf = PAGE_SIZE - pageofs_out;
+	const char *cur = dst - pageofs_out;
+
+	while (cur < end) {
+		struct page *const page = *out++;
+
+		if (page) {
+			char *buf = kmap_atomic(page);
+
+			if (cur >= dst) {
+				memcpy(buf, cur, min_t(uint, PAGE_SIZE,
+						       end - cur));
+			} else {
+				memcpy(buf + pageofs_out, cur + pageofs_out,
+				       min_t(uint, righthalf, end - cur));
+			}
+			kunmap_atomic(buf);
+		}
+		cur += PAGE_SIZE;
+	}
+}
+
 static int z_erofs_lz4_decompress(struct z_erofs_decompress_req *rq,
 				  struct page **pagepool)
 {
@@ -285,7 +312,7 @@ static int z_erofs_lz4_decompress(struct z_erofs_decompress_req *rq,
 				return PTR_ERR(dst);
 
 			rq->inplace_io = false;
-			ret = alg->decompress(rq, dst);
+			ret = z_erofs_lz4_decompress_mem(rq, dst);
 			if (!ret)
 				copy_from_pcpubuf(rq->out, dst, rq->pageofs_out,
 						  rq->outputsize);

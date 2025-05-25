@@ -926,13 +926,4 @@ typedef struct {
 	unsigned long val;
 } swp_entry_t;
 
-/* Return the name for an anonymous mapping or NULL for a file-backed mapping */
-static inline const char __user *vma_get_anon_name(struct vm_area_struct *vma)
-{
-	if (vma->vm_file)
-		return NULL;
-
-	return vma->anon_name;
-}
-
 #endif /* _LINUX_MM_TYPES_H */

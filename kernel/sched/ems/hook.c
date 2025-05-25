@@ -69,11 +69,6 @@ static void ems_hook_find_lowest_rq(void *data,
 	*lowest_cpu = frt_find_lowest_rq(p, local_cpu_mask);
 }
 
-static void ems_hook_tick_entry(void *data, struct rq *rq)
-{
-	ems_tick_entry(rq);
-}
-
 static void ems_hook_scheduler_tick(void *data, struct rq *rq)
 {
 	ems_tick(rq);
@@ -296,10 +291,6 @@ int hook_init(void)
 		return ret;
 
 	ret = register_trace_android_rvh_find_lowest_rq(ems_hook_find_lowest_rq, NULL);
-	if (ret)
-		return ret;
-
-	ret = register_trace_android_rvh_tick_entry(ems_hook_tick_entry, NULL);
 	if (ret)
 		return ret;
 

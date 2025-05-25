@@ -67,22 +67,6 @@
 #define DMA_ATTR_SET_PRIV_DATA(val)	(DMA_ATTR_HAS_PRIV_DATA |	\
 					 ((val) & 0xf) << DMA_ATTR_PRIV_SHIFT)
 #define DMA_ATTR_TO_PRIV_PROT(val)	(((val) >> DMA_ATTR_PRIV_SHIFT) & 0x3)
-/*
- * DMA_ATTR_SYS_CACHE_ONLY: used to indicate that the buffer should be mapped
- * with the correct memory attributes so that it can be cached in the system
- * or last level cache. This is useful for buffers that are being mapped for
- * devices that are non-coherent, but can use the system cache.
- */
-#define DMA_ATTR_SYS_CACHE_ONLY		(1UL << 14)
-
-/*
- * DMA_ATTR_SYS_CACHE_ONLY_NWA: used to indicate that the buffer should be
- * mapped with the correct memory attributes so that it can be cached in the
- * system or last level cache, with a no write allocate cache policy. This is
- * useful for buffers that are being mapped for devices that are non-coherent,
- * but can use the system cache.
- */
-#define DMA_ATTR_SYS_CACHE_ONLY_NWA	(1UL << 15)
 
 /*
  * DMA_ATTR_SYS_CACHE_ONLY: used to indicate that the buffer should be mapped

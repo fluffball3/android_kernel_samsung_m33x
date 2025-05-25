@@ -99,7 +99,6 @@ static void z_erofs_free_pcluster(struct z_erofs_pcluster *pcl)
 /* how to allocate cached pages for a pcluster */
 enum z_erofs_cache_alloctype {
 	DONTALLOC,	/* don't allocate any cached pages */
-
 	/*
 	 * try to use cached I/O if page allocation succeeds or fallback
 	 * to in-place I/O instead to avoid any direct reclaim.
@@ -402,7 +401,7 @@ static void preload_compressed_pages(struct z_erofs_collector *clt,
 		if (!cmpxchg_relaxed(pages, NULL, tagptr_cast_ptr(t)))
 			continue;
 
-		if (page) {
+		if (page)
 			put_page(page);
 		else if (newpage)
 			erofs_pagepool_add(pagepool, newpage);

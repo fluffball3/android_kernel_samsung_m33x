@@ -21,8 +21,11 @@
 #include <linux/sort.h>
 #include <linux/slab.h>
 #include <linux/memblock.h>
+#include <linux/kmemleak.h>
 
-#define MAX_RESERVED_REGIONS	64
+#include "of_private.h"
+
+#define MAX_RESERVED_REGIONS	128
 static struct reserved_mem reserved_mem[MAX_RESERVED_REGIONS];
 static int reserved_mem_count;
 
@@ -31,21 +34,27 @@ static int __init early_init_dt_alloc_reserved_memory_arch(phys_addr_t size,
 	phys_addr_t *res_base)
 {
 	phys_addr_t base;
+	int err = 0;
 
 	end = !end ? MEMBLOCK_ALLOC_ANYWHERE : end;
 	align = !align ? SMP_CACHE_BYTES : align;
-	base = memblock_find_in_range(start, end, size, align);
+	base = memblock_phys_alloc_range(size, align, start, end);
 	if (!base)
 		return -ENOMEM;
 
 	*res_base = base;
-	if (nomap)
-		return memblock_remove(base, size);
+	if (nomap) {
+		err = memblock_mark_nomap(base, size);
+		if (err)
+			memblock_free(base, size);
+	}
 
-	return memblock_reserve(base, size);
+	kmemleak_ignore_phys(base);
+
+	return err;
 }
 
-/**
+/*
  * fdt_reserved_mem_save_node() - save fdt node for second pass initialization
  */
 void __init fdt_reserved_mem_save_node(unsigned long node, const char *uname,
@@ -67,33 +76,7 @@ void __init fdt_reserved_mem_save_node(unsigned long node, const char *uname,
 	return;
 }
 
-#ifdef CONFIG_RBIN
-static phys_addr_t __init get_reserved_size(unsigned long node)
-{
-	int len;
-	const __be32 *prop;
-	phys_addr_t size;
-
-	prop = of_get_flat_dt_prop(node, "reserved_size", &len);
-	if (!prop)
-		return 0;
-
-	if (len != dt_root_size_cells * sizeof(__be32)) {
-		pr_err("invalid reserved_size property in 'rbin' node.\n");
-		return 0;
-	}
-	size = dt_mem_next_cell(dt_root_size_cells, &prop);
-
-	return size;
-}
-
-static bool __init under_8GB_device(void)
-{
-	return memblock_end_of_DRAM() <= 0xa00000000 ? true : false;
-}
-#endif
-
-/**
+/*
  * __reserved_mem_alloc_size() - allocate reserved memory described by
  *	'size', 'alignment'  and 'alloc-ranges' properties.
  */
@@ -117,14 +100,7 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 		return -EINVAL;
 	}
 	size = dt_mem_next_cell(dt_root_size_cells, &prop);
-#ifdef CONFIG_RBIN
-	if (!strncmp(uname, "rbin", 4) && !under_8GB_device()) {
-		phys_addr_t size_temp = get_reserved_size(node);
 
-		if (size_temp > 0)
-			size = size_temp;
-	}
-#endif
 	prop = of_get_flat_dt_prop(node, "alignment", &len);
 	if (prop) {
 		if (len != dt_root_addr_cells * sizeof(__be32)) {
@@ -197,7 +173,7 @@ static int __init __reserved_mem_alloc_size(unsigned long node,
 static const struct of_device_id __rmem_of_table_sentinel
 	__used __section("__reservedmem_of_table_end");
 
-/**
+/*
  * __reserved_mem_init_node() - call region specific reserved memory init code
  */
 static int __init __reserved_mem_init_node(struct reserved_mem *rmem)
@@ -307,33 +283,28 @@ void __init fdt_init_reserved_mem(void)
 			if (err != 0 && err != -ENOENT) {
 				pr_info("node %s compatible matching fail\n",
 					rmem->name);
-				memblock_free(rmem->base, rmem->size);
 				if (nomap)
-					memblock_add(rmem->base, rmem->size);
+					memblock_clear_nomap(rmem->base, rmem->size);
+				else
+					memblock_free(rmem->base, rmem->size);
 			} else {
+				phys_addr_t end = rmem->base + rmem->size - 1;
+
 #ifdef CONFIG_RBIN
 				if (!strcmp(rmem->name, "rbin")) {
-					if (under_8GB_device()) {
-						rbin_total = rmem->size >> PAGE_SHIFT;
-						reusable = true;
-					} else {
-						reusable = false;
-						memblock_memsize_record("camera_heap", rmem->base,
-									rmem->size, nomap,
-									reusable);
-						continue;
-					}
+					rbin_total = rmem->size >> PAGE_SHIFT;
+					reusable = true;
 				}
 #endif
-				phys_addr_t end = rmem->base + rmem->size - 1;
-				bool reusable =
-					(of_get_flat_dt_prop(node, "reusable", NULL)) != NULL;
-
 				pr_info("%pa..%pa (%lu KiB) %s %s %s\n",
 					&rmem->base, &end, (unsigned long)(rmem->size / SZ_1K),
 					nomap ? "nomap" : "map",
 					reusable ? "reusable" : "non-reusable",
 					rmem->name ? rmem->name : "unknown");
+
+				memblock_memsize_record(rmem->name, rmem->base,
+							rmem->size, nomap,
+							reusable);
 			}
 		}
 	}

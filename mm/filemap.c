@@ -2696,8 +2696,6 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	DEFINE_READAHEAD(ractl, file, mapping, vmf->pgoff);
 	struct file *fpin = NULL;
 	unsigned int mmap_miss;
-	unsigned int ra_pages;
-	pgoff_t offset = vmf->pgoff;
 
 	/* If we don't want any read-ahead, don't bother */
 	if (vmf->vma->vm_flags & VM_RAND_READ)
@@ -2707,9 +2705,7 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 
 	if (vmf->vma->vm_flags & VM_SEQ_READ) {
 		fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-		filemap_tracing_mark_begin(file, offset, ra->ra_pages, 1);
 		page_cache_sync_ra(&ractl, ra, ra->ra_pages);
-		filemap_tracing_mark_end();
 		return fpin;
 	}
 
@@ -2729,16 +2725,11 @@ static struct file *do_sync_mmap_readahead(struct vm_fault *vmf)
 	 * mmap read-around
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
-	ra_pages = min_t(unsigned int, ra->ra_pages, mmap_readaround_limit);
-	ra->start = max_t(long, 0, vmf->pgoff - ra_pages / 2);
-	ra->size = ra_pages;
-	ra->async_size = ra_pages / 4;
-	trace_android_vh_tune_mmap_readaround(ra->ra_pages, vmf->pgoff,
-			&ra->start, &ra->size, &ra->async_size);
+	ra->start = max_t(long, 0, vmf->pgoff - ra->ra_pages / 2);
+	ra->size = ra->ra_pages;
+	ra->async_size = ra->ra_pages / 4;
 	ractl._index = ra->start;
-	filemap_tracing_mark_begin(file, offset, ra_pages, 1);
 	do_page_cache_ra(&ractl, ra->size, ra->async_size);
-	filemap_tracing_mark_end();
 	return fpin;
 }
 

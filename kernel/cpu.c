@@ -46,7 +46,6 @@
 #include <trace/hooks/sched.h>
 #include <trace/hooks/cpu.h>
 
-#include "sched/sched.h"
 #include "smpboot.h"
 #include "sched/sched.h"
 

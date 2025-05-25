@@ -6,7 +6,6 @@
 #define HCI_RXPRDT_ENTRY_SIZE		0x04
 #define HCI_TO_CNT_DIV_VAL              0x08
 #define HCI_1US_TO_CNT_VAL		0x0C
- #define CNT_VAL_1US_MASK	0x3ff
 #define HCI_INVALID_UPIU_CTRL		0x10
 #define HCI_INVALID_UPIU_BADDR		0x14
 #define HCI_INVALID_UPIU_UBADDR		0x18
@@ -33,8 +32,6 @@
 #define HCI_UTMRL_NEXUS_TYPE		0x44
 #define HCI_E2EFC_CTRL			0x48
 #define HCI_SW_RST			0x50
- #define UFS_LINK_SW_RST	(1 << 0)
- #define UFS_UNIPRO_SW_RST	(1 << 1)
  #define UFS_SW_RST_MASK	(UFS_UNIPRO_SW_RST | UFS_LINK_SW_RST)
 #define HCI_LINK_VERSION		0x54
 #define HCI_IDLE_TIMER_CONFIG		0x58

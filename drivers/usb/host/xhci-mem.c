@@ -1960,24 +1960,6 @@ static void xhci_vendor_free_dcbaa(struct xhci_hcd *xhci)
 		ops->free_dcbaa(xhci);
 }
 
-static struct xhci_device_context_array *xhci_vendor_alloc_dcbaa(
-		struct xhci_hcd *xhci, gfp_t flags)
-{
-	struct xhci_vendor_ops *ops = xhci_vendor_get_ops(xhci);
-
-	if (ops && ops->alloc_dcbaa)
-		return ops->alloc_dcbaa(xhci, flags);
-	return 0;
-}
-
-static void xhci_vendor_free_dcbaa(struct xhci_hcd *xhci)
-{
-	struct xhci_vendor_ops *ops = xhci_vendor_get_ops(xhci);
-
-	if (ops && ops->free_dcbaa)
-		ops->free_dcbaa(xhci);
-}
-
 void xhci_mem_cleanup(struct xhci_hcd *xhci)
 {
 	struct device	*dev = xhci_to_hcd(xhci)->self.sysdev;

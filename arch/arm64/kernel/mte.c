@@ -143,7 +143,6 @@ void mte_enable_kernel_async(void)
 	if (!system_uses_mte_async_or_asymm_mode())
 		static_branch_enable(&mte_async_or_asymm_mode);
 }
-#endif
 
 void mte_enable_kernel_asymm(void)
 {

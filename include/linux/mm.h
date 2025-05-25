@@ -3463,6 +3463,7 @@ enum rbin_stat_item {
 };
 extern int rbin_oem_func(int cmd, int *stats);
 extern unsigned long rbin_total;
+#endif
 
 #ifdef CONFIG_ANON_VMA_NAME
 int madvise_set_anon_name(struct mm_struct *mm, unsigned long start,

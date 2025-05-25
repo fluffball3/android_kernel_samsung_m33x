@@ -197,7 +197,7 @@ static ssize_t ufs_sec_wb_support_show(struct device *dev,
 	struct ufs_hba *hba = dev_get_drvdata(dev);
 
 	return sprintf(buf, "%s:%s\n", ufs_wb.wb_support ? "Support" : "No support",
-			hba->wb_enabled ? "on" : "off");
+			hba->dev_info.wb_enabled ? "on" : "off");
 }
 static DEVICE_ATTR(sec_wb_support, 0444, ufs_sec_wb_support_show, NULL);
 

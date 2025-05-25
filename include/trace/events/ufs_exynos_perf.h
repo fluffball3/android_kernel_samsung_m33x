@@ -240,6 +240,27 @@ TRACE_EVENT(ufs_perf_lock,
 		__print_symbolic(__entry->i, CTRL_OP))
 );
 
+TRACE_EVENT(ufs_perf_gear,
+	TP_PROTO(const char *event, int p, int n),
+
+	TP_ARGS(event, p, n),
+
+	TP_STRUCT__entry(
+		__string(event, event)
+		__field(int,	p)
+		__field(int,	n)
+	),
+
+	TP_fast_assign(
+		__assign_str(event, event);
+		__entry->p = p;
+		__entry->n = n;
+	),
+
+	TP_printk("prev-gear: %d, change-gear: %d",
+		__entry->p, __entry->n)
+);
+
 DECLARE_EVENT_CLASS(ufshcd_profiling_template,
 	TP_PROTO(const char *dev_name, const char *profile_info, s64 time_us,
 		 int err),

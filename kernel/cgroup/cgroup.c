@@ -747,7 +747,6 @@ EXPORT_SYMBOL_GPL(of_css);
  * reference-counted, to improve performance when child cgroups
  * haven't been created.
  */
-
 struct css_set init_css_set = {
 	.refcount		= REFCOUNT_INIT(1),
 	.dom_cset		= &init_css_set,
@@ -1193,7 +1192,6 @@ static struct css_set *find_css_set(struct css_set *old_cset,
 				    struct cgroup *cgrp)
 {
 	struct cgroup_subsys_state *template[CGROUP_SUBSYS_COUNT] = { };
-	struct ext_css_set *ext_cset;
 	struct css_set *cset;
 	struct list_head tmp_links;
 	struct cgrp_cset_link *link;
@@ -1214,10 +1212,9 @@ static struct css_set *find_css_set(struct css_set *old_cset,
 	if (cset)
 		return cset;
 
-	ext_cset = kzalloc(sizeof(*ext_cset), GFP_KERNEL);
-	if (!ext_cset)
+	cset = kzalloc(sizeof(*cset), GFP_KERNEL);
+	if (!cset)
 		return NULL;
-	cset = &ext_cset->cset;
 
 	/* Allocate all the cgrp_cset_link objects that we'll need */
 	if (allocate_cgrp_cset_links(cgroup_root_count, &tmp_links) < 0) {
@@ -2708,7 +2705,6 @@ void cgroup_migrate_add_src(struct css_set *src_cset,
 			    struct cgroup_mgctx *mgctx)
 {
 	struct cgroup *src_cgrp;
-	struct ext_css_set *ext_src_cset;
 
 	lockdep_assert_held(&cgroup_mutex);
 	lockdep_assert_held(&css_set_lock);
@@ -2722,7 +2718,6 @@ void cgroup_migrate_add_src(struct css_set *src_cset,
 		return;
 
 	src_cgrp = cset_cgroup_from_root(src_cset, dst_cgrp->root);
-	ext_src_cset = container_of(src_cset, struct ext_css_set, cset);
 
 	if (!list_empty(&src_cset->mg_preload_node))
 		return;
@@ -2754,7 +2749,7 @@ void cgroup_migrate_add_src(struct css_set *src_cset,
  */
 int cgroup_migrate_prepare_dst(struct cgroup_mgctx *mgctx)
 {
-	struct ext_css_set *ext_src_set, *tmp_cset;
+	struct css_set *src_cset, *tmp_cset;
 
 	lockdep_assert_held(&cgroup_mutex);
 
@@ -2762,14 +2757,12 @@ int cgroup_migrate_prepare_dst(struct cgroup_mgctx *mgctx)
 	list_for_each_entry_safe(src_cset, tmp_cset, &mgctx->preloaded_src_csets,
 				 mg_preload_node) {
 		struct css_set *dst_cset;
-		struct ext_css_set *ext_dst_cset;
 		struct cgroup_subsys *ss;
 		int ssid;
 
 		dst_cset = find_css_set(src_cset, src_cset->mg_dst_cgrp);
 		if (!dst_cset)
 			return -ENOMEM;
-		ext_dst_cset = container_of(dst_cset, struct ext_css_set, cset);
 
 		WARN_ON_ONCE(src_cset->mg_dst_cset || dst_cset->mg_dst_cset);
 
@@ -3010,7 +3003,7 @@ static int cgroup_update_dfl_csses(struct cgroup *cgrp)
 	DEFINE_CGROUP_MGCTX(mgctx);
 	struct cgroup_subsys_state *d_css;
 	struct cgroup *dsct;
-	struct ext_css_set *ext_src_set;
+	struct css_set *src_cset;
 	bool has_tasks;
 	int ret;
 
@@ -3045,7 +3038,7 @@ static int cgroup_update_dfl_csses(struct cgroup *cgrp)
 		struct task_struct *task, *ntask;
 
 		/* all tasks in src_csets need to be migrated */
-		list_for_each_entry_safe(task, ntask, &ext_src_set->cset.tasks, cg_list)
+		list_for_each_entry_safe(task, ntask, &src_cset->tasks, cg_list)
 			cgroup_migrate_add_task(task, &mgctx);
 	}
 	spin_unlock_irq(&css_set_lock);
@@ -4251,7 +4244,6 @@ int cgroup_add_dfl_cftypes(struct cgroup_subsys *ss, struct cftype *cfts)
 		cft->flags |= __CFTYPE_ONLY_ON_DFL;
 	return cgroup_add_cftypes(ss, cfts);
 }
-EXPORT_SYMBOL_GPL(cgroup_add_dfl_cftypes);
 
 /**
  * cgroup_add_legacy_cftypes - add an array of cftypes for legacy hierarchies
@@ -4981,7 +4973,7 @@ static ssize_t cgroup_threads_write(struct kernfs_open_file *of,
 	struct task_struct *task;
 	const struct cred *saved_cred;
 	ssize_t ret;
-	bool threadgroup_locked;
+	bool locked;
 
 	buf = strstrip(buf);
 
@@ -5015,7 +5007,7 @@ static ssize_t cgroup_threads_write(struct kernfs_open_file *of,
 	ret = cgroup_attach_task(dst_cgrp, task, false);
 
 out_finish:
-	cgroup_procs_write_finish(task, threadgroup_locked);
+	cgroup_procs_write_finish(task, locked);
 out_unlock:
 	cgroup_kn_unlock(of->kn);
 

@@ -63,11 +63,6 @@ struct arm64_ftr_bits {
 	s64		safe_val; /* safe value for FTR_EXACT features */
 };
 
-struct arm64_ftr_override {
-	u64		val;
-	u64		mask;
-};
-
 /*
  * Describe the early feature override to the core override code:
  *

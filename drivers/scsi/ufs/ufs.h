@@ -612,6 +612,8 @@ struct ufs_dev_info {
 	u8	*model;
 	u16	wspecversion;
 	u32	clk_gating_wait_us;
+	u32 d_ext_ufs_feature_sup;
+	u32 d_wb_alloc_units;
 
 	/* UFS HPB related flag */
 	bool	hpb_enabled;

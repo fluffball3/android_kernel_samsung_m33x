@@ -40,9 +40,6 @@
 #include <net/inet_ecn.h>
 #include <net/dst.h>
 #include <net/mptcp.h>
-#ifdef CONFIG_SKB_TRACER
-#include <net/skb_tracer.h>
-#endif
 
 #include <linux/seq_file.h>
 #include <linux/memcontrol.h>
@@ -51,7 +48,9 @@
 
 extern struct inet_hashinfo tcp_hashinfo;
 
-extern struct percpu_counter tcp_orphan_count;
+DECLARE_PER_CPU(unsigned int, tcp_orphan_count);
+int tcp_orphan_count_sum(void);
+
 void tcp_time_wait(struct sock *sk, int state, int timeo);
 
 #define MAX_TCP_HEADER	L1_CACHE_ALIGN(128 + MAX_HEADER)
@@ -295,19 +294,6 @@ static inline bool tcp_out_of_memory(struct sock *sk)
 }
 
 void sk_forced_mem_schedule(struct sock *sk, int size);
-
-static inline bool tcp_too_many_orphans(struct sock *sk, int shift)
-{
-	struct percpu_counter *ocp = sk->sk_prot->orphan_count;
-	int orphans = percpu_counter_read_positive(ocp);
-
-	if (orphans << shift > sysctl_tcp_max_orphans) {
-		orphans = percpu_counter_sum_positive(ocp);
-		if (orphans << shift > sysctl_tcp_max_orphans)
-			return true;
-	}
-	return false;
-}
 
 bool tcp_check_oom(struct sock *sk, int shift);
 
@@ -1883,10 +1869,6 @@ static inline void tcp_rtx_queue_unlink(struct sk_buff *skb, struct sock *sk)
 {
 	tcp_skb_tsorted_anchor_cleanup(skb);
 	rb_erase(&skb->rbnode, &sk->tcp_rtx_queue);
-
-#ifdef CONFIG_SKB_TRACER
-	skb_tracer_unmask(skb, sk->tcp_rtx_queue.mask);
-#endif
 }
 
 static inline void tcp_rtx_queue_unlink_and_free(struct sk_buff *skb, struct sock *sk)

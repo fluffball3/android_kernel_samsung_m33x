@@ -11,10 +11,6 @@
 #include <linux/rwsem.h>
 #include <linux/memcontrol.h>
 #include <linux/highmem.h>
-#ifndef __GENKSYMS__
-#define PROTECT_TRACE_INCLUDE_PATH
-#include <trace/hooks/mm.h>
-#endif
 
 /*
  * The anon_vma heads a list of private "related" vmas, to scan if
@@ -216,12 +212,7 @@ void hugepage_add_new_anon_rmap(struct page *, struct vm_area_struct *,
 
 static inline void page_dup_rmap(struct page *page, bool compound)
 {
-	bool success = false;
-
-	if (!compound)
-		trace_android_vh_update_page_mapcount(page, true, compound, NULL, &success);
-	if (!success)
-		atomic_inc(compound ? compound_mapcount_ptr(page) : &page->_mapcount);
+	atomic_inc(compound ? compound_mapcount_ptr(page) : &page->_mapcount);
 }
 
 /*
@@ -300,9 +291,6 @@ struct rmap_walk_control {
 	 * Return false if page table scanning in rmap_walk should be stopped.
 	 * Otherwise, return true.
 	 */
-#ifdef CONFIG_PAGE_BOOST
-	int ret;
-#endif
 	bool (*rmap_one)(struct page *page, struct vm_area_struct *vma,
 					unsigned long addr, void *arg);
 	int (*done)(struct page *page);

@@ -587,7 +587,6 @@ void *kvmalloc_node(size_t size, gfp_t flags, int node)
 {
 	gfp_t kmalloc_flags = flags;
 	void *ret;
-	bool use_vmalloc = false;
 
 	/*
 	 * vmalloc uses GFP_KERNEL for some internal allocations (e.g page tables)
@@ -595,10 +594,6 @@ void *kvmalloc_node(size_t size, gfp_t flags, int node)
 	 */
 	if ((flags & GFP_KERNEL) != GFP_KERNEL)
 		return kmalloc_node(size, flags, node);
-
-	trace_android_vh_kvmalloc_node_use_vmalloc(size, &kmalloc_flags, &use_vmalloc);
-	if (use_vmalloc)
-		goto use_vmalloc_node;
 
 	/*
 	 * We want to attempt a large physically contiguous block first because
@@ -629,7 +624,6 @@ void *kvmalloc_node(size_t size, gfp_t flags, int node)
 		return NULL;
 	}
 
-use_vmalloc_node:
 	return __vmalloc_node(size, 1, flags, node,
 			__builtin_return_address(0));
 }

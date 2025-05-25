@@ -684,10 +684,9 @@ static int usb_gadget_connect_locked(struct usb_gadget *gadget)
 		goto out;
 	}
 
-	gadget->connected = 1;
 	ret = gadget->ops->pullup(gadget, 1);
-	if (ret)
-		gadget->connected = 0;
+	if (!ret)
+		gadget->connected = 1;
 
 out:
 	trace_usb_gadget_connect(gadget, ret);
@@ -1091,6 +1090,8 @@ void usb_gadget_set_state(struct usb_gadget *gadget,
 	schedule_work(&gadget->work);
 }
 EXPORT_SYMBOL_GPL(usb_gadget_set_state);
+
+/* ------------------------------------------------------------------------- */
 
 /* Acquire connect_lock before calling this function. */
 static void usb_udc_connect_control_locked(struct usb_udc *udc) __must_hold(&connect_lock)
@@ -1585,16 +1586,6 @@ static int udc_bind_to_driver(struct usb_udc *udc, struct usb_gadget_driver *dri
 
 	kobject_uevent(&udc->dev.kobj, KOBJ_CHANGE);
 	return 0;
-
-err_connect_control:
-	usb_gadget_disable_async_callbacks(udc);
-	if (udc->gadget->irq)
-		synchronize_irq(udc->gadget->irq);
-	usb_gadget_udc_stop(udc);
-
-err_start:
-	driver->unbind(udc->gadget);
-
 err1:
 	if (ret != -EISNAM)
 		dev_err(&udc->dev, "failed to start %s: %d\n",

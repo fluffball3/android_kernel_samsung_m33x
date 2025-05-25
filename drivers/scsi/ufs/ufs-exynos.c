@@ -63,6 +63,7 @@ static int ufs_host_index = 0;
 static const char *res_token[2] = {
 	"passes",
 	"fails",
+};
 
 	/*
  * Exynos's Vendor specific registers for UFSHCI

@@ -26,7 +26,6 @@
 #include <sound/soc-dpcm.h>
 #include <sound/soc-link.h>
 #include <sound/initval.h>
-#include <trace/hooks/sound.h>
 
 #define DPCM_MAX_BE_USERS	8
 
@@ -1273,15 +1272,12 @@ int dpcm_path_get(struct snd_soc_pcm_runtime *fe,
 {
 	struct snd_soc_dai *cpu_dai = asoc_rtd_to_cpu(fe, 0);
 	int paths;
-	bool chaining = false;
 
 	if (fe->num_cpus > 1) {
 		dev_err(fe->dev,
 			"%s doesn't support Multi CPU yet\n", __func__);
 		return -EINVAL;
 	}
-
-	trace_android_vh_snd_soc_card_get_comp_chain(&chaining);
 
 	/* get number of valid DAI paths and their widgets */
 	paths = snd_soc_dapm_dai_get_connected_widgets(cpu_dai, stream, list,
@@ -2090,23 +2086,17 @@ static int dpcm_do_trigger(struct snd_soc_dpcm *dpcm,
 	return ret;
 }
 
-static int dpcm_can_be_free_stop_unlocked(struct snd_soc_pcm_runtime *fe,
-		struct snd_soc_pcm_runtime *be, int stream);
-
 int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 			       int cmd)
 {
-	struct snd_soc_pcm_runtime *be;
 	struct snd_soc_dpcm *dpcm;
 	int ret = 0;
-	unsigned long flags;
 
-	spin_lock_irqsave(&fe->card->dpcm_lock, flags);
 	for_each_dpcm_be(fe, stream, dpcm) {
-		struct snd_pcm_substream *be_substream;
 
-		be = dpcm->be;
-		be_substream = snd_soc_dpcm_get_substream(be, stream);
+		struct snd_soc_pcm_runtime *be = dpcm->be;
+		struct snd_pcm_substream *be_substream =
+			snd_soc_dpcm_get_substream(be, stream);
 
 		/* is this op for this BE ? */
 		if (!snd_soc_dpcm_be_can_update(fe, be, stream))
@@ -2121,7 +2111,7 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_START;
 			break;
@@ -2131,7 +2121,7 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_START;
 			break;
@@ -2141,7 +2131,7 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_START;
 			break;
@@ -2150,12 +2140,12 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 			    (be->dpcm[stream].state != SND_SOC_DPCM_STATE_PAUSED))
 				continue;
 
-			if (!dpcm_can_be_free_stop_unlocked(fe, be, stream))
+			if (!snd_soc_dpcm_can_be_free_stop(fe, be, stream))
 				continue;
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_STOP;
 			break;
@@ -2163,12 +2153,12 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 			if (be->dpcm[stream].state != SND_SOC_DPCM_STATE_START)
 				continue;
 
-			if (!dpcm_can_be_free_stop_unlocked(fe, be, stream))
+			if (!snd_soc_dpcm_can_be_free_stop(fe, be, stream))
 				continue;
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_SUSPEND;
 			break;
@@ -2176,22 +2166,18 @@ int dpcm_be_dai_trigger(struct snd_soc_pcm_runtime *fe, int stream,
 			if (be->dpcm[stream].state != SND_SOC_DPCM_STATE_START)
 				continue;
 
-			if (!dpcm_can_be_free_stop_unlocked(fe, be, stream))
+			if (!snd_soc_dpcm_can_be_free_stop(fe, be, stream))
 				continue;
 
 			ret = dpcm_do_trigger(dpcm, be_substream, cmd);
 			if (ret)
-				goto end;
+				return ret;
 
 			be->dpcm[stream].state = SND_SOC_DPCM_STATE_PAUSED;
 			break;
 		}
 	}
-end:
-	spin_unlock_irqrestore(&fe->card->dpcm_lock, flags);
-	if (ret < 0)
-		dev_err(fe->dev, "ASoC: %s() failed at %s (%d)\n",
-			__func__, be->dai_link->name, ret);
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(dpcm_be_dai_trigger);
@@ -2935,9 +2921,10 @@ static int snd_soc_dpcm_check_state(struct snd_soc_pcm_runtime *fe,
 	struct snd_soc_dpcm *dpcm;
 	int state;
 	int ret = 1;
+	unsigned long flags;
 	int i;
 
-	lockdep_assert_held(&fe->card->dpcm_lock);
+	spin_lock_irqsave(&fe->card->dpcm_lock, flags);
 	for_each_dpcm_fe(be, stream, dpcm) {
 
 		if (dpcm->fe == fe)
@@ -2951,22 +2938,10 @@ static int snd_soc_dpcm_check_state(struct snd_soc_pcm_runtime *fe,
 			}
 		}
 	}
+	spin_unlock_irqrestore(&fe->card->dpcm_lock, flags);
 
 	/* it's safe to do this BE DAI */
 	return ret;
-}
-
-int dpcm_can_be_free_stop_unlocked(struct snd_soc_pcm_runtime *fe,
-		struct snd_soc_pcm_runtime *be, int stream)
-{
-
-	const enum snd_soc_dpcm_state state[] = {
-		SND_SOC_DPCM_STATE_START,
-		SND_SOC_DPCM_STATE_PAUSED,
-		SND_SOC_DPCM_STATE_SUSPEND,
-	};
-
-	return snd_soc_dpcm_check_state(fe, be, stream, state, ARRAY_SIZE(state));
 }
 
 /*
@@ -2976,14 +2951,13 @@ int dpcm_can_be_free_stop_unlocked(struct snd_soc_pcm_runtime *fe,
 int snd_soc_dpcm_can_be_free_stop(struct snd_soc_pcm_runtime *fe,
 		struct snd_soc_pcm_runtime *be, int stream)
 {
-	unsigned long flags;
-	int ret;
+	const enum snd_soc_dpcm_state state[] = {
+		SND_SOC_DPCM_STATE_START,
+		SND_SOC_DPCM_STATE_PAUSED,
+		SND_SOC_DPCM_STATE_SUSPEND,
+	};
 
-	spin_lock_irqsave(&fe->card->dpcm_lock, flags);
-	ret =  dpcm_can_be_free_stop_unlocked(fe, be, stream);
-	spin_unlock_irqrestore(&fe->card->dpcm_lock, flags);
-
-	return ret;
+	return snd_soc_dpcm_check_state(fe, be, stream, state, ARRAY_SIZE(state));
 }
 EXPORT_SYMBOL_GPL(snd_soc_dpcm_can_be_free_stop);
 
@@ -2994,9 +2968,6 @@ EXPORT_SYMBOL_GPL(snd_soc_dpcm_can_be_free_stop);
 int snd_soc_dpcm_can_be_params(struct snd_soc_pcm_runtime *fe,
 		struct snd_soc_pcm_runtime *be, int stream)
 {
-	unsigned long flags;
-	int ret;
-
 	const enum snd_soc_dpcm_state state[] = {
 		SND_SOC_DPCM_STATE_START,
 		SND_SOC_DPCM_STATE_PAUSED,
@@ -3004,11 +2975,7 @@ int snd_soc_dpcm_can_be_params(struct snd_soc_pcm_runtime *fe,
 		SND_SOC_DPCM_STATE_PREPARE,
 	};
 
-	spin_lock_irqsave(&fe->card->dpcm_lock, flags);
-	ret = snd_soc_dpcm_check_state(fe, be, stream, state, ARRAY_SIZE(state));
-	spin_unlock_irqrestore(&fe->card->dpcm_lock, flags);
-
-	return ret;
+	return snd_soc_dpcm_check_state(fe, be, stream, state, ARRAY_SIZE(state));
 }
 EXPORT_SYMBOL_GPL(snd_soc_dpcm_can_be_params);
 

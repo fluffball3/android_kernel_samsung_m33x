@@ -234,8 +234,9 @@ static int dbg_snapshot_on_accessable_stack(const struct task_struct *tsk,
 						unsigned long sp)
 {
 	struct stack_info __maybe_unused info;
+	unsigned long size = 0;      //size doesn't matter
 
-	if (on_task_stack(tsk, sp, &info))
+	if (on_task_stack(tsk, sp, size, &info))
 		return true;
 	if (tsk != current || preemptible())
 		return false;

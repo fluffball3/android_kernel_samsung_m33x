@@ -242,20 +242,6 @@ static inline bool selinux_policycap_ioctl_skip_cloexec(void)
 	return READ_ONCE(state->policycap[POLICYDB_CAPABILITY_IOCTL_SKIP_CLOEXEC]);
 }
 
-static inline bool selinux_android_nlroute_getlink(void)
-{
-	struct selinux_state *state = &selinux_state;
-
-	return state->android_netlink_route;
-}
-
-static inline bool selinux_android_nlroute_getneigh(void)
-{
-	struct selinux_state *state = &selinux_state;
-
-	return state->android_netlink_getneigh;
-}
-
 struct selinux_policy_convert_data;
 
 struct selinux_load_state {

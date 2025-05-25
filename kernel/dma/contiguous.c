@@ -50,7 +50,6 @@
 #include <linux/sizes.h>
 #include <linux/dma-map-ops.h>
 #include <linux/cma.h>
-#include <trace/hooks/mm.h>
 
 #ifdef CONFIG_CMA_SIZE_MBYTES
 #define CMA_SIZE_MBYTES CONFIG_CMA_SIZE_MBYTES
@@ -231,21 +230,16 @@ int __init dma_contiguous_reserve_area(phys_addr_t size, phys_addr_t base,
 {
 	int ret;
 
-	memblock_memsize_disable_tracking();
 	ret = cma_declare_contiguous(base, size, limit, 0, 0, fixed,
 					"reserved", res_cma);
 	if (ret)
-		goto out;
+		return ret;
 
 	/* Architecture specific contiguous memory fixup. */
 	dma_contiguous_early_fixup(cma_get_base(*res_cma),
 				cma_get_size(*res_cma));
 
-	memblock_memsize_record("dma_cma", cma_get_base(*res_cma),
-				cma_get_size(*res_cma), false, true);
-out:
-	memblock_memsize_enable_tracking();
-	return ret;
+	return 0;
 }
 
 /**
@@ -314,19 +308,14 @@ struct page *dma_alloc_contiguous(struct device *dev, size_t size, gfp_t gfp)
 #ifdef CONFIG_DMA_PERNUMA_CMA
 	int nid = dev_to_node(dev);
 #endif
-	bool allow_subpage_alloc = false;
 
 	/* CMA can be used only in the context which permits sleeping */
 	if (!gfpflags_allow_blocking(gfp))
 		return NULL;
 	if (dev->cma_area)
 		return cma_alloc_aligned(dev->cma_area, size, gfp);
-
-	if (size <= PAGE_SIZE) {
-		trace_android_vh_subpage_dma_contig_alloc(&allow_subpage_alloc, dev, &size);
-		if (!allow_subpage_alloc)
-			return NULL;
-	}
+	if (size <= PAGE_SIZE)
+		return NULL;
 
 #ifdef CONFIG_DMA_PERNUMA_CMA
 	if (nid != NUMA_NO_NODE && !(gfp & (GFP_DMA | GFP_DMA32))) {

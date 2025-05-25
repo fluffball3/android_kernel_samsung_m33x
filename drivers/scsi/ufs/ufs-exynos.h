@@ -82,15 +82,6 @@ enum exynos_ufs_ah8_state {
 	UFS_STATE_IDLE,
 };
 
-/* UFSHCD states */
-enum {
-	UFSHCD_STATE_RESET,
-	UFSHCD_STATE_ERROR,
-	UFSHCD_STATE_OPERATIONAL,
-	UFSHCD_STATE_EH_SCHEDULED_FATAL,
-	UFSHCD_STATE_EH_SCHEDULED_NON_FATAL,
-};
-
 struct exynos_ufs {
 	struct device *dev;
 	struct ufs_hba *hba;

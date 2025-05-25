@@ -234,7 +234,7 @@ static int ufs_sec_wb_ctrl(struct ufs_hba *hba, bool enable, bool force)
 		return 0;
 	}
 
-	if (!(enable ^ hba->wb_enabled)) {
+	if (!(enable ^ hba->dev_info.wb_enabled)) {
 		pr_info("%s: write booster is already %s\n",
 				__func__, enable ? "enabled" : "disabled");
 		return 0;
@@ -255,7 +255,7 @@ static int ufs_sec_wb_ctrl(struct ufs_hba *hba, bool enable, bool force)
 	pm_runtime_put(hba->dev);
 
 	if (!ret) {
-		hba->wb_enabled = enable;
+		hba->dev_info.wb_enabled = enable;
 		pr_info("%s: SEC write booster %s, current WB state is %d.\n",
 				__func__, enable ? "enable" : "disable",
 				ufs_wb.state);
@@ -278,7 +278,7 @@ static void ufs_sec_wb_on_work_func(struct work_struct *work)
 		spin_lock_irqsave(hba->host->host_lock, flags);
 
 		dev_err(hba->dev, "%s: write booster on failed %d, now WB is %s, state is %d.\n", __func__,
-				ret, hba->wb_enabled ? "on" : "off",
+				ret, hba->dev_info.wb_enabled ? "on" : "off",
 				ufs_wb.state);
 
 		/*
@@ -294,7 +294,7 @@ static void ufs_sec_wb_on_work_func(struct work_struct *work)
 	}
 
 	dev_dbg(hba->dev, "%s: WB %s, count %d, ret %d.\n", __func__,
-			hba->wb_enabled ? "on" : "off",
+			hba->dev_info.wb_enabled ? "on" : "off",
 			ufs_wb.wb_current_rqs, ret);
 }
 
@@ -312,7 +312,7 @@ static void ufs_sec_wb_off_work_func(struct work_struct *work)
 		spin_lock_irqsave(hba->host->host_lock, flags);
 
 		dev_err(hba->dev, "%s: write booster off failed %d, now WB is %s, state is %d.\n", __func__,
-				ret, hba->wb_enabled ? "on" : "off",
+				ret, hba->dev_info.wb_enabled ? "on" : "off",
 				ufs_wb.state);
 
 		/*
@@ -331,7 +331,7 @@ static void ufs_sec_wb_off_work_func(struct work_struct *work)
 	}
 
 	dev_dbg(hba->dev, "%s: WB %s, count %d, ret %d.\n", __func__,
-			hba->wb_enabled ? "on" : "off",
+			hba->dev_info.wb_enabled ? "on" : "off",
 			ufs_wb.wb_current_rqs, ret);
 }
 
@@ -1567,7 +1567,7 @@ static void sec_android_vh_ufs_compl_command(void *data, struct ufs_hba *hba, st
 			ufs_wb.wb_current_block -= ufs_cmd.transfer_len;
 			ufs_wb.wb_current_rqs--;
 
-			if (hba->wb_enabled)
+			if (hba->dev_info.wb_enabled)
 				ufs_wb.wb_curr_issued_block += (unsigned int)ufs_cmd.transfer_len;
 
 			ufs_sec_wb_update_state(hba);

@@ -84,19 +84,6 @@ enum ufs_event_type {
 	UFS_EVT_CNT,
 };
 
-/* UFSHCD error handling flags */
-enum {
-	UFSHCD_EH_IN_PROGRESS = (1 << 0),
-};
-
-#define ufshcd_set_eh_in_progress(h) \
-	((h)->eh_flags |= UFSHCD_EH_IN_PROGRESS)
-#define ufshcd_eh_in_progress(h) \
-	((h)->eh_flags & UFSHCD_EH_IN_PROGRESS)
-#define ufshcd_clear_eh_in_progress(h) \
-	((h)->eh_flags &= ~UFSHCD_EH_IN_PROGRESS)
-
-
 /**
  * struct uic_command - UIC command structure
  * @command: UIC command
@@ -902,12 +889,7 @@ struct ufs_hba {
 
 	struct blk_mq_tag_set tmf_tag_set;
 	struct request_queue *tmf_queue;
-#if 0
-	/*
-	 * This has been moved into struct ufs_hba_add_info because of the GKI.
-	 */
 	struct request **tmf_rqs;
-#endif
 
 	struct uic_command *active_uic_cmd;
 	struct mutex uic_cmd_mutex;
@@ -1037,12 +1019,6 @@ static inline bool ufshcd_can_aggressive_pc(struct ufs_hba *hba)
 		  (hba->caps & UFSHCD_CAP_AGGR_POWER_COLLAPSE));
 }
 
-static inline bool ufshcd_can_aggressive_pc(struct ufs_hba *hba)
-{
-	return !!(ufshcd_is_link_hibern8(hba) &&
-		  (hba->caps & UFSHCD_CAP_AGGR_POWER_COLLAPSE));
-}
-
 static inline bool ufshcd_is_auto_hibern8_supported(struct ufs_hba *hba)
 {
 	return (hba->capabilities & MASK_AUTO_HIBERN8_SUPPORT) &&
@@ -1102,11 +1078,6 @@ int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
 void ufshcd_parse_dev_ref_clk_freq(struct ufs_hba *hba, struct clk *refclk);
 void ufshcd_update_evt_hist(struct ufs_hba *hba, u32 id, u32 val);
 void ufshcd_hba_stop(struct ufs_hba *hba);
-void ufshcd_complete_requests(struct ufs_hba *hba);
-void ufshcd_release_scsi_cmd(struct ufs_hba *hba,
-				    struct ufshcd_lrb *lrbp);
-void ufshcd_err_handling_prepare(struct ufs_hba *hba);
-void ufshcd_err_handling_unprepare(struct ufs_hba *hba);
 void ufshcd_schedule_eh_work(struct ufs_hba *hba);
 
 static inline void check_upiu_size(void)
@@ -1253,9 +1224,6 @@ int ufshcd_query_attr_retry(struct ufs_hba *hba, enum query_opcode opcode,
 			    u32 *attr_val);
 int ufshcd_query_attr(struct ufs_hba *hba, enum query_opcode opcode,
 		      enum attr_idn idn, u8 index, u8 selector, u32 *attr_val);
-int ufshcd_query_attr_retry(struct ufs_hba *hba,
-	enum query_opcode opcode, enum attr_idn idn, u8 index, u8 selector,
-	u32 *attr_val);
 int ufshcd_query_flag(struct ufs_hba *hba, enum query_opcode opcode,
 	enum flag_idn idn, u8 index, bool *flag_res);
 int ufshcd_query_flag_retry(struct ufs_hba *hba,
@@ -1323,11 +1291,6 @@ static inline u32 ufshcd_vops_get_ufs_hci_version(struct ufs_hba *hba)
 		return hba->vops->get_ufs_hci_version(hba);
 
 	return ufshcd_readl(hba, REG_UFS_VERSION);
-}
-
-static inline bool ufshcd_has_utrlcnr(struct ufs_hba *hba)
-{
-	return (hba->ufs_version >= ufshci_version(3, 0));
 }
 
 static inline int ufshcd_vops_clk_scale_notify(struct ufs_hba *hba,
@@ -1477,8 +1440,7 @@ static inline u8 ufshcd_scsi_to_upiu_lun(unsigned int scsi_lun)
 
 int ufshcd_dump_regs(struct ufs_hba *hba, size_t offset, size_t len,
 		     const char *prefix);
-int ufshcd_uic_hibern8_enter(struct ufs_hba *hba);
-int ufshcd_uic_hibern8_exit(struct ufs_hba *hba);
+
 int __ufshcd_write_ee_control(struct ufs_hba *hba, u32 ee_ctrl_mask);
 int ufshcd_write_ee_control(struct ufs_hba *hba);
 int ufshcd_update_ee_control(struct ufs_hba *hba, u16 *mask, u16 *other_mask,

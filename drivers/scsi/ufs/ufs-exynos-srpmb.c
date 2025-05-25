@@ -32,9 +32,6 @@ struct scsi_device *exynos_ufs_srpmb_sdev(void)
 	if (!hba_srpmb->sdev_ufs_device)
 		return NULL;
 
-	if (!hba_srpmb->sdev_rpmb)
-		return NULL;
-
-	return hba_srpmb->sdev_rpmb;
+	return hba_srpmb->sdev_ufs_device;
 }
 EXPORT_SYMBOL(exynos_ufs_srpmb_sdev);
