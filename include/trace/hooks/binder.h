@@ -6,7 +6,6 @@
 #if !defined(_TRACE_HOOK_BINDER_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _TRACE_HOOK_BINDER_H
 #include <trace/hooks/vendor_hooks.h>
-
 /*
  * Following tracepoints are not exported in tracefs and provide a
  * mechanism for vendor modules to hook and extend functionality

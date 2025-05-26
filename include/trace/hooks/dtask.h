@@ -10,7 +10,6 @@
  * Following tracepoints are not exported in tracefs and provide a
  * mechanism for vendor modules to hook and extend functionality
  */
-
 struct mutex;
 struct rt_mutex;
 struct rw_semaphore;

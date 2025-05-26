@@ -277,6 +277,7 @@ DECLARE_RESTRICTED_HOOK(android_rvh_replace_next_task_fair,
 	TP_PROTO(struct rq *rq, struct task_struct **p, struct sched_entity **se, bool *repick,
 			bool simple, struct task_struct *prev),
 	TP_ARGS(rq, p, se, repick, simple, prev), 1);
+
 DECLARE_RESTRICTED_HOOK(android_rvh_util_est_update,
 	TP_PROTO(struct cfs_rq *cfs_rq, struct task_struct *p, bool task_sleep, int *ret),
 	TP_ARGS(cfs_rq, p, task_sleep, ret), 1);
@@ -420,7 +421,6 @@ DECLARE_HOOK(android_vh_mmput,
 DECLARE_HOOK(android_vh_rebuild_root_domains_bypass,
 	TP_PROTO(bool tasks_frozen, bool *bypass),
 	TP_ARGS(tasks_frozen, bypass));
-
 /* macro versions of hooks are no longer required */
 
 #endif /* _TRACE_HOOK_SCHED_H */
