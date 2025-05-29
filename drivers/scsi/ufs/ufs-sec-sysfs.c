@@ -653,8 +653,10 @@ void ufs_sec_remove_sysfs_nodes(struct ufs_hba *hba)
 		sysfs_remove_group(&sec_ufs_cmd_dev->kobj,
 				&sec_ufs_info_attribute_group);
 
+#if IS_ENABLED(CONFIG_SEC_UFS_CMD_LOGGING)
 		sysfs_remove_group(&sec_ufs_cmd_dev->kobj,
 				&sec_ufs_cmd_log_attribute_group);
+#endif
 	}
 
 	if (shost_dev)

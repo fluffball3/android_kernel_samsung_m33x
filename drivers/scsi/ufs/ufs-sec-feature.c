@@ -13,7 +13,6 @@
 #include <linux/irqreturn.h>
 #include <asm/unaligned.h>
 #include <trace/hooks/ufshcd.h>
-#include <linux/panic_notifier.h>
 #include <linux/reboot.h>
 
 #include "ufs-sec-feature.h"

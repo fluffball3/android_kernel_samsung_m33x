@@ -42,7 +42,7 @@
 #include <trace/events/ufs_exynos_perf.h>
 
 #ifndef CONFIG_SCSI_UFS_EXYNOS_BLOCK_WDT_RST
-#include <soc/samsung/exynos/debug-snapshot.h>
+#include <soc/samsung/debug-snapshot.h>
 #endif
 
 #include "../scsi_priv.h"
@@ -2525,7 +2525,6 @@ static void __ufs_resume_async(struct work_struct *work)
 static int exynos_ufs_itmon_notifier(struct notifier_block *nb,
 		unsigned long action, void *nb_data)
 {
-	struct exynos_ufs *ufs = container_of(nb, struct exynos_ufs, itmon_nb);
 	struct itmon_notifier *itmon_data = nb_data;
 	int size;
 
@@ -2536,7 +2535,6 @@ static int exynos_ufs_itmon_notifier(struct notifier_block *nb,
 	if ((itmon_data->master && !strncmp("UFS", itmon_data->master, size)) ||
 			(itmon_data->dest && !strncmp("UFS", itmon_data->dest,
 				size))) {
-		exynos_ufs_dump_info(hba, &ufs->handle, ufs->dev);
 #if !IS_ENABLED(CONFIG_SAMSUNG_PRODUCT_SHIP)
 #ifndef CONFIG_SCSI_UFS_EXYNOS_BLOCK_WDT_RST
 		dbg_snapshot_expire_watchdog();

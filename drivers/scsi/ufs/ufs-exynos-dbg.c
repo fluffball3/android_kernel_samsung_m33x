@@ -15,7 +15,7 @@
 
 #include "ufshcd.h"
 #include <soc/samsung/exynos-smc.h>
-#include <soc/samsung/exynos/memlogger.h>
+#include <soc/samsung/memlogger.h>
 #include "ufs-vs-mmio.h"
 #include "ufs-vs-regs.h"
 #include "ufs-dump.h"

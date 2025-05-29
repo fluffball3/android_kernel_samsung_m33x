@@ -253,7 +253,6 @@ static struct page *alloc_freepage_one(struct zone *zone, unsigned int order,
 				area->nr_free--;
 				expand(zone, page, order,
 				       current_order, area, mt);
-				set_pcppage_migratetype(page, mt);
 
 				return page;
 			}

@@ -42,11 +42,6 @@ static inline void count_compact_events(enum vm_event_item item, long delta)
 
 #if defined CONFIG_COMPACTION || defined CONFIG_CMA
 
-#define CREATE_TRACE_POINTS
-#include <trace/events/compaction.h>
-#undef CREATE_TRACE_POINTS
-#include <trace/hooks/mm.h>
-
 #define block_start_pfn(pfn, order)	round_down(pfn, 1UL << (order))
 #define block_end_pfn(pfn, order)	ALIGN((pfn) + 1, 1UL << (order))
 #define pageblock_start_pfn(pfn)	block_start_pfn(pfn, pageblock_order)
@@ -169,8 +164,6 @@ void defer_compaction(struct zone *zone, int order)
 
 	if (zone->compact_defer_shift > COMPACT_MAX_DEFER_SHIFT)
 		zone->compact_defer_shift = COMPACT_MAX_DEFER_SHIFT;
-
-	trace_mm_compaction_defer_compaction(zone, order);
 }
 
 /* Returns true if compaction should be skipped this time */
@@ -186,8 +179,6 @@ bool compaction_deferred(struct zone *zone, int order)
 		zone->compact_considered = defer_limit;
 		return false;
 	}
-
-	trace_mm_compaction_deferred(zone, order);
 
 	return true;
 }
@@ -206,8 +197,6 @@ void compaction_defer_reset(struct zone *zone, int order,
 	}
 	if (order >= zone->compact_order_failed)
 		zone->compact_order_failed = order + 1;
-
-	trace_mm_compaction_defer_reset(zone, order);
 }
 
 /* Returns true if restarting compaction after many failures */
@@ -664,9 +653,6 @@ isolate_fail:
 	if (unlikely(blockpfn > end_pfn))
 		blockpfn = end_pfn;
 
-	trace_mm_compaction_isolate_freepages(*start_pfn, blockpfn,
-					nr_scanned, total_isolated);
-
 	/* Record how far we have got within the block */
 	*start_pfn = blockpfn;
 
@@ -834,7 +820,6 @@ isolate_migratepages_block(struct compact_control_ext *cc_ext, unsigned long low
 	unsigned long flags = 0;
 	bool locked = false;
 	struct page *page = NULL, *valid_page = NULL;
-	unsigned long start_pfn = low_pfn;
 	bool skip_on_failure = false;
 	unsigned long next_skip_pfn = 0;
 	bool skip_updated = false;
@@ -1116,9 +1101,6 @@ isolate_abort:
 			set_pageblock_skip(valid_page);
 		update_cached_migrate(cc, low_pfn);
 	}
-
-	trace_mm_compaction_isolate_migratepages(start_pfn, low_pfn,
-						nr_scanned, nr_isolated);
 
 fatal_pending:
 	cc->total_migrate_scanned += nr_scanned;
@@ -2102,7 +2084,6 @@ static enum compact_result compact_finished(struct compact_control *cc)
 	int ret;
 
 	ret = __compact_finished(cc);
-	trace_mm_compaction_finished(cc->zone, cc->order, ret);
 	if (ret == COMPACT_NO_SUITABLE_PAGE)
 		ret = COMPACT_CONTINUE;
 
@@ -2190,7 +2171,6 @@ enum compact_result compaction_suitable(struct zone *zone, int order,
 			ret = COMPACT_NOT_SUITABLE_ZONE;
 	}
 
-	trace_mm_compaction_suitable(zone, order, ret);
 	if (ret == COMPACT_NOT_SUITABLE_ZONE)
 		ret = COMPACT_SKIPPED;
 
@@ -2238,7 +2218,6 @@ compact_zone(struct compact_control *cc, struct capture_control *capc)
 	unsigned long last_migrated_pfn;
 	const bool sync = cc->mode != MIGRATE_ASYNC;
 	bool update_cached;
-	long vendor_ret;
 	struct compact_control_ext cc_ext = {
 		.cc = cc,
 		.nr_migrate_file_pages = 0,
@@ -2312,10 +2291,6 @@ compact_zone(struct compact_control *cc, struct capture_control *capc)
 	update_cached = !sync &&
 		cc->zone->compact_cached_migrate_pfn[0] == cc->zone->compact_cached_migrate_pfn[1];
 
-	trace_mm_compaction_begin(start_pfn, cc->migrate_pfn,
-				cc->free_pfn, end_pfn, sync);
-	trace_android_vh_mm_compaction_begin(cc, &vendor_ret);
-
 	/* lru_add_drain_all could be expensive with involving other CPUs */
 	lru_add_drain();
 
@@ -2365,9 +2340,6 @@ compact_zone(struct compact_control *cc, struct capture_control *capc)
 		err = migrate_pages(&cc->migratepages, compaction_alloc,
 				compaction_free, (unsigned long)&cc_ext, cc->mode,
 				MR_COMPACTION);
-
-		trace_mm_compaction_migratepages(cc->nr_migratepages, err,
-							&cc->migratepages);
 
 		/* All pages were either migrated or will be released */
 		cc->nr_migratepages = 0;
@@ -2444,10 +2416,6 @@ out:
 	count_compact_events(COMPACTMIGRATE_SCANNED, cc->total_migrate_scanned);
 	count_compact_events(COMPACTFREE_SCANNED, cc->total_free_scanned);
 
-	trace_android_vh_mm_compaction_end(cc, vendor_ret);
-	trace_mm_compaction_end(start_pfn, cc->migrate_pfn,
-				cc->free_pfn, end_pfn, sync, ret);
-
 	return ret;
 }
 
@@ -2523,8 +2491,6 @@ enum compact_result try_to_compact_pages(gfp_t gfp_mask, unsigned int order,
 
 	if (!gfp_compaction_allowed(gfp_mask))
 		return COMPACT_SKIPPED;
-
-	trace_mm_compaction_try_to_compact_pages(order, gfp_mask, prio);
 
 	/* Compact each zone in the list */
 	for_each_zone_zonelist_nodemask(zone, z, ac->zonelist,
@@ -2772,8 +2738,7 @@ static void kcompactd_do_work(pg_data_t *pgdat)
 		.ignore_skip_hint = false,
 		.gfp_mask = GFP_KERNEL,
 	};
-	trace_mm_compaction_kcompactd_wake(pgdat->node_id, cc.order,
-							cc.highest_zoneidx);
+
 	count_compact_event(KCOMPACTD_WAKE);
 
 	for (zoneid = 0; zoneid <= cc.highest_zoneidx; zoneid++) {
@@ -2855,8 +2820,6 @@ void wakeup_kcompactd(pg_data_t *pgdat, int order, int highest_zoneidx)
 	if (!kcompactd_node_suitable(pgdat))
 		return;
 
-	trace_mm_compaction_wakeup_kcompactd(pgdat->node_id, order,
-							highest_zoneidx);
 	wake_up_interruptible(&pgdat->kcompactd_wait);
 }
 
@@ -2887,7 +2850,6 @@ static int kcompactd(void *p)
 		timeout = sysctl_compaction_proactiveness ?
 			msecs_to_jiffies(HPAGE_FRAG_CHECK_INTERVAL_MSEC) :
 			MAX_SCHEDULE_TIMEOUT;
-		trace_mm_compaction_kcompactd_sleep(pgdat->node_id);
 		if (wait_event_freezable_timeout(pgdat->kcompactd_wait,
 			kcompactd_work_requested(pgdat), timeout) &&
 			!pgdat->proactive_compact_trigger) {

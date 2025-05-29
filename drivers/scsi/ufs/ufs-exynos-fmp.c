@@ -27,7 +27,7 @@
 #include <trace/hooks/ufshcd.h>
 #endif
 #ifdef CONFIG_EXYNOS_FMP_FIPS
-#include "../../crypto/fmp/fmp_fips.h"
+#include <crypto/fmp_fips.h>
 #endif
 
 #ifdef CONFIG_HW_KEYS_IN_CUSTOM_KEYSLOT
@@ -905,9 +905,9 @@ void exynos_ufs_fmp_resume(struct ufs_hba *hba)
 	unsigned long ret;
 
 	/* Restore all fmp registers on init - Security, Kwmode, kwindataswap */
-	ret = exynos_smc(SMC_CMD_FMP_RESUME, 0, FMP_EMBEDDED, 0);
+	ret = exynos_smc(SMC_CMD_FMP_SMU_RESUME, 0, FMP_EMBEDDED, 0);
 	if (ret)
-		dev_err(hba->dev, "SMC_CMD_FMP_RESUME failed on resume: %ld\n", ret);
+		dev_err(hba->dev, "SMC_CMD_FMP_SMU_RESUME failed on resume: %ld\n", ret);
 
 	if (!(hba->caps &UFSHCD_CAP_CRYPTO))
 		return;
