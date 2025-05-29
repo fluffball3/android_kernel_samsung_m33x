@@ -10,6 +10,7 @@
  */
 
 #include <asm/unaligned.h>
+#include <linux/async.h>
 
 #include "ufshcd.h"
 #include "ufshpb.h"
@@ -167,9 +168,19 @@ next_srgn:
 		set_bit_len = cnt;
 
 	spin_lock_irqsave(&hpb->rgn_state_lock, flags);
-	if (set_dirty && rgn->rgn_state != HPB_RGN_INACTIVE &&
-	    srgn->srgn_state == HPB_SRGN_VALID)
-		bitmap_set(srgn->mctx->ppn_dirty, srgn_offset, set_bit_len);
+	if (rgn->rgn_state != HPB_RGN_INACTIVE) {
+		if (set_dirty) {
+			if (srgn->srgn_state == HPB_SRGN_VALID)
+				bitmap_set(srgn->mctx->ppn_dirty, srgn_offset,
+					   set_bit_len);
+		} else if (hpb->is_hcm) {
+			 /* rewind the read timer for lru regions */
+			rgn->read_timeout = ktime_add_ms(ktime_get(),
+					rgn->hpb->params.read_timeout_ms);
+			rgn->read_timeout_expiries =
+				rgn->hpb->params.read_timeout_expiries;
+		}
+	}
 	spin_unlock_irqrestore(&hpb->rgn_state_lock, flags);
 
 	if (hpb->is_hcm && prev_srgn != srgn) {
@@ -234,7 +245,7 @@ next_srgn:
 	/*
 	 * If the region state is active, mctx must be allocated.
 	 * In this case, check whether the region is evicted or
-	 * mctx allcation fail.
+	 * mctx allocation fail.
 	 */
 	if (unlikely(!srgn->mctx)) {
 		dev_err(&hpb->sdev_ufs_lu->sdev_dev,
@@ -320,7 +331,7 @@ ufshpb_set_hpb_read_to_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp,
 	cdb[0] = UFSHPB_READ;
 
 	if (hba->dev_quirks & UFS_DEVICE_QUIRK_SWAP_L2P_ENTRY_FOR_HPB_READ)
-		ppn_tmp = (__force __be64)swab64((__force u64)ppn);
+		ppn_tmp = swab64(ppn);
 
 	/* ppn value is stored as big-endian in the host memory */
 	memcpy(&cdb[6], &ppn_tmp, sizeof(__be64));
@@ -358,7 +369,7 @@ int ufshpb_prep(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		return -ENODEV;
 	}
 
-	if (blk_rq_is_scsi(scsi_cmd_to_rq(cmd)) ||
+	if (blk_rq_is_passthrough(scsi_cmd_to_rq(cmd)) ||
 	    (!ufshpb_is_write_or_discard(cmd) &&
 	     !ufshpb_is_read_cmd(cmd)))
 		return 0;
@@ -469,6 +480,7 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 {
 	struct ufshpb_req *map_req;
 	struct bio *bio;
+	unsigned long flags;
 
 	if (hpb->is_hcm &&
 	    hpb->num_inflight_map_req >= hpb->params.inflight_map_req) {
@@ -479,7 +491,7 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 		return NULL;
 	}
 
-	map_req = ufshpb_get_req(hpb, srgn->rgn_idx, REQ_OP_SCSI_IN, false);
+	map_req = ufshpb_get_req(hpb, srgn->rgn_idx, REQ_OP_DRV_IN, false);
 	if (!map_req)
 		return NULL;
 
@@ -493,7 +505,10 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 
 	map_req->rb.srgn_idx = srgn->srgn_idx;
 	map_req->rb.mctx = srgn->mctx;
+
+	spin_lock_irqsave(&hpb->param_lock, flags);
 	hpb->num_inflight_map_req++;
+	spin_unlock_irqrestore(&hpb->param_lock, flags);
 
 	return map_req;
 }
@@ -501,9 +516,14 @@ static struct ufshpb_req *ufshpb_get_map_req(struct ufshpb_lu *hpb,
 static void ufshpb_put_map_req(struct ufshpb_lu *hpb,
 			       struct ufshpb_req *map_req)
 {
+	unsigned long flags;
+
 	bio_put(map_req->bio);
 	ufshpb_put_req(hpb, map_req);
+
+	spin_lock_irqsave(&hpb->param_lock, flags);
 	hpb->num_inflight_map_req--;
+	spin_unlock_irqrestore(&hpb->param_lock, flags);
 }
 
 static int ufshpb_clear_dirty_bitmap(struct ufshpb_lu *hpb,
@@ -850,18 +870,12 @@ static struct ufshpb_region *ufshpb_victim_lru_info(struct ufshpb_lu *hpb)
 	struct ufshpb_region *rgn, *victim_rgn = NULL;
 
 	list_for_each_entry(rgn, &lru_info->lh_lru_rgn, list_lru_rgn) {
-		if (!rgn) {
-			dev_err(&hpb->sdev_ufs_lu->sdev_dev,
-				"%s: no region allocated\n",
-				__func__);
-			return NULL;
-		}
 		if (ufshpb_check_srgns_issue_state(hpb, rgn))
 			continue;
 
 		/*
 		 * in host control mode, verify that the exiting region
-		 * has less reads
+		 * has fewer reads
 		 */
 		if (hpb->is_hcm &&
 		    rgn->reads > hpb->params.eviction_thld_exit)
@@ -870,6 +884,11 @@ static struct ufshpb_region *ufshpb_victim_lru_info(struct ufshpb_lu *hpb)
 		victim_rgn = rgn;
 		break;
 	}
+
+	if (!victim_rgn)
+		dev_err(&hpb->sdev_ufs_lu->sdev_dev,
+			"%s: no region allocated\n",
+			__func__);
 
 	return victim_rgn;
 }
@@ -899,7 +918,7 @@ static int ufshpb_issue_umap_req(struct ufshpb_lu *hpb,
 	struct ufshpb_req *umap_req;
 	int rgn_idx = rgn ? rgn->rgn_idx : 0;
 
-	umap_req = ufshpb_get_req(hpb, rgn_idx, REQ_OP_SCSI_OUT, atomic);
+	umap_req = ufshpb_get_req(hpb, rgn_idx, REQ_OP_DRV_OUT, atomic);
 	if (!umap_req)
 		return -ENOMEM;
 
@@ -948,6 +967,7 @@ static int ufshpb_evict_region(struct ufshpb_lu *hpb, struct ufshpb_region *rgn)
 			 rgn->rgn_idx);
 		goto out;
 	}
+
 	if (!list_empty(&rgn->list_lru_rgn)) {
 		if (ufshpb_check_srgns_issue_state(hpb, rgn)) {
 			ret = -EBUSY;
@@ -1056,8 +1076,8 @@ static int ufshpb_add_region(struct ufshpb_lu *hpb, struct ufshpb_region *rgn)
 	spin_lock_irqsave(&hpb->rgn_state_lock, flags);
 	/*
 	 * If region belongs to lru_list, just move the region
-	 * to the front of lru list. because the state of the region
-	 * is already active-state
+	 * to the front of lru list because the state of the region
+	 * is already active-state.
 	 */
 	if (!list_empty(&rgn->list_lru_rgn)) {
 		ufshpb_hit_lru_info(lru_info, rgn);
@@ -1088,7 +1108,8 @@ static int ufshpb_add_region(struct ufshpb_lu *hpb, struct ufshpb_region *rgn)
 			victim_rgn = ufshpb_victim_lru_info(hpb);
 			if (!victim_rgn) {
 				dev_warn(&hpb->sdev_ufs_lu->sdev_dev,
-				    "cannot get victim region error\n");
+				    "cannot get victim region %s\n",
+				    hpb->is_hcm ? "" : "error");
 				ret = -ENOMEM;
 				goto out;
 			}
@@ -1201,6 +1222,7 @@ static void ufshpb_rsp_req_region_update(struct ufshpb_lu *hpb,
 			}
 		}
 		spin_unlock(&hpb->rgn_state_lock);
+
 	}
 
 out:
@@ -1225,7 +1247,6 @@ static void ufshpb_dev_reset_handler(struct ufshpb_lu *hpb)
 	spin_unlock_irqrestore(&hpb->rgn_state_lock, flags);
 }
 
-
 /*
  * This function will parse recommended active subregion information in sense
  * data field of response UPIU with SAM_STAT_GOOD state.
@@ -1235,6 +1256,13 @@ void ufshpb_rsp_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 	struct ufshpb_lu *hpb = ufshpb_get_hpb_data(lrbp->cmd->device);
 	struct utp_hpb_rsp *rsp_field = &lrbp->ucd_rsp_ptr->hr;
 	int data_seg_len;
+
+	data_seg_len = be32_to_cpu(lrbp->ucd_rsp_ptr->header.dword_2)
+		& MASK_RSP_UPIU_DATA_SEG_LEN;
+
+	/* If data segment length is zero, rsp_field is not valid */
+	if (!data_seg_len)
+		return;
 
 	if (unlikely(lrbp->lun != rsp_field->lun)) {
 		struct scsi_device *sdev;
@@ -1267,18 +1295,6 @@ void ufshpb_rsp_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		dev_notice(&hpb->sdev_ufs_lu->sdev_dev,
 			   "%s: ufshpb state is not PRESENT/SUSPEND\n",
 			   __func__);
-		return;
-	}
-
-	data_seg_len = be32_to_cpu(lrbp->ucd_rsp_ptr->header.dword_2)
-		& MASK_RSP_UPIU_DATA_SEG_LEN;
-
-	/* To flush remained rsp_list, we queue the map_work task */
-	if (!data_seg_len) {
-		if (!ufshpb_is_general_lun(hpb->lun))
-			return;
-
-		ufshpb_kick_map_work(hpb);
 		return;
 	}
 
@@ -1550,7 +1566,6 @@ static void ufshpb_lu_parameter_init(struct ufs_hba *hba,
 	else
 		hpb->pre_req_max_tr_len = hpb_dev_info->max_hpb_single_cmd;
 
-
 	hpb->lu_pinned_start = hpb_lu_info->pinned_start;
 	hpb->lu_pinned_end = hpb_lu_info->num_pinned ?
 		(hpb_lu_info->pinned_start + hpb_lu_info->num_pinned - 1)
@@ -1602,8 +1617,6 @@ static int ufshpb_alloc_region_tbl(struct ufs_hba *hba, struct ufshpb_lu *hpb)
 	if (!rgn_table)
 		return -ENOMEM;
 
-	hpb->rgn_tbl = rgn_table;
-
 	for (rgn_idx = 0; rgn_idx < hpb->rgns_per_lu; rgn_idx++) {
 		int srgn_cnt = hpb->srgns_per_rgn;
 		bool last_srgn = false;
@@ -1640,13 +1653,14 @@ static int ufshpb_alloc_region_tbl(struct ufs_hba *hba, struct ufshpb_lu *hpb)
 		rgn->hpb = hpb;
 	}
 
+	hpb->rgn_tbl = rgn_table;
+
 	return 0;
 
 release_srgn_table:
-	for (i = 0; i < rgn_idx; i++) {
-		rgn = rgn_table + i;
-		kvfree(rgn->srgn_tbl);
-	}
+	for (i = 0; i <= rgn_idx; i++)
+		kvfree(rgn_table[i].srgn_tbl);
+
 	kvfree(rgn_table);
 	return ret;
 }
@@ -1981,7 +1995,6 @@ static ssize_t inflight_map_req_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(inflight_map_req);
 
-
 static void ufshpb_hcm_param_init(struct ufshpb_lu *hpb)
 {
 	hpb->params.activation_thld = ACTIVATION_THRESHOLD;
@@ -2097,6 +2110,7 @@ static int ufshpb_lu_hpb_init(struct ufs_hba *hba, struct ufshpb_lu *hpb)
 
 	spin_lock_init(&hpb->rgn_state_lock);
 	spin_lock_init(&hpb->rsp_list_lock);
+	spin_lock_init(&hpb->param_lock);
 
 	INIT_LIST_HEAD(&hpb->lru_info.lh_lru_rgn);
 	INIT_LIST_HEAD(&hpb->lh_act_srgn);
@@ -2200,9 +2214,9 @@ static void ufshpb_discard_rsp_lists(struct ufshpb_lu *hpb)
 	unsigned long flags;
 
 	/*
-	 * If the device reset occurred, the remained HPB region information
-	 * may be stale. Therefore, by dicarding the lists of HPB response
-	 * that remained after reset, it prevents unnecessary work.
+	 * If the device reset occurred, the remaining HPB region information
+	 * may be stale. Therefore, by discarding the lists of HPB response
+	 * that remained after reset, we prevent unnecessary work.
 	 */
 	spin_lock_irqsave(&hpb->rsp_list_lock, flags);
 	list_for_each_entry_safe(rgn, next_rgn, &hpb->lh_inact_rgn,
@@ -2349,11 +2363,11 @@ static int ufshpb_get_lu_info(struct ufs_hba *hba, int lun,
 
 	ufshcd_map_desc_id_to_length(hba, QUERY_DESC_IDN_UNIT, &size);
 
-	pm_runtime_get_sync(hba->dev);
+	ufshcd_rpm_get_sync(hba);
 	ret = ufshcd_query_descriptor_retry(hba, UPIU_QUERY_OPCODE_READ_DESC,
 					    QUERY_DESC_IDN_UNIT, lun, 0,
 					    desc_buf, &size);
-	pm_runtime_put_sync(hba->dev);
+	ufshcd_rpm_put_sync(hba);
 
 	if (ret) {
 		dev_err(hba->dev,
@@ -2585,10 +2599,8 @@ void ufshpb_get_dev_info(struct ufs_hba *hba, u8 *desc_buf)
 	if (hpb_dev_info->is_legacy)
 		return;
 
-	pm_runtime_get_sync(hba->dev);
 	ret = ufshcd_query_attr_retry(hba, UPIU_QUERY_OPCODE_READ_ATTR,
 		QUERY_ATTR_IDN_MAX_HPB_SINGLE_CMD, 0, 0, &max_single_cmd);
-	pm_runtime_put_sync(hba->dev);
 
 	if (ret)
 		hpb_dev_info->max_hpb_single_cmd = HPB_LEGACY_CHUNK_HIGH;

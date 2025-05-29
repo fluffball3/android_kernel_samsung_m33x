@@ -2248,7 +2248,7 @@ static int memblock_memsize_show(struct seq_file *m, void *private)
 	unsigned long text, rw, ro, bss, etc;
 
 #ifdef CONFIG_RBIN
-	system += rbin_total << PAGE_SHIFT;
+//	system += rbin_total << PAGE_SHIFT;
 #endif
 	sort(memsize_rgn, memsize_rgn_count,
 	     sizeof(memsize_rgn[0]), memsize_rgn_cmp, NULL);

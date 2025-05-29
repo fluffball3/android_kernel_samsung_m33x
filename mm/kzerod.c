@@ -47,9 +47,6 @@ static bool app_launch;
 
 static bool need_pause(void)
 {
-	if (app_launch || need_memory_boosting())
-		return true;
-
 	return false;
 }
 
@@ -756,19 +753,6 @@ static void zeroing_nonzero_list(enum zone_type ht)
 						     struct page, lru);
 		list_del(&page->lru);
 		nr_hugepages_nonzero[ht]--;
-		spin_unlock(&hugepage_nonzero_list_lock[ht]);
-
-		spin_lock(&hugepage_list_lock[ht]);
-		if (nr_pages_to_fill(ht)) {
-			prep_new_page(page, HUGEPAGE_ORDER, __GFP_ZERO, 0);
-			list_add(&page->lru, &hugepage_list[ht]);
-			nr_hugepages[ht]++;
-		} else
-			___free_pages_ok(page, HUGEPAGE_ORDER, (__force int __bitwise)0, true);
-
-		spin_unlock(&hugepage_list_lock[ht]);
-
-		spin_lock(&hugepage_nonzero_list_lock[ht]);
 	}
 	spin_unlock(&hugepage_nonzero_list_lock[ht]);
 
@@ -942,7 +926,6 @@ static unsigned long hugepage_pool_scan(struct shrinker *shrink,
 			page = list_first_entry(&hugepage_nonzero_list[zidx],
 					struct page, lru);
 			list_del(&page->lru);
-			___free_pages_ok(page, HUGEPAGE_ORDER, (__force int __bitwise)0, true);
 			nr_hugepages_nonzero[zidx]--;
 			freed_zone++;
 		}
@@ -989,7 +972,6 @@ static void prepare_hugepage_alloc(void)
 		if (!sched_setscheduler(current, SCHED_NORMAL,
 				   &param_normal)) {
 			pr_info("kzerod_h: compact start\n");
-			compact_node_async();
 			pr_info("kzerod_h: compact end (%d done)\n",
 				++compact_count);
 

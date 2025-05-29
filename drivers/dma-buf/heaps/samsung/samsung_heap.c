@@ -254,10 +254,7 @@ static void show_dmaheap_meminfo(void *data, struct seq_file *m)
 	u64 total_size_kb = samsung_heap_total_kbsize(heap);
 
 	if (total_size_kb == 0)
-		return;
-
-	show_val_meminfo(m, heap->name, total_size_kb);
-}
+		return;}
 
 static struct samsung_dma_heap *__samsung_heap_add(struct device *dev, void *priv,
 						   void (*release)(struct samsung_dma_buffer *),

@@ -291,10 +291,10 @@ void __init fdt_init_reserved_mem(void)
 				phys_addr_t end = rmem->base + rmem->size - 1;
 
 #ifdef CONFIG_RBIN
-				if (!strcmp(rmem->name, "rbin")) {
-					rbin_total = rmem->size >> PAGE_SHIFT;
-					reusable = true;
-				}
+	//			if (!strcmp(rmem->name, "rbin")) {
+	//				rbin_total = rmem->size >> PAGE_SHIFT;
+		//			reusable = true;
+		//		}
 #endif
 				pr_info("%pa..%pa (%lu KiB) %s %s %s\n",
 					&rmem->base, &end, (unsigned long)(rmem->size / SZ_1K),
