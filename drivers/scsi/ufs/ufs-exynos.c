@@ -1187,70 +1187,6 @@ out:
 	ufs->h_state = H_REQ_BUSY;
 }
 
-static void exynos_ufs_check_uac(struct ufs_hba *hba, int tag, bool cmd)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct ufshcd_lrb *lrbp;
-	struct scsi_cmnd *scmd;
-	struct utp_upiu_rsp *ucd_rsp_ptr;
-	int result = 0;
-
-	if (!cmd)
-		return;
-
-	lrbp = &hba->lrb[tag];
-	ucd_rsp_ptr = lrbp->ucd_rsp_ptr;
-	scmd = lrbp->cmd;
-
-	result = be32_to_cpu(ucd_rsp_ptr->header.dword_0) >> 24;
-	if (result != UPIU_TRANSACTION_RESPONSE)
-		return;
-
-	result = be32_to_cpu(ucd_rsp_ptr->header.dword_1);
-	if (result & SAM_STAT_CHECK_CONDITION) {
-		result &= ~SAM_STAT_CHECK_CONDITION;
-		result |= SAM_STAT_BUSY;
-		ucd_rsp_ptr->header.dword_1 = cpu_to_be32(result);
-
-		scmd->result |= (DID_SOFT_ERROR << 16);
-	}
-
-	ufs->resume_state = 0;
-}
-
-static void exynos_ufs_compl_nexus_t_xfer_req(void *data, struct ufs_hba *hba,
-				struct ufshcd_lrb *lrbp)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct ufs_vs_handle *handle = &ufs->handle;
-	unsigned long completed_reqs;
-	u32 tr_doorbell;
-	int tag;
-
-	if (!lrbp) {
-		dev_err(hba->dev, "%s: lrbp: local reference block is null\n",
-				__func__);
-		return;
-	}
-
-	tag = lrbp->task_tag;
-
-	/* When it's first command completion after resume, check uac. */
-	if (ufs->resume_state || (lrbp->lun != 0))
-		exynos_ufs_check_uac(hba, tag, (lrbp->cmd ? true : false));
-
-	/* cmd_logging */
-	if (lrbp->cmd)
-		exynos_ufs_cmd_log_end(handle, hba, tag);
-
-	tr_doorbell = std_readl(handle, REG_UTP_TRANSFER_REQ_DOOR_BELL);
-	completed_reqs = tr_doorbell ^ hba->outstanding_reqs;
-	if (!(hba->outstanding_reqs^completed_reqs)) {
-		if (ufs->perf)
-			ufs_perf_reset(ufs->perf);
-	}
-}
-
 static void exynos_ufs_set_nexus_t_task_mgmt(struct ufs_hba *hba, int tag,
 						u8 tm_func)
 {
@@ -1286,52 +1222,6 @@ static void exynos_ufs_set_nexus_t_task_mgmt(struct ufs_hba *hba, int tag,
 #if IS_ENABLED(CONFIG_EXYNOS_CPUPM)
 	exynos_update_ip_idle_status(ufs->idle_ip_index, 0);
 #endif
-}
-
-static void __check_int_errors(void *data, struct ufs_hba *hba, bool queue_eh_work)
-{
-	if (hba->errors & UIC_ERROR) {
-		if (ufshcd_is_auto_hibern8_supported(hba)) {
-			struct exynos_ufs *ufs = to_exynos_ufs(hba);
-			struct ufs_vs_handle *handle = &ufs->handle;
-			u32 reg;
-
-			reg = hci_readl(handle, HCI_AH8_STATE);
-			if (reg & HCI_AH8_STATE_ERROR) {
-
-				reg = hci_readl(handle, HCI_VENDOR_SPECIFIC_IS);
-				pr_err("%s: occured AH8 ERROR State[%08X]\n",
-						__func__, reg);
-				ufshcd_update_evt_hist(hba, UFS_EVT_AUTO_HIBERN8_ERR, reg);
-				ufshcd_set_link_broken(hba);
-			}
-
-			hci_writel(handle, AH8_ERR_REPORT_UE,
-					HCI_VENDOR_SPECIFIC_IS);
-		}
-	}
-}
-
-static void __check_vendor_is(void *data, struct ufs_hba *hba, bool *has_outstanding)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct ufs_vs_handle *handle = &ufs->handle;
-	u32 vs_is;
-
-	vs_is = hci_readl(handle, HCI_VENDOR_SPECIFIC_IS);
-	vs_is = vs_is & (hci_readl(handle, HCI_VENDOR_SPECIFIC_IE));
-
-	if (vs_is)
-		dev_info(hba->dev, "%s: vs_is = 0x%08X\n", __func__, vs_is);
-
-	/* check PRE_PROC error, as we want to prevent cmd timeout */
-	if (vs_is & (AH8_ERR_AT_PRE_PROC | AH8_TIMEOUT)) {
-		hba->ufshcd_state = UFSHCD_STATE_EH_SCHEDULED_FATAL;
-		ufshcd_set_link_broken(hba);
-		ufshcd_update_evt_hist(hba, UFS_EVT_AUTO_HIBERN8_ERR, vs_is);
-		queue_work(hba->eh_wq, &hba->eh_work);
-	}
-	hci_writel(handle, vs_is, HCI_VENDOR_SPECIFIC_IS);
 }
 
 static void exynos_ufs_hibern8_notify(struct ufs_hba *hba, enum uic_cmd_dme cmd,
@@ -1692,10 +1582,6 @@ static void __fixup_dev_quirks(struct ufs_hba *hba)
 
 static void exynos_ufs_register_vendor_hooks(void)
 {
-	register_trace_android_vh_ufs_compl_command(
-			exynos_ufs_compl_nexus_t_xfer_req, NULL);
-	register_trace_android_vh_ufs_check_int_errors(__check_int_errors, NULL);
-	register_trace_android_vh_ufs_mcq_has_oustanding_reqs(__check_vendor_is, NULL);
 #if IS_ENABLED(CONFIG_SEC_UFS_FEATURE)
 	/* register vendor hooks */
 	ufs_sec_register_vendor_hooks();

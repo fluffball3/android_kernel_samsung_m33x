@@ -908,8 +908,6 @@ int busy_cpu_ratio = 150;
 
 static int ems_probe(struct platform_device *pdev)
 {
-	int ret;
-
 	/* get first sched_class pointer */
 	sched_class_begin = cpu_rq(0)->stop->sched_class;
 
@@ -939,12 +937,6 @@ static int ems_probe(struct platform_device *pdev)
 	halo_governor_init(ems_kobj);
 	lb_init();
 	mhdvfs_init(ems_kobj);
-
-	ret = hook_init();
-	if (ret) {
-		WARN_ON("EMS failed to register vendor hook\n");
-		return ret;
-	}
 
 	ems_init_ioctl();
 

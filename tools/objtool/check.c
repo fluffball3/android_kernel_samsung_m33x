@@ -3667,7 +3667,7 @@ int check(struct objtool_file *file)
 			goto out;
 		warnings += ret;
 	}
-
+	
 	if (retpoline) {
 		ret = create_retpoline_sites_sections(file);
 		if (ret < 0)

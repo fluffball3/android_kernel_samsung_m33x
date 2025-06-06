@@ -60,6 +60,8 @@
 #define GET_LENGTH(d) \
         ((d)->des3 & 0x3ffffff)
 
+MODULE_IMPORT_NS(VFS_internal_I_am_really_a_filesystem_and_am_NOT_a_driver);
+
 static struct device *fmp_dev;
 
 struct exynos_fmp *get_fmp(void)

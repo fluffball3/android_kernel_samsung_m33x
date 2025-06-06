@@ -43,7 +43,6 @@ static spinlock_t prezeroed_lock;
 static unsigned long nr_prezeroed;
 static unsigned long kzerod_wmark_high;
 static unsigned long kzerod_wmark_low;
-static bool app_launch;
 
 static bool need_pause(void)
 {
@@ -51,53 +50,6 @@ static bool need_pause(void)
 }
 
 static void try_wake_up_kzerod(void);
-#ifdef CONFIG_HUGEPAGE_POOL
-static void try_wake_up_hugepage_kzerod(void);
-#endif
-
-static int kzerod_app_launch_notifier(struct notifier_block *nb,
-					 unsigned long action, void *data)
-{
-	bool prev_launch;
-	static unsigned long prev_total;
-	static unsigned long prev_prezero;
-	static unsigned long prev_jiffies;
-	unsigned long cur_total, cur_prezero;
-
-	prev_launch = app_launch;
-	app_launch = action ? true : false;
-
-	if (!prev_launch && app_launch) {
-		prev_total = atomic_read(&kzerod_zero_page_alloc_total);
-		prev_prezero = atomic_read(&kzerod_zero_page_alloc_prezero);
-		prev_jiffies = jiffies;
-		trace_printk("kzerod: %s %d\n", current->comm, current->pid);
-	} else if (prev_launch && !app_launch) {
-		cur_total = atomic_read(&kzerod_zero_page_alloc_total);
-		cur_prezero = atomic_read(&kzerod_zero_page_alloc_prezero);
-		trace_printk("kzerod: launch finished used zero %luKB/%luKB %ums\n",
-			     K(cur_prezero - prev_prezero),
-			     K(cur_total - prev_total),
-			     jiffies_to_msecs(jiffies - prev_jiffies));
-		pr_info("kzerod: launch finished used zero %luKB/%luKB %ums\n",
-			     K(cur_prezero - prev_prezero),
-			     K(cur_total - prev_total),
-			     jiffies_to_msecs(jiffies - prev_jiffies));
-
-		if (kzerod_enabled) {
-			try_wake_up_kzerod();
-#ifdef CONFIG_HUGEPAGE_POOL
-			try_wake_up_hugepage_kzerod();
-#endif
-		}
-	}
-
-	return 0;
-}
-
-static struct notifier_block kzerod_app_launch_nb = {
-	.notifier_call = kzerod_app_launch_notifier,
-};
 
 unsigned long kzerod_get_zeroed_size(void)
 {
@@ -687,17 +639,6 @@ static inline void __try_wake_up_hugepage_kzerod(enum zone_type ht)
 	}
 }
 
-static void try_wake_up_hugepage_kzerod(void)
-{
-	int i;
-	enum zone_type high_zoneidx;
-
-	high_zoneidx = gfp_zone(GFP_HIGHUSER_MOVABLE);
-
-	for (i = high_zoneidx; i >= 0; i--)
-		__try_wake_up_hugepage_kzerod(i);
-}
-
 static inline gfp_t get_gfp(enum zone_type ht)
 {
 	gfp_t ret;
@@ -1016,7 +957,6 @@ static int __init kzerod_init(void)
 #endif
 
 	spin_lock_init(&prezeroed_lock);
-	am_app_launch_notifier_register(&kzerod_app_launch_nb);
 	task_kzerod = kthread_run(kzerod, NULL, "kzerod");
 	if (IS_ERR(task_kzerod)) {
 		task_kzerod = NULL;

@@ -22,7 +22,6 @@ ems-y += sparing.o
 ems-y += ecs.o
 ems-y += ecs_dynamic.o
 ems-y += freqboost.o
-ems-y += hook.o
 ems-y += sysbusy.o
 ems-y += frt.o
 ems-y += profile.o

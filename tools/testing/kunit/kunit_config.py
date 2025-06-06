@@ -1,4 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0
+#
+# Builds a .config from a kunitconfig.
+#
+# Copyright (C) 2019, Google LLC.
+# Author: Felix Guo <felixguoxiuping@gmail.com>
+# Author: Brendan Higgins <brendanhiggins@google.com>
 
 import collections
 import re
@@ -6,7 +12,7 @@ import re
 CONFIG_IS_NOT_SET_PATTERN = r'^# CONFIG_(\w+) is not set$'
 CONFIG_PATTERN = r'^CONFIG_(\w+)=(\S+|".*")$'
 
-KconfigEntryBase = collections.namedtuple('KconfigEntry', ['name', 'value'])
+KconfigEntryBase = collections.namedtuple('KconfigEntryBase', ['name', 'value'])
 
 class KconfigEntry(KconfigEntryBase):
 
@@ -33,7 +39,7 @@ class Kconfig(object):
 	def add_entry(self, entry: KconfigEntry) -> None:
 		self._entries.append(entry)
 
-	def is_subset_of(self, other: "Kconfig") -> bool:
+	def is_subset_of(self, other: 'Kconfig') -> bool:
 		for a in self.entries():
 			found = False
 			for b in other.entries():
@@ -81,10 +87,3 @@ class Kconfig(object):
 	def read_from_file(self, path: str) -> None:
 		with open(path, 'r') as f:
 			self.parse_from_string(f.read())
-
-class KunitConfigProvider(object):
-
-  def get_kconfig(self, conf='kunitconfigs/kunitconfig') -> Kconfig:
-    kconfig = Kconfig()
-    kconfig.read_from_file(conf)
-    return kconfig

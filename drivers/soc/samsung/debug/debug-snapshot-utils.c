@@ -1309,11 +1309,6 @@ void dbg_snapshot_register_debug_ops(void *halt, void *arraydump,
 }
 EXPORT_SYMBOL_GPL(dbg_snapshot_register_debug_ops);
 
-static void dbg_snapshot_ipi_stop(void *ignore, struct pt_regs *regs)
-{
-	dbg_snapshot_save_context(regs, true);
-}
-
 static inline bool is_event_supported(unsigned int type, unsigned int code)
 {
 	if (!(dss_desc.hold_key && dss_desc.trigger_key))
@@ -1463,7 +1458,6 @@ void dbg_snapshot_init_utils(struct device *dev)
 	register_restart_handler(&nb_restart_block);
 	atomic_notifier_chain_register(&panic_notifier_list, &nb_pre_panic_block);
 	atomic_notifier_chain_register(&panic_notifier_list, &nb_post_panic_block);
-	register_trace_android_vh_ipi_stop(dbg_snapshot_ipi_stop, NULL);
 #if !IS_ENABLED(CONFIG_SEC_KEY_NOTIFIER)
 	input_register_handler(&dbg_snapshot_input_handler);
 #endif

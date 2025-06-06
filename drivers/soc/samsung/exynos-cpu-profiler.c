@@ -1135,29 +1135,6 @@ static struct notifier_block cpupro_cpufreq_notifier = {
 	.notifier_call  = cpupro_cpufreq_callback,
 };
 
-static int cpupro_pm_update(int flag)
-{
-	int cpu = raw_smp_processor_id();
-	struct cpu_profiler *cpupro = per_cpu_ptr(profiler.cpus, cpu);
-
-	if (!cpupro->enabled)
-		return NOTIFY_OK;
-	cpupro_update_time_in_freq(cpu, flag, -1);
-	return NOTIFY_OK;
-}
-
-static void android_vh_cpupro_idle_enter(void *data, int *state,
-		struct cpuidle_device *dev)
-{
-	int flag = (*state) ? PWR_OFF : CLK_OFF;
-	cpupro_pm_update(flag);
-}
-static void android_vh_cpupro_idle_exit(void *data, int state,
-		struct cpuidle_device *dev)
-{
-	cpupro_pm_update(ACTIVE);
-}
-
 static int cpupro_cpupm_online(unsigned int cpu)
 {
 	struct domain_profiler *dompro = get_dom_by_cpu(cpu);
@@ -1433,10 +1410,6 @@ static int exynos_cpu_profiler_probe(struct platform_device *pdev)
 	/* register cpufreq notifier */
 	exynos_cpufreq_register_notifier(&cpupro_cpufreq_notifier,
 					CPUFREQ_TRANSITION_NOTIFIER);
-
-	/* register cpu pm notifier */
-	register_trace_android_vh_cpu_idle_enter(android_vh_cpupro_idle_enter, NULL);
-	register_trace_android_vh_cpu_idle_exit(android_vh_cpupro_idle_exit, NULL);
 
 	/* register cpu hotplug notifier */
 	cpuhp_setup_state(CPUHP_BP_PREPARE_DYN,

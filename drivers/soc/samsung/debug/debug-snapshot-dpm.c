@@ -35,52 +35,11 @@ EXPORT_SYMBOL(dbg_snapshot_get_dpm_status);
 
 void dbg_snapshot_do_dpm(struct pt_regs *regs)
 {
-	unsigned int esr = read_sysreg(esr_el1);
-	unsigned int val = 0;
 	unsigned int policy = GO_DEFAULT_ID;
 
 	/* check dpm */
 	if (!dss_dpm.enabled || !dss_dpm.enabled_debug || dss_dpm.dump_mode_none)
 		return;
-
-	switch (ESR_ELx_EC(esr)) {
-	case ESR_ELx_EC_DABT_CUR:
-		val = esr & 63;
-		if ((val >= 4 && val <= 7) ||	/* translation fault */
-		     (val >= 9 && val <= 11) || /* page fault */
-		     (val >= 12 && val <= 15))	/* page fault */
-			policy = GO_DEFAULT_ID;
-		else
-			policy = dss_dpm.p_el1_da;
-		break;
-	case ESR_ELx_EC_IABT_CUR:
-		policy = dss_dpm.p_el1_ia;
-		break;
-	case ESR_ELx_EC_SYS64:
-		policy = dss_dpm.p_el1_undef;
-		break;
-	case ESR_ELx_EC_SP_ALIGN:
-		policy = dss_dpm.p_el1_sp_pc;
-		break;
-	case ESR_ELx_EC_PC_ALIGN:
-		policy = dss_dpm.p_el1_sp_pc;
-		break;
-	case ESR_ELx_EC_UNKNOWN:
-		policy = dss_dpm.p_el1_undef;
-		break;
-	case ESR_ELx_EC_SOFTSTP_LOW:
-	case ESR_ELx_EC_SOFTSTP_CUR:
-	case ESR_ELx_EC_BREAKPT_LOW:
-	case ESR_ELx_EC_BREAKPT_CUR:
-	case ESR_ELx_EC_WATCHPT_LOW:
-	case ESR_ELx_EC_WATCHPT_CUR:
-	case ESR_ELx_EC_BRK64:
-		policy = GO_DEFAULT_ID;
-		break;
-	default:
-		policy = dss_dpm.p_el1_serror;
-		break;
-	}
 
 	if (policy && policy != GO_DEFAULT_ID) {
 		if (dss_dpm.pre_log) {
