@@ -1,7 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright 2022 Samsung Electronics Co., Ltd.
- */
 #ifndef _UFS_CAL_
 #define _UFS_CAL_
 
@@ -63,16 +59,16 @@ struct ufs_eom_result_s {
 struct ufs_cal_param {
 	/* input */
 	struct ufs_vs_handle *handle;
-	u32 available_lane;
-	u32 connected_tx_lane;
-	u32 connected_rx_lane;
-	u32 active_tx_lane;
-	u32 active_rx_lane;
+	u8 available_lane;
+	u8 connected_tx_lane;
+	u8 connected_rx_lane;
+	u8 active_tx_lane;
+	u8 active_rx_lane;
 	u32 mclk_rate;
-	u32 tbl;
-	u32 board;
-	u32 evt_ver;
-	u32 max_gear;
+	u8 tbl;
+	u8 board;
+	u8 evt_ver;
+	u8 max_gear;
 	struct uic_pwr_mode *pmd;
 
 	/* output */
@@ -88,23 +84,14 @@ struct ufs_cal_param {
 	u32 support_ah8_cal;
 	u32 ah8_thinern8_time;
 	u32 ah8_brefclkgatingwaittime;
-
-	/* save & restore */
-	u32 save_and_restore_mode;
-	unsigned long m_phy_bias;
 };
-typedef enum {
+
+enum ufs_cal_errno {
 	UFS_CAL_NO_ERROR = 0,
 	UFS_CAL_TIMEOUT,
 	UFS_CAL_ERROR,
 	UFS_CAL_INV_ARG,
 	UFS_CAL_INV_CONF,
-} ufs_cal_errno;
-
-enum {
-	NO_MODE = 0,
-	SAVE_MODE,
-	RESTORE_MODE,
 };
 
 enum {
@@ -125,22 +112,18 @@ enum {
 #define BRD_ALL		(BIT(__BRD_MAX) - 1)
 
 /* UFS CAL interface */
-typedef ufs_cal_errno (*cal_if_func) (struct ufs_cal_param *);
-ufs_cal_errno ufs_cal_post_h8_enter(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_pre_h8_exit(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_post_pmc(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_pre_pmc(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_post_link(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_pre_link(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_init(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_eom(struct ufs_cal_param *p);
+typedef enum ufs_cal_errno (*cal_if_func_init) (struct ufs_cal_param *, int);
+typedef enum ufs_cal_errno (*cal_if_func) (struct ufs_cal_param *);
+enum ufs_cal_errno ufs_cal_post_h8_enter(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_pre_h8_exit(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_post_pmc(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_pre_pmc(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_post_link(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_pre_link(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_init(struct ufs_cal_param *p, int idx);
+enum ufs_cal_errno ufs_cal_eom(struct ufs_cal_param *p);
 
-ufs_cal_errno ufs_cal_loopback_init(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_loopback_set_1(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_loopback_set_2(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_pre_pm(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_post_pm(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_during_hce_enable(struct ufs_cal_param *p);
-ufs_cal_errno ufs_cal_resume_hibern8(struct ufs_cal_param *p);
-
+enum ufs_cal_errno ufs_cal_loopback_init(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_loopback_set_1(struct ufs_cal_param *p);
+enum ufs_cal_errno ufs_cal_loopback_set_2(struct ufs_cal_param *p);
 #endif /*_UFS_CAL_ */

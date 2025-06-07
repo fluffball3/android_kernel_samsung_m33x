@@ -13,8 +13,6 @@
 #include "ufs-cal-if.h"
 #include "ufs-exynos.h"
 
-#define RV_SUCCESS 0
-
 struct ufs_hba *hba_srpmb;
 
 int exynos_ufs_srpmb_config(struct ufs_hba *hba)

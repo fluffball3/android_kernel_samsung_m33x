@@ -9,7 +9,6 @@ zsmalloc.ko
 lzo.ko
 lzo-rle.ko
 ssg.ko
-blk-sec-stats.ko
 phy-exynos-mipi-dsim.ko
 phy-exynos-mipi.ko
 phy-exynos-usbdrd-super.ko
@@ -41,8 +40,6 @@ exynos-dm.ko
 exynos-mcinfo.ko
 exynos-cpuhp.ko
 xperf.ko
-exynos-cpupm.ko
-exynos-ufcc.ko
 exynos-afm.ko
 mcu_ipc.ko
 shm_ipc.ko
@@ -63,7 +60,6 @@ secmem.ko
 hdcp2.ko
 exynos-migov.ko
 exynos-gpu-profiler.ko
-exynos-cpu-profiler.ko
 exynos-mif-profiler.ko
 exynos-wow.ko
 s2mpu13_regulator.ko
@@ -91,8 +87,6 @@ s2mpu13_mfd.ko
 s2mpu14_mfd.ko
 nfc_sec.ko
 dma-buf-container.ko
-ufs-exynos-core.ko
-scsi_srpmb.ko
 spidev.ko
 spi-s3c64xx.ko
 smsc.ko
@@ -211,7 +205,6 @@ pmic_class.ko
 dev_ril_bridge.ko
 mcd-panel.ko
 sec_vibrator.ko
-dropdump.ko
 common_muic.ko
 mcd-panel-nt36672c_m33x_01.ko
 mcd-panel-nt36672c_m33x_00.ko

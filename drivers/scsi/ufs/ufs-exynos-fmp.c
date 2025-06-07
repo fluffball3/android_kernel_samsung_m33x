@@ -5,11 +5,13 @@
  * Copyright (C) 2020 Samsung Electronics Co., Ltd.
  * Copyright 2020 Google LLC
  *
- * Authors: Hyeyeon Chung <hyeon.chung@samsung.com>
- *	    Boojin Kim <boojin.kim@samsung.com>
+ * Authors: Boojin Kim <boojin.kim@samsung.com>
  *	    Eric Biggers <ebiggers@google.com>
  */
 
+#include <asm/unaligned.h>
+#include <crypto/aes.h>
+#include <crypto/algapi.h>
 #include <soc/samsung/exynos-smc.h>
 #include <linux/of.h>
 
@@ -19,83 +21,34 @@
 #include "ufs-cal-if.h"
 #include "ufs-exynos.h"
 #include "ufs-exynos-fmp.h"
-
-#ifdef CONFIG_KEYS_IN_PRDT
-#include <asm/unaligned.h>
-#include <crypto/aes.h>
-#include <crypto/algapi.h>
 #include <trace/hooks/ufshcd.h>
-#endif
 #ifdef CONFIG_EXYNOS_FMP_FIPS
 #include <crypto/fmp_fips.h>
 #endif
-
+#ifndef CONFIG_KEYS_IN_PRDT
 #ifdef CONFIG_HW_KEYS_IN_CUSTOM_KEYSLOT
-static struct device dev_fmp;
+struct device dev_fmp;
 #endif
 #define MAX_RETRY_COUNT 0x100
-
-#ifndef CONFIG_KEYS_IN_PRDT
-static void exynos_ufs_fmp_populate_dt(struct device *dev, struct exynos_fmp* fmp)
-{
-	struct device_node *np = dev->of_node;
-	struct device_node *child_np;
-	int ret = 0;
-
-	/* Check fmp status for featuring */
-	child_np = of_get_child_by_name(np, "ufs-protector");
-	if (!child_np) {
-		dev_info(dev, "No ufs-protector node, set to 0\n");
-		fmp->cfge_en = 0;
-	}
-	else {
-		ret = of_property_read_u8(child_np, "cfge_en", &fmp->cfge_en);
-		if (ret) {
-			dev_info(dev, "read cfge_en failed = 0x%x, set to 0\n", __func__, ret);
-			fmp->cfge_en = 0;
-		}
-	}
-}
 #endif
 
-int exynos_ufs_fmp_check_selftest(struct ufs_hba *hba)
+#ifdef CONFIG_EXYNOS_FIPS_SIMULATOR
+static struct fmp_handle *fmp_ufs_handle;
+
+struct fmp_handle *get_fmp_handle()
 {
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	u32 fips_status;
-	u32 count = 0;
-	int ret = 0;
-
-	do {
-		fips_status = ufsp_readl(&ufs->handle, FMP_SELFTESTSTAT);
-		if (!(fips_status & FMP_SELF_TEST_DONE)) {
-			udelay(20);
-			count++;
-			continue;
-		}
-		else {
-			break;
-		}
-	} while (count < MAX_RETRY_COUNT);
-
-	if (!(fips_status & FMP_SELF_TEST_DONE)) {
-		ret = -ETIMEDOUT;
-		dev_err(hba->dev, "FMP selftest timeout\n");
-		goto err;
-	}
-
-	/* write to clear */
-	ufsp_writel(&ufs->handle, FMP_SELF_TEST_DONE, FMP_SELFTESTSTAT);
-	if (fips_status & FMP_SELF_TEST_FAIL) {
-		ret = -EINVAL;
-		dev_err(hba->dev, "FMP selftest failed\n");
-		goto err;
-	}
-
-	dev_info(hba->dev, "FMP selftest success\n");
-err:
-	return ret;
+	return fmp_ufs_handle;
 }
+EXPORT_SYMBOL(get_fmp_handle);
 
+static int FIPS_keyslot_num;
+
+void set_fips_keyslot_num(int num)
+{
+	FIPS_keyslot_num = num;
+}
+EXPORT_SYMBOL(set_fips_keyslot_num);
+#endif
 
 #ifdef CONFIG_KEYS_IN_PRDT
 static inline __be32 fmp_key_word(const u8 *key, int j)
@@ -106,34 +59,32 @@ static inline __be32 fmp_key_word(const u8 *key, int j)
 
 /* Configure FMP on requests that have an encryption context. */
 static void exynos_ufs_fmp_fill_prdt(void *ignore, struct ufs_hba *hba, struct ufshcd_lrb *lrbp,
-					unsigned int segments, int *err)
+					 unsigned int segments, int *err)
 {
 #ifdef CONFIG_EXYNOS_FMP_FIPS
 	struct exynos_fmp_crypt_info fmp_ci;
 	int ret;
 #endif
 	const struct bio_crypt_ctx *bc;
-	struct request *rq;
 	const u8 *enckey, *twkey;
 	u64 dun_lo, dun_hi;
 	struct fmp_sg_entry *table;
 	unsigned int i;
+	*err = 0;
 
 	/*
 	 * There's nothing to do for unencrypted requests, since the mode field
 	 * ("FAS") is already 0 (FMP_BYPASS_MODE) by default, as it's in the
 	 * same word as ufshcd_sg_entry::size which was already initialized.
 	 */
-	rq = scsi_cmd_to_rq(lrbp->cmd);
-	bc = rq->crypt_ctx;
+	bc = lrbp->cmd->request->crypt_ctx;
 	BUILD_BUG_ON(FMP_BYPASS_MODE != 0);
-
 #ifdef CONFIG_EXYNOS_FMP_FIPS
 	if (!bc) {
-		if (!(rq->bio))
+		if (!(lrbp->cmd->request->bio))
 			return;
 
-		if (is_fmp_fips_op(rq->bio)) {
+		if (is_fmp_fips_op(lrbp->cmd->request->bio)) {
 			fmp_ci.fips = true;
 			goto encrypt;
 		}
@@ -200,18 +151,16 @@ encrypt:
 		*err = -EINVAL;
 		return;
 	}
-
 	/* Configure FMP on each segment of the request. */
 	table = (struct fmp_sg_entry *)lrbp->ucd_prdt_ptr;
 	for (i = 0; i < segments; i++) {
 		struct fmp_sg_entry *ent = &table[i];
 		struct ufshcd_sg_entry *prd = (struct ufshcd_sg_entry *)ent;
-		int j;
+		size_t j, limit;
 
 		/* Each segment must be exactly one data unit. */
 		if (le32_to_cpu(prd->size) + 1 != FMP_DATA_UNIT_SIZE) {
-			dev_err(hba->dev,
-				"scatterlist segment is misaligned for FMP\n");
+			dev_err(hba->dev, "scatterlist segment is misaligned for FMP\n");
 			*err = -EINVAL;
 			return;
 		}
@@ -221,7 +170,7 @@ encrypt:
 		SET_KEYLEN(ent, FKL);
 
 		/* Set the key. */
-		for (j = 0; j < AES_KEYSIZE_256 / sizeof(u32); j++) {
+		for (j = 0, limit = AES_KEYSIZE_256 / sizeof(u32); j < limit; j++) {
 			ent->file_enckey[j] = fmp_key_word(enckey, j);
 			ent->file_twkey[j] = fmp_key_word(twkey, j);
 		}
@@ -240,16 +189,111 @@ encrypt:
 #endif
 	return;
 }
+#else
+static void exynos_ufs_fmp_populate_dt(struct device *dev, struct exynos_fmp* fmp)
+{
+	struct device_node *np = dev->of_node;
+	struct device_node *child_np;
+	int ret = 0;
 
+	/* Check fmp status for featuring */
+	child_np = of_get_child_by_name(np, "ufs-protector");
+	if (!child_np) {
+		dev_info(dev, "No ufs-protector node, set to 1 for boot\n");
+		fmp->valid_check = 1;
+	}
+	else {
+		ret = of_property_read_u8(child_np, "valid-check", &fmp->valid_check);
+		if (ret) {
+			dev_info(dev, "read valid_check failed = 0x%x, set to 1\n", __func__, ret);
+			fmp->valid_check = 1;
+		}
+	}
+}
+
+void exynos_ufs_fmp_set_crypto_cfg(struct ufs_hba *hba)
+{
+	union exynos_ufs_crypto_cfg_entry cfg = {};
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+
+	/* Set crypto config register.*/
+	cfg.data_unit_size = FMP_DATA_UNIT_SIZE / 512;
+	cfg.config_enable = UFS_CRYPTO_CONFIGURATION_ENABLE;
+	std_writel(&ufs->handle, le32_to_cpu(cfg.reg_val), CRYPTOCFG);
+
+	dev_info(hba->dev, "%s set CRYPTOCFG = 0x%x\n", __func__, std_readl(&ufs->handle, CRYPTOCFG));
+
+	return;
+}
+
+static void exynos_ufs_fmp_prepare_command(void *ignore, struct ufs_hba *hba, struct request *rq,
+					struct ufshcd_lrb *lrbp, int *err)
+{
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_fmp *fmp = (struct exynos_fmp*)ufs->fmp;
+#ifdef CONFIG_EXYNOS_FMP_FIPS
+	const struct bio_crypt_ctx *bc;
+	int ret;
+	struct exynos_fmp_crypt_info fmp_ci;
+
+	BUILD_BUG_ON(FMP_BYPASS_MODE != 0);
+	bc = lrbp->cmd->request->crypt_ctx;
+	fmp_ci.fips = false;
+
+	if (!bc) {
+		if (!(lrbp->cmd->request->bio)) {
+			*err = 0;
+			return;
+		}
+
+		if (is_fmp_fips_op(lrbp->cmd->request->bio))
+			fmp_ci.fips = true;
+		else
+			goto out;
+	}
+
+	ret = exynos_fmp_crypt(&fmp_ci, (void *)&ufs->handle);
+	if (ret) {
+		dev_err(hba->dev, "%s: fail to crypt with fmp. ret:%d\n", __func__, ret);
+		*err = ret;
+		return;
+	}
+
+	if (fmp_ci.fips) {
+#ifdef CONFIG_EXYNOS_FIPS_SIMULATOR
+		if ((FIPS_keyslot_num >= 0) && (FIPS_keyslot_num <= 15))
+			fmp_ci.crypto_key_slot = FIPS_keyslot_num;
+#endif
+		lrbp->crypto_key_slot = fmp_ci.crypto_key_slot;
+		lrbp->data_unit_num = fmp_ci.data_unit_num;
+		*err = 0;
+		return;
+	}
+out:
+#endif /* CONFIG_EXYNOS_FMP_FIPS */
+	if ((lrbp->crypto_key_slot >= 0) && (fmp->valid_check == 1))
+		lrbp->crypto_key_slot++; /* account for hardware quirk */
+	*err = 0;
+}
+#endif
+
+#ifdef CONFIG_KEYS_IN_PRDT
 void exynos_ufs_fmp_init(struct ufs_hba *hba)
 {
 	unsigned long ret;
+
+#ifndef CONFIG_EXYNOS_FMP_FIPS
 	dev_info(hba->dev, "Exynos FMP Version: %s\n", FMP_DRV_VERSION);
+#endif
 	dev_info(hba->dev, "KEYS_IN_PRDT\n");
+
+	ret = exynos_smc(SMC_CMD_SMU, SMU_INIT, FMP_EMBEDDED, 0);
+	if (ret)
+		dev_warn(hba->dev, "SMC_CMD_SMU(SMU_INIT) failed: %ld\n", ret);
 
 	ret = exynos_smc(SMC_CMD_FMP_SECURITY, 0, FMP_EMBEDDED, CFG_DESCTYPE_3);
 	if (ret) {
-		dev_warn(hba->dev, "SMC_CMD_FMP_SECURITY failed on init: %ld\n",ret);
+		dev_warn(hba->dev, "SMC_CMD_FMP_SECURITY failed on init: %ld\n", ret);
 		goto disable;
 	}
 	else
@@ -257,7 +301,7 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 
 	ret = exynos_smc(SMC_CMD_FMP_KW_MODE, 0, FMP_EMBEDDED, SWKEY_MODE);
 	if (ret) {
-		dev_warn(hba->dev, "SMC_CMD_FMP_KW_MODE failed on init: %ld\n",ret);
+		dev_warn(hba->dev, "SMC_CMD_FMP_KW_MODE failed on init: %ld\n", ret);
 		goto disable;
 	}
 
@@ -265,9 +309,8 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 	hba->caps |= UFSHCD_CAP_CRYPTO;
 
 	/* Advertise crypto quirks to ufshcd-core. */
-	hba->quirks |= UFSHCD_QUIRK_CUSTOM_KEYSLOT_MANAGER;
-	hba->quirks |= UFSHCD_QUIRK_KEYS_IN_PRDT;
-
+	hba->quirks |= UFSHCD_QUIRK_FMP_MODE_SPECIFIC |
+		       UFSHCD_QUIRK_FMP_SOC_SPECIFIC;
 	dev_info(hba->dev, "Exynos FMP quirks: 0x%x\n", hba->quirks);
 
 	/* Advertise crypto capabilities to the block layer. */
@@ -287,47 +330,73 @@ disable:
 }
 #endif /* CONFIG_KEYS_IN_PRDT */
 #ifdef CONFIG_HW_KEYS_IN_CUSTOM_KEYSLOT
-static int fmp_program_key(struct ufs_hba *hba,
-			const u32* fmp_key,
-			const union exynos_ufs_crypto_cfg_entry *cfg, int slot)
+static int exynos_ufs_fmp_keyslot_program(struct blk_keyslot_manager *ksm,
+					const struct blk_crypto_key *key,
+					unsigned int keyslot)
 {
+	struct ufs_hba *hba = container_of(ksm, struct ufs_hba, ksm);
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct exynos_fmp *fmp = (struct exynos_fmp *)ufs->fmp;
-	unsigned int num_keyslots = hba->crypto_capabilities.config_count;
+	struct exynos_fmp *fmp = (struct exynos_fmp*)ufs->fmp;
+	unsigned int num_keyslots = NUM_KEYSLOTS;
+	unsigned int slot = keyslot;
 	size_t i, limit;
 	u32 count = 0;
 	u32 kw_keyvalid;
 	u32 kw_tagabort;
 	u32 kw_pbkabort;
 	u32 kw_control;
-
 	u32 slot_offset = FMP_KW_SECUREKEY + slot*FMP_KW_SECUREKEY_OFFSET;
 	u32 tag_offset = FMP_KW_TAG + slot*FMP_KW_TAG_OFFSET;
-	u32 cryptocfg_offset = CRYPTOCFG + slot*CRYPTOCFG_OFFSET;
+	u32 secret_size = SECRET_SIZE + AES_GCM_TAG_SIZE;
+
+	union {
+		u8 bytes[AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE];
+		u32 words[(AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE) / sizeof(u32)];
+	} fmp_key;
+
+	if (fmp->valid_check == 1) {
+		slot += 1;
+		num_keyslots -= 1;
+	}
+
+	slot_offset = FMP_KW_SECUREKEY + slot*FMP_KW_SECUREKEY_OFFSET;
+	tag_offset = FMP_KW_TAG + slot*FMP_KW_TAG_OFFSET;
+
+	/* To Do
+	 * This is from ufshcd-crypto. Should check if this is needed.
+	 */
+	// ufshcd_hold(hba, false);
+
+	/* Only AES-256-XTS is supported */
+	if (key->crypto_cfg.crypto_mode != BLK_ENCRYPTION_MODE_AES_256_XTS ||
+		(key->size - secret_size) != (AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE)) {
+		dev_err(hba->dev,
+			"Unhandled crypto capability; crypto_mode=%d, key_size=%d\n",
+			key->crypto_cfg.crypto_mode, key->size - secret_size);
+		return -EINVAL;
+	}
 
 	dev_info(hba->dev, "%s slot = %d/%d\n",__func__, slot, num_keyslots);
 
-	/* Ensure that CFGE is cleared before programming the key */
-	/* Do not clear CFGE because this should be 1 when CFGE_EN == 1 */
-	if (!fmp->cfge_en)
-		hci_writel(&ufs->handle, 0, cryptocfg_offset - HCI_VS_BASE_GAP);
-	else
-		hci_writel(&ufs->handle, CRYPTOCFG_GFGE_EN, cryptocfg_offset - HCI_VS_BASE_GAP);
+	/* In XTS mode, the blk_crypto_key's size is already doubled */
+	memcpy(fmp_key.bytes, key->raw, key->size - secret_size);
 
 	/* Key program in keyslot */
 	/* Swap File key and Tweak key */
 	for (i = 0, limit = AES_256_XTS_KEY_SIZE / (sizeof(u32) * 2); i < limit; i++) {
-		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key[i]),
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key.words[i]),
 			slot_offset + ((i + AES_256_XTS_TWK_OFFSET) * sizeof(u32)));
-		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key[i + AES_256_XTS_TWK_OFFSET]),
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key.words[i + AES_256_XTS_TWK_OFFSET]),
 			slot_offset + (i * sizeof(u32)));
 	}
 
 	/* KEY TAG */
 	for (i = 0, limit = AES_GCM_TAG_SIZE / sizeof(u32); i < limit; i++) {
-		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key[i + HW_WRAPPED_KEY_TAG_OFFSET]),
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key.words[i + HW_WRAPPED_KEY_TAG_OFFSET]),
 			tag_offset + (i * sizeof(u32)));
 	}
+
+	memzero_explicit(&fmp_key, key->size - secret_size);
 
 	/* Unwrap command */
 	kw_control = (1<<slot);
@@ -366,121 +435,26 @@ static int fmp_program_key(struct ufs_hba *hba,
 		return -EINVAL;
 	}
 	else {
-		/* Dword 16 must be written last */
-		hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val), cryptocfg_offset - HCI_VS_BASE_GAP);
 		dev_info(hba->dev, "%s Key valid = 0x%x\n", __func__, kw_keyvalid);
 	}
 
 	/* To Do
-	 * This should be fixed to return by goto label in error cases if ufshcd control is needed.
+	 * This is from ufshcd-crypto. Should check if this is needed.
 	 */
-	return 0;
-}
-
-static int fmp_evict_key(struct ufs_hba *hba,
-			const u32* fmp_key,
-			const union exynos_ufs_crypto_cfg_entry *cfg, int slot)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct exynos_fmp *fmp = (struct exynos_fmp *)ufs->fmp;
-	unsigned int num_keyslots = hba->crypto_capabilities.config_count;
-	size_t i, limit;
-
-	u32 slot_offset = FMP_KW_SECUREKEY + slot*FMP_KW_SECUREKEY_OFFSET;
-	u32 tag_offset = FMP_KW_TAG + slot*FMP_KW_TAG_OFFSET;
-	u32 cryptocfg_offset = CRYPTOCFG + slot*CRYPTOCFG_OFFSET;
-
-	dev_info(hba->dev, "%s slot = %d/%d\n",__func__, slot, num_keyslots);
-
-	/* Ensure that CFGE is cleared before programming the key */
-	/* Do not clear CFGE because this should be 1 when CFGE_EN == 1 */
-	if (!fmp->cfge_en)
-		hci_writel(&ufs->handle, 0, cryptocfg_offset - HCI_VS_BASE_GAP);
-	else
-		hci_writel(&ufs->handle, CRYPTOCFG_GFGE_EN, cryptocfg_offset - HCI_VS_BASE_GAP);
-
-	/* Key program in keyslot */
-	/* No need to Swap File key and Tweak key for zeroization */
-	for (i = 0, limit = AES_256_XTS_KEY_SIZE / sizeof(u32); i < limit; i++) {
-		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key[i]), slot_offset + (i * sizeof(u32)));
-	}
-
-	/* KEY TAG */
-	for (i = 0, limit = AES_GCM_TAG_SIZE / sizeof(u32); i < limit; i++) {
-		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key[i + HW_WRAPPED_KEY_TAG_OFFSET]),
-				tag_offset + (i * sizeof(u32)));
-	}
-
-	/* Do not Unwrap */
-	/* Dword 16 must be written last */
-	hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val), cryptocfg_offset - HCI_VS_BASE_GAP);
+	// ufshcd_release(hba);
 
 	/* To Do
 	 * This should be fixed to return by goto label in error cases if ufshcd control is needed.
 	 */
 	return 0;
-}
-
-static int exynos_ufs_fmp_keyslot_program(struct blk_keyslot_manager *ksm,
-					 const struct blk_crypto_key *key,
-					 unsigned int slot)
-{
-	struct ufs_hba *hba = container_of(ksm, struct ufs_hba, ksm);
-	u32 secret_size = SECRET_SIZE + AES_GCM_TAG_SIZE;
-	union exynos_ufs_crypto_cfg_entry cfg = {};
-	union {
-		u8 bytes[AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE];
-		u32 words[(AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE) / sizeof(u32)];
-	} fmp_key;
-
-	int err = 0;
-
-	/* Only AES-256-XTS is supported */
-	if (key->crypto_cfg.crypto_mode != BLK_ENCRYPTION_MODE_AES_256_XTS ||
-		(key->crypto_cfg.data_unit_size != FMP_DATA_UNIT_SIZE) ||
-		(key->crypto_cfg.is_hw_wrapped != true) ||
-		((key->size - secret_size)!= (AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE))) {
-		dev_err(hba->dev,
-			"Unhandled crypto capability: crypto_mode=%d, key_size=%d, data_unit_size=%d, is_hw_wrapped%d\n",
-			key->crypto_cfg.crypto_mode, key->size - secret_size,
-			key->crypto_cfg.data_unit_size, key->crypto_cfg.is_hw_wrapped);
-		return -EINVAL;
-	}
-
-	/* In XTS mode, the blk_crypto_key's size is already doubled */
-	memcpy(fmp_key.bytes, key->raw, key->size - secret_size);
-
-	/* Set crypto config register.*/
-	cfg.data_unit_size = FMP_DATA_UNIT_SIZE / 512;
-	cfg.crypto_cap_idx = 1;
-	cfg.config_enable = UFS_CRYPTO_CONFIGURATION_ENABLE;
-
-	err = fmp_program_key(hba, fmp_key.words, &cfg, slot);
-
-	memzero_explicit(&fmp_key, key->size - secret_size);
-	return err;
 }
 
 static int exynos_ufs_fmp_keyslot_evict(struct blk_keyslot_manager *ksm,
 					const struct blk_crypto_key *key,
 					unsigned int slot)
 {
-	struct ufs_hba *hba = container_of(ksm, struct ufs_hba, ksm);
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct exynos_fmp *fmp = (struct exynos_fmp *)ufs->fmp;
-	union exynos_ufs_crypto_cfg_entry cfg = {};
-	u32 fmp_key[(AES_256_XTS_KEY_SIZE + AES_GCM_TAG_SIZE) / sizeof(u32)] = {};
-	int err = 0;
-
-	/* Set CFGE bit to 1 by force in case of key eviction
-	 * because this should be 1 when CFGE_EN == 1
-	*/
-	if (fmp->cfge_en)
-		cfg.config_enable = UFS_CRYPTO_CONFIGURATION_ENABLE;
-
-	err = fmp_evict_key(hba, fmp_key, &cfg, slot);
-
-	return err;
+	/* Nothing To Do */
+        return 0;
 }
 
 static int exynos_ufs_fmp_derive_raw_secret(struct blk_keyslot_manager *ksm,
@@ -539,83 +513,130 @@ static const struct blk_ksm_ll_ops exynos_ufs_fmp_ksm_ll_ops = {
 	.derive_raw_secret	= exynos_ufs_fmp_derive_raw_secret,
 };
 
-/**
- * exynos_ufs_fmp_init_crypto_capabilities - Read crypto capabilities, init crypto
- *					 fields in hba
- * @hba: Per adapter instance
- *
- * Return: 0 if crypto was initialized else a -errno value.
- */
-int exynos_ufs_fmp_init_crypto_capabilities(struct ufs_hba *hba)
+void key_program_slot0(struct ufs_hba *hba)
 {
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	int err = 0;
+	unsigned long ret;
+	size_t i, limit;
+	u32 kw_keyvalid;
+	u32 kw_control;
+	u32 count = 0;
+	int slot = 0;
+	u32 *fmp_key;
+	u32 *tag;
 
-	if (!(hba->quirks & UFSHCD_QUIRK_CUSTOM_KEYSLOT_MANAGER)) {
-		err = -EINVAL;
-		goto out;
+	/* Key program in keyslot #0 */
+	u32 slot_offset = FMP_KW_SECUREKEY;
+	u32 tag_offset = FMP_KW_TAG;
+
+	/* The Galois/Counter Mode of Operation (GCM) Test Case #15 */
+	/* P: plaine text = {
+		0xd9, 0x31, 0x32, 0x25, 0xf8, 0x84, 0x06, 0xe5,
+		0xa5, 0x59, 0x09, 0xc5, 0xaf, 0xf5, 0x26, 0x9a,
+		0x86, 0xa7, 0xa9, 0x53, 0x15, 0x34, 0xf7, 0xda,
+		0x2e, 0x4c, 0x30, 0x3d, 0x8a, 0x31, 0x8a, 0x72,
+		0x1c, 0x3c, 0x0c, 0x95, 0x95, 0x68, 0x09, 0x53,
+		0x2f, 0xcf, 0x0e, 0x24, 0x49, 0xa6, 0xb5, 0x25,
+		0xb1, 0x6a, 0xed, 0xf5, 0xaa, 0x0d, 0xe6, 0x57,
+		0xba, 0x63, 0x7b, 0x39, 0x1a, 0xaf, 0xd2, 0x55
+	};
+	*/
+
+	/* C: cipher text */
+	u8 c[AES_256_XTS_KEY_SIZE] = {
+		0x52, 0x2d, 0xc1, 0xf0, 0x99, 0x56, 0x7d, 0x07,
+		0xf4, 0x7f, 0x37, 0xa3, 0x2a, 0x84, 0x42, 0x7d,
+		0x64, 0x3a, 0x8c, 0xdc, 0xbf, 0xe5, 0xc0, 0xc9,
+		0x75, 0x98, 0xa2, 0xbd, 0x25, 0x55, 0xd1, 0xaa,
+		0x8c, 0xb0, 0x8e, 0x48, 0x59, 0x0d, 0xbb, 0x3d,
+		0xa7, 0xb0, 0x8b, 0x10, 0x56, 0x82, 0x88, 0x38,
+		0xc5, 0xf6, 0x1e, 0x63, 0x93, 0xba, 0x7a, 0x0a,
+		0xbc, 0xc9, 0xf6, 0x62, 0x89, 0x80, 0x15, 0xad
+	};
+
+	/* T: tag */
+	u8 t[AES_GCM_TAG_SIZE] = {
+		0xb0, 0x94, 0xda, 0xc5, 0xd9, 0x34, 0x71, 0xbd,
+		0xec, 0x1a, 0x50, 0x22, 0x70, 0xe3, 0xcc, 0x6c
+	};
+
+	fmp_key = (u32 *)c;
+	tag = (u32 *)t;
+
+	/* Set key, tag, iv, perboot keky */
+	ret = exynos_smc(SMC_CMD_FMP_KW_SYSREG_DUMMY, 0, 0, 0);
+        if (ret) {
+		dev_err(hba->dev, "SMC_CMD_FMP_KW_SYSREG_DUMMY failed: %ld\n", ret);
+		return;
+        }
+
+	/* Hw wrapped key */
+	/* Swap File key and Tweak key */
+	for (i = 0, limit = AES_256_XTS_KEY_SIZE / (sizeof(u32) * 2); i < limit; i++) {
+		ufsp_writel(&ufs->handle, le32_to_cpu(*(fmp_key + i)),
+			slot_offset + (i + AES_256_XTS_TWK_OFFSET) * sizeof(u32));
+		ufsp_writel(&ufs->handle, le32_to_cpu(*(fmp_key + i + AES_256_XTS_TWK_OFFSET)),
+			slot_offset + (i * sizeof(u32)));
 	}
 
-	/*
-	 * Don't use crypto if either the hardware doesn't advertise the
-	 * standard crypto capability bit *or* if the vendor specific driver
-	 * hasn't advertised that crypto is supported.
-	 */
-	if (!(std_readl(&ufs->handle, REG_CONTROLLER_CAPABILITIES) & MASK_CRYPTO_SUPPORT) ||
-	    !(hba->caps & UFSHCD_CAP_CRYPTO)) {
-		err = -EOPNOTSUPP;
-		goto out;
+	/* tag */
+	for (i = 0, limit = AES_GCM_TAG_SIZE / sizeof(u32); i < limit; i++) {
+		ufsp_writel(&ufs->handle, le32_to_cpu(*(tag + i)),
+			tag_offset + (i * sizeof(u32)));
 	}
 
-	hba->crypto_capabilities.reg_val =
-			cpu_to_le32(std_readl(&ufs->handle, REG_UFS_CCAP));
-	hba->crypto_cfg_register =
-		(u32)hba->crypto_capabilities.config_array_ptr * 0x100;
+	/* Unwrap command */
+	kw_control = (1<<slot);
+	ufsp_writel(&ufs->handle, kw_control, FMP_KW_CONTROL);
 
-	/* The actual number of configurations supported is (CFGC+1) */
-	err = blk_ksm_init(&hba->ksm, hba->crypto_capabilities.config_count + 1);
-	if (err) {
-		dev_err(hba->dev, "blk_ksm_init fail");
-		err = -EINVAL;
-		goto out;
-	}
+	/* Keyslot #0 should be valid for normal IO */
+	do {
+		kw_keyvalid = ufsp_readl(&ufs->handle, FMP_KW_KEYVALID);
+		if (!(kw_keyvalid & (0x1 << slot))) {
+			dev_warn(hba->dev, "Key slot #%d is not valid yet\n", slot);
+			udelay(2);
+			count++;
+			continue;
+		}
+		else {
+			break;
+		}
+	} while (count < MAX_RETRY_COUNT);
 
-	hba->ksm.ksm_ll_ops = exynos_ufs_fmp_ksm_ll_ops;
-	/* UFS only supports 8 bytes for any DUN */
-	hba->ksm.max_dun_bytes_supported = 8;
-	hba->ksm.features = BLK_CRYPTO_FEATURE_WRAPPED_KEYS;
-	hba->ksm.dev = hba->dev;
-
-	/*
-	 * UFS can support crypto capabilities but FMP can only 1 capability for hw wrapped key
-	 */
-	hba->ksm.crypto_modes_supported[BLK_ENCRYPTION_MODE_AES_256_XTS] =
-			FMP_DATA_UNIT_SIZE;
-
-	return 0;
-
-out:
-	return err;
+	if (!(kw_keyvalid & (0x1 << slot)))
+		dev_err(hba->dev, "Key slot #%d is not valid\n", slot);
+	else
+		dev_info(hba->dev, "%s Key valid = 0x%x\n", __func__, kw_keyvalid);
 }
-
 
 void exynos_ufs_fmp_init(struct ufs_hba *hba)
 {
 	unsigned long ret;
 	int err;
 	unsigned int kw_indataswap;
+	int num_keyslots = NUM_KEYSLOTS;
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	struct exynos_fmp *fmp;
 
+#ifndef CONFIG_EXYNOS_FMP_FIPS
 	dev_info(hba->dev, "Exynos FMP Version: %s\n", FMP_DRV_VERSION);
+#endif
 	dev_info(hba->dev, "HW_KEYS_IN_CUSTOM_KEYSLOT\n");
 
+#ifdef CONFIG_EXYNOS_FIPS_SIMULATOR
+	fmp_ufs_handle = (struct fmp_handle *)&ufs->handle;
+	FIPS_keyslot_num = -1;
+#endif
 	ufs->fmp = devm_kzalloc(ufs->dev, sizeof(struct exynos_fmp), GFP_KERNEL);
 	if (ufs->fmp == NULL) {
 		dev_warn(hba->dev, "failed to alloc ufs->fmp\n");
 		goto disable_nofree;
 	}
 	fmp = (struct exynos_fmp *)ufs->fmp;
+
+	ret = exynos_smc(SMC_CMD_SMU, SMU_INIT, FMP_EMBEDDED, 0);
+	if (ret)
+		dev_warn(hba->dev, "SMC_CMD_SMU(SMU_INIT) failed: %ld\n", ret);
 
 	ret = exynos_smc(SMC_CMD_FMP_SECURITY, 0, FMP_EMBEDDED, CFG_DESCTYPE_0);
 	if (ret) {
@@ -633,7 +654,8 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 	hba->caps |= UFSHCD_CAP_CRYPTO;
 
 	/* Advertise crypto quirks to ufshcd-core. */
-	hba->quirks |= UFSHCD_QUIRK_CUSTOM_KEYSLOT_MANAGER;
+	hba->quirks |= UFSHCD_QUIRK_FMP_MODE_SPECIFIC |
+			UFSHCD_QUIRK_FMP_SOC_SPECIFIC;
 	dev_info(hba->dev, "Exynos FMP quirks: 0x%x\n", hba->quirks);
 
 	/*
@@ -654,7 +676,13 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 	}
 
 	exynos_ufs_fmp_populate_dt(ufs->dev, fmp);
-	dev_info(ufs->dev, "ufs->fmp cfge_en = %d\n", fmp->cfge_en);
+	dev_info(ufs->dev, "ufs->fmp valid_check = %d\n", fmp->valid_check);
+
+	/* Key program slot #0 to make it valid for non crypto IO. */
+	if (fmp->valid_check == 1) {
+		num_keyslots -= 1;
+		key_program_slot0(hba);
+	}
 
 	/* Write Perboot key, IV and Valid bit setting */
 	ret = exynos_smc(SMC_CMD_FMP_KW_SYSREG, 0, 0, 0);
@@ -663,11 +691,20 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 		goto disable;
 	}
 
-	err = exynos_ufs_fmp_init_crypto_capabilities(hba);
+	err = blk_ksm_init(&hba->ksm, num_keyslots);
 	if (err) {
-		dev_warn(hba->dev, "exynos_ufs_fmp_init_crypto_capabilities failed: %d\n", err);
+		dev_warn(hba->dev, "blk_ksm_init failed: %d\n", err);
 		goto disable;
 	}
+
+	hba->ksm.ksm_ll_ops = exynos_ufs_fmp_ksm_ll_ops;
+	hba->ksm.max_dun_bytes_supported = 8;
+	hba->ksm.features = BLK_CRYPTO_FEATURE_WRAPPED_KEYS;
+
+	hba->ksm.dev = hba->dev;
+	hba->ksm.crypto_modes_supported[BLK_ENCRYPTION_MODE_AES_256_XTS] =
+		FMP_DATA_UNIT_SIZE;
+
 
 	device_initialize(&dev_fmp);
 	err = dma_coerce_mask_and_coherent(&dev_fmp, DMA_BIT_MASK(36));
@@ -676,113 +713,97 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 		goto disable;
 	}
 
-	err = exynos_ufs_fmp_check_selftest(hba);
-	if (err) {
-		dev_warn(hba->dev, "FMP selftest failed: %d\n", err);
-		goto disable;
-	}
-
+	register_trace_android_vh_ufs_prepare_command(exynos_ufs_fmp_prepare_command, NULL);
 	return;
+
 disable:
 	devm_kfree(ufs->dev, ufs->fmp);
 disable_nofree:
-	/* Indicate that init failed by clearing UFSHCD_CAP_CRYPTO */
 	dev_warn(hba->dev, "Disabling inline encryption support\n");
 	hba->caps &= ~UFSHCD_CAP_CRYPTO;
 }
 #endif /* CONFIG_HW_KEYS_IN_CUSTOM_KEYSLOT */
 #ifdef CONFIG_KEYS_IN_CUSTOM_KEYSLOT
-static int fmp_evict_key(struct ufs_hba *hba,
-			const union ufs_crypto_cfg_entry *cfg, int slot)
+/*
+ * Program a key into a FMP custom keyslot, or evict a keyslot.
+ */
+static int exynos_ufs_fmp_keyslot_program(struct blk_keyslot_manager *ksm,
+					const struct blk_crypto_key *key,
+					unsigned int keyslot)
 {
+	struct ufs_hba *hba = container_of(ksm, struct ufs_hba, ksm);
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	struct exynos_fmp *fmp = (struct exynos_fmp *)ufs->fmp;
-	size_t i;
-	u32 slot_offset = hba->crypto_cfg_register + slot * sizeof(*cfg);
-	u32 dword16;
-
-	dev_info(hba->dev, "%s slot = %d/%d\n",__func__, slot, hba->crypto_capabilities.config_count);
-
-	/* Ensure that CFGE is cleared before programming the key */
-	/* Do not clear CFGE because this shoul be 1 when CFGE_EN == 1 */
-	if (!fmp->cfge_en)
-		hci_writel(&ufs->handle, 0, slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-	else
-		hci_writel(&ufs->handle, CRYPTOCFG_GFGE_EN, slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-
-	for (i = 0; i < 16; i++) {
-		hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[i]),
-			      slot_offset + i * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-	}
-
-	/* Write key partially to make key invalid */
-	hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[0]), slot_offset - HCI_VS_BASE_GAP);
-
-	/* Write dword 17 */
-	hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[17]),
-		      slot_offset + 17 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-
-	/* Dword 16 must be written last */
-	/* Set CFGE bit to 1 by force in case of key eviction
-	 *  because this should be 1 when CFGE_EN == 1
-	 */
-	if (fmp->cfge_en)
-		dword16 = cfg->reg_val[16] | 0x80000000;
-
-	/* CFGE bit should be 1 when CFGE_EN == 1 */
-	if (fmp->cfge_en)
-		hci_writel(&ufs->handle, le32_to_cpu(dword16),
-				slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-	else
-		hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[16]),
-				slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-
-	/* To Do
-	 * This should be fixed to return by goto label in error cases if ufshcd control is needed.
-	 */
-	return 0;
-}
-
-int exynos_ufs_fmp_program_key(struct ufs_hba *hba,
-			const union ufs_crypto_cfg_entry *cfg, int slot)
-{
-	struct exynos_ufs *ufs = to_exynos_ufs(hba);
-	struct exynos_fmp *fmp = (struct exynos_fmp *)ufs->fmp;
-	const u8 *enckey, *twkey;
+	unsigned int num_keyslots = NUM_KEYSLOTS;
+	unsigned int slot = keyslot;
+#ifdef CONFIG_EXYNOS_FMP_FIPS
+	int ret;
+	struct exynos_fmp_key_info fmp_ki;
+#else
+	size_t i, limit;
 	u32 count = 0;
 	u32 kw_keyvalid;
-	size_t i;
-	u32 slot_offset = hba->crypto_cfg_register + slot * sizeof(*cfg);
+	u32 slot_offset;
+	const u8 *enckey, *twkey;
+	union {
+		u8 bytes[AES_256_XTS_KEY_SIZE];
+		u32 words[AES_256_XTS_KEY_SIZE / sizeof(u32)];
+	} fmp_key;
+#endif
+	if(fmp->valid_check == 1) {
+		slot += 1;
+		num_keyslots -= 1;
+	}
 
-	if (!(cfg->config_enable & UFS_CRYPTO_CONFIGURATION_ENABLE))
-		return fmp_evict_key(hba, cfg, slot);
+	/* To Do
+	 * This is from ufshcd-crypto. Should check if this is needed.
+	 */
+	// ufshcd_hold(hba, false);
 
-	dev_info(hba->dev, "%s slot = %d/%d\n",__func__, slot, hba->crypto_capabilities.config_count);
-
-	enckey = cfg->crypto_key;
-	twkey = enckey + (AES_256_XTS_KEY_SIZE/2);
-
-	/* Reject weak AES-XTS keys */
-	if (!memcmp(enckey, twkey, AES_256_XTS_KEY_SIZE/2)) {
-		dev_err(hba->dev, "Can't use weak AES-XTS key\n");
+	/* Only AES-256-XTS is supported */
+	if (key->crypto_cfg.crypto_mode != BLK_ENCRYPTION_MODE_AES_256_XTS ||
+		key->size != AES_256_XTS_KEY_SIZE) {
+		dev_err(hba->dev,
+			"Unhandled crypto capability; crypto_mode=%d, key_size=%d\n",
+			key->crypto_cfg.crypto_mode, key->size);
 		return -EINVAL;
 	}
 
-	/* Ensure that CFGE is cleared before programming the key */
-	/* Do not clear CFGE because this shoul be 1 when CFGE_EN == 1 */
-	if (!fmp->cfge_en)
-		hci_writel(&ufs->handle, 0, slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-	else
-		hci_writel(&ufs->handle, CRYPTOCFG_GFGE_EN, slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
+	dev_info(hba->dev, "%s slot = %d/%d\n",__func__, slot, num_keyslots);
+#ifdef CONFIG_EXYNOS_FMP_FIPS
+	fmp_ki.raw = key->raw;
+	fmp_ki.size = key->size;
+	fmp_ki.slot = slot;
+	ret = exynos_fmp_setkey(&fmp_ki, (struct fmp_handle *)&ufs->handle);
+	if (ret) {
+		dev_err(hba->dev, "%s: Fail to set FMP key in keyslot (ret: %d)\n", __func__, ret);
+		return ret;
+	}
+#else
+	/* In XTS mode, the blk_crypto_key's size is already doubled */
+	memcpy(fmp_key.bytes, key->raw, key->size);
 
-	for (i = 0; i < 16; i++) {
-		hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[i]),
-			      slot_offset + i * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
+	enckey = key->raw;
+	twkey = enckey + AES_KEYSIZE_256;
+
+	slot_offset = FMP_KW_SECUREKEY + slot*FMP_KW_SECUREKEY_OFFSET;
+
+	/* Reject weak AES-XTS keys */
+	if (!crypto_memneq(enckey, twkey, AES_KEYSIZE_256)) {
+		dev_err(hba->dev, "Can't use weak AES-XTS key\n");
+		return -EINVAL;
+	}
+	/* Key program in keyslot */
+	/* Swap File key and Tweak key */
+	for (i = 0, limit = AES_256_XTS_KEY_SIZE / (sizeof(u32) * 2); i < limit; i++) {
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key.words[i]),
+			slot_offset + ((i + AES_256_XTS_TWK_OFFSET) * sizeof(u32)));
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key.words[i + AES_256_XTS_TWK_OFFSET]),
+			slot_offset + (i * sizeof(u32)));
 	}
 
-	/* Write dword 17 */
-	hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[17]),
-		      slot_offset + 17 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
+	/* Zeroise the key */
+	memzero_explicit(&fmp_key, key->size);
 
 	/* Keyslot should be valid for crypto IO */
 	do {
@@ -801,12 +822,13 @@ int exynos_ufs_fmp_program_key(struct ufs_hba *hba,
 		dev_err(hba->dev, "Key slot #%d is not valid\n", slot);
 		return -EINVAL;
 	}
-	else {
-		/* Dword 16 must be written last */
-		hci_writel(&ufs->handle, le32_to_cpu(cfg->reg_val[16]),
-				slot_offset + 16 * sizeof(cfg->reg_val[0]) - HCI_VS_BASE_GAP);
-		dev_info(hba->dev, "%s Key valid = 0x%x\n", __func__, kw_keyvalid);
-	}
+
+	dev_info(hba->dev, "%s Key valid = 0x%x\n", __func__, kw_keyvalid);
+#endif
+	/* To Do
+	 * This is from ufshcd-crypto. Should check if this is needed.
+	 */
+	// ufshcd_release(hba);
 
 	/* To Do
 	 * This should be fixed to return by goto label in error cases if ufshcd control is needed.
@@ -814,23 +836,82 @@ int exynos_ufs_fmp_program_key(struct ufs_hba *hba,
 	return 0;
 }
 
+static int exynos_ufs_fmp_keyslot_evict(struct blk_keyslot_manager *ksm,
+					const struct blk_crypto_key *key,
+					unsigned int slot)
+{
+	/* Nothing To Do */
+	return 0;
+}
+
+static const struct blk_ksm_ll_ops exynos_ufs_fmp_ksm_ll_ops = {
+	.keyslot_program	= exynos_ufs_fmp_keyslot_program,
+	.keyslot_evict		= exynos_ufs_fmp_keyslot_evict,
+};
+
+void key_program_slot0(struct ufs_hba *hba)
+{
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	size_t i, limit;
+	u32 kw_keyvalid;
+	u32 count = 0;
+	int slot = 0;
+	u32 fmp_key = 0;
+
+	/* Key program in keyslot #0 */
+	u32 slot_offset = FMP_KW_SECUREKEY;
+
+	/* Swap File key and Tweak key */
+	for (i = 0, limit = AES_256_XTS_KEY_SIZE / sizeof(u32); i < limit; i++)
+		ufsp_writel(&ufs->handle, le32_to_cpu(fmp_key), slot_offset + (i * sizeof(fmp_key)));
+
+	/* Keyslot #0 should be valid for normal IO */
+	do {
+		kw_keyvalid = ufsp_readl(&ufs->handle, FMP_KW_KEYVALID);
+		if (!(kw_keyvalid & 0x1)) {
+			dev_warn(hba->dev, "Key slot #%d is not valid yet\n", slot);
+			udelay(2);
+			count++;
+			continue;
+		}
+		else {
+			break;
+		}
+	} while (count < MAX_RETRY_COUNT);
+
+	if (!(kw_keyvalid & (0x1 << slot)))
+		dev_err(hba->dev, "Key slot #%d is not valid\n", slot);
+	else
+		dev_info(hba->dev, "%s Key valid = 0x%x\n", __func__, kw_keyvalid);
+}
+
 void exynos_ufs_fmp_init(struct ufs_hba *hba)
 {
 	unsigned long ret;
 	int err;
 	unsigned int kw_indataswap;
+	int num_keyslots = NUM_KEYSLOTS;
 	struct exynos_ufs *ufs = to_exynos_ufs(hba);
 	struct exynos_fmp *fmp;
 
+#ifndef CONFIG_EXYNOS_FMP_FIPS
 	dev_info(hba->dev, "Exynos FMP Version: %s\n", FMP_DRV_VERSION);
+#endif
 	dev_info(hba->dev, "KEYS_IN_CUSTOM_KEYSLOT\n");
-
+#ifdef CONFIG_EXYNOS_FIPS_SIMULATOR
+	fmp_ufs_handle = (struct fmp_handle *)&ufs->handle;
+	FIPS_keyslot_num = -1;
+#endif
 	ufs->fmp = devm_kzalloc(ufs->dev, sizeof(struct exynos_fmp), GFP_KERNEL);
 	if (ufs->fmp == NULL) {
 		dev_warn(hba->dev, "failed to alloc ufs->fmp\n");
 		goto disable_nofree;
 	}
 	fmp = (struct exynos_fmp *)ufs->fmp;
+
+	ret = exynos_smc(SMC_CMD_SMU, SMU_INIT, FMP_EMBEDDED, 0);
+	if (ret)
+		dev_warn(hba->dev, "SMC_CMD_SMU(SMU_INIT) failed: %ld\n", ret);
 
 	ret = exynos_smc(SMC_CMD_FMP_SECURITY, 0, FMP_EMBEDDED, CFG_DESCTYPE_0);
 	if (ret) {
@@ -848,6 +929,8 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 	hba->caps |= UFSHCD_CAP_CRYPTO;
 
 	/* Advertise crypto quirks to ufshcd-core. */
+	hba->quirks |= UFSHCD_QUIRK_FMP_MODE_SPECIFIC |
+			UFSHCD_QUIRK_FMP_SOC_SPECIFIC;
 	dev_info(hba->dev, "Exynos FMP quirks: 0x%x\n", hba->quirks);
 
 	/*
@@ -868,40 +951,46 @@ void exynos_ufs_fmp_init(struct ufs_hba *hba)
 	}
 
 	exynos_ufs_fmp_populate_dt(ufs->dev, fmp);
-	dev_info(ufs->dev, "ufs->fmp cfge_en = %d\n", fmp->cfge_en);
+	dev_info(ufs->dev, "ufs->fmp valid_check = %d\n", fmp->valid_check);
 
-	err = exynos_ufs_fmp_check_selftest(hba);
+	/* Key program slot #0 to make it valid for non crypto IO. */
+	if (fmp->valid_check == 1) {
+		num_keyslots -= 1;
+		key_program_slot0(hba);
+	}
+
+	/* Advertise crypto capabilities to the block layer. */
+	err = blk_ksm_init(&hba->ksm, num_keyslots);
 	if (err) {
-		dev_warn(hba->dev, "FMP selftest failed: %d\n", err);
+		dev_warn(hba->dev, "blk_ksm_init failed: %d\n", err);
 		goto disable;
 	}
 
+	hba->ksm.ksm_ll_ops = exynos_ufs_fmp_ksm_ll_ops;
+	hba->ksm.max_dun_bytes_supported = 8;
+	hba->ksm.features |= BLK_CRYPTO_FEATURE_STANDARD_KEYS;
+
+	hba->ksm.dev = hba->dev;
+	hba->ksm.crypto_modes_supported[BLK_ENCRYPTION_MODE_AES_256_XTS] =
+		FMP_DATA_UNIT_SIZE;
+
+	register_trace_android_vh_ufs_prepare_command(exynos_ufs_fmp_prepare_command, NULL);
 	return;
 
 disable:
 	devm_kfree(ufs->dev, ufs->fmp);
 disable_nofree:
-	/* Indicate that init failed by clearing UFSHCD_CAP_CRYPTO */
 	dev_warn(hba->dev, "Disabling inline encryption support\n");
 	hba->caps &= ~UFSHCD_CAP_CRYPTO;
 }
 #endif
 
-void exynos_ufs_fmp_enable(struct ufs_hba *hba)
-{
-	int err;
-
-	if (!(hba->caps & UFSHCD_CAP_CRYPTO))
-		return;
-
-	err = exynos_ufs_fmp_check_selftest(hba);
-	if (err) {
-		panic("FMP selftest failed: %d\n", err);
-	}
-}
-
 void exynos_ufs_fmp_resume(struct ufs_hba *hba)
 {
+#ifndef CONFIG_KEYS_IN_PRDT
+	struct exynos_ufs *ufs = to_exynos_ufs(hba);
+	struct exynos_fmp *fmp = (struct exynos_fmp*)ufs->fmp;
+#endif
 	unsigned long ret;
 
 	/* Restore all fmp registers on init - Security, Kwmode, kwindataswap */
@@ -909,8 +998,11 @@ void exynos_ufs_fmp_resume(struct ufs_hba *hba)
 	if (ret)
 		dev_err(hba->dev, "SMC_CMD_FMP_SMU_RESUME failed on resume: %ld\n", ret);
 
-	if (!(hba->caps &UFSHCD_CAP_CRYPTO))
-		return;
+	/* Key program slot #0 to make it valid for non crypto IO. */
+#ifndef CONFIG_KEYS_IN_PRDT
+	if (fmp->valid_check == 1)
+		key_program_slot0(hba);
+#endif
 
 #ifdef CONFIG_HW_KEYS_IN_CUSTOM_KEYSLOT
 	/* Restore Perboot key, IV and Valid bit setting */
@@ -920,4 +1012,20 @@ void exynos_ufs_fmp_resume(struct ufs_hba *hba)
 		return;
 	}
 #endif
+}
+
+void exynos_ufs_fmp_dump_info(struct ufs_hba *hba)
+{
+	int i = 0;
+
+	dev_err(hba->dev, ": --------------------------------------------------- \n");
+	dev_err(hba->dev, ": \t\tFMP REGs\n");
+	dev_err(hba->dev, ": --------------------------------------------------- \n");
+
+	for( i = 0; i < FMP_REGS; i++) {
+		ufs_fmp_log_sfr[i].val = exynos_smc(SMC_CMD_FMP_SMU_DUMP, 0, FMP_EMBEDDED, ufs_fmp_log_sfr[i].offset);
+		dev_err(hba->dev, ": %-30s\t0x%-012x\t0x%-014x\n",
+				ufs_fmp_log_sfr[i].name, ufs_fmp_log_sfr[i].offset, ufs_fmp_log_sfr[i].val);
+
+	}
 }

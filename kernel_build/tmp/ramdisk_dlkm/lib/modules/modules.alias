@@ -40,6 +40,8 @@ alias of:N*T*Carm,mali-midgard mali_kbase
 alias of:N*T*Carm,mali-midgardC* mali_kbase
 alias of:N*T*Carm,mali-bifrost mali_kbase
 alias of:N*T*Carm,mali-bifrostC* mali_kbase
+alias of:N*T*Carm,mali-valhall mali_kbase
+alias of:N*T*Carm,mali-valhallC* mali_kbase
 alias of:N*T*Csamsung,scsc_bt_qos scsc_bt
 alias of:N*T*Csamsung,scsc_bt_qosC* scsc_bt
 alias platform:samsung-slif snd_soc_samsung_slif
@@ -234,6 +236,9 @@ alias of:N*T*Csamsung,exynos-ecc-handler exynos_ecc_handler
 alias of:N*T*Csamsung,exynos-ecc-handlerC* exynos_ecc_handler
 alias of:N*T*Csamsung,exynos-s2mpu exynos_s2mpu
 alias of:N*T*Csamsung,exynos-s2mpuC* exynos_s2mpu
+alias platform:s610-radio fm_s620
+alias of:N*T*Csamsung,exynos8825-fm fm_s620
+alias of:N*T*Csamsung,exynos8825-fmC* fm_s620
 alias of:N*T*Csamsung,exynos4210-mct exynos_mct
 alias of:N*T*Csamsung,exynos4210-mctC* exynos_mct
 alias of:N*T*Csamsung,exynos4412-mct exynos_mct
@@ -421,8 +426,6 @@ alias hid:b0003g*v000004D9p0000A055 hid_holtek_kbd
 alias usb:v084Ep1001d*dc*dsc*dp*ic*isc*ip*in* kbtab
 alias of:N*T*Csamsung,kq-mesh mesh
 alias of:N*T*Csamsung,kq-meshC* mesh
-alias of:N*T*Csamsung,exynos-ufs ufs_exynos_core
-alias of:N*T*Csamsung,exynos-ufsC* ufs_exynos_core
 alias of:N*T*Csamsung,mcd-panel-samsung-drv mcd_panel_samsung_drv
 alias of:N*T*Csamsung,mcd-panel-samsung-drvC* mcd_panel_samsung_drv
 alias of:N*T*Csamsung,exynos-tmu-v2 exynos_thermal
@@ -445,8 +448,6 @@ alias hid:b0003g*v00000925p00000005 hid_sjoy
 alias hid:b0003g*v00000925p00008888 hid_sjoy
 alias hid:b0003g*v00000925p00008866 hid_sjoy
 alias hid:b0003g*v00000B43p00000003 hid_sjoy
-alias of:N*T*Csamsung,exynos-cpu-profiler exynos_cpu_profiler
-alias of:N*T*Csamsung,exynos-cpu-profilerC* exynos_cpu_profiler
 alias platform:samsung-abox-synchronized-ipc snd_soc_samsung_abox_sync
 alias of:N*T*Csamsung,abox-synchronized-ipc snd_soc_samsung_abox_sync
 alias of:N*T*Csamsung,abox-synchronized-ipcC* snd_soc_samsung_abox_sync
@@ -614,8 +615,17 @@ alias of:N*T*Csamsung,exynos-mfcC* exynos_mfc
 alias of:N*T*Csamsung,exynos-mfc-core exynos_mfc
 alias of:N*T*Csamsung,exynos-mfc-coreC* exynos_mfc
 alias i2c:tas2562 snd_soc_tas2562
+alias i2c:tas2563 snd_soc_tas2562
+alias i2c:tas2564 snd_soc_tas2562
+alias i2c:tas2110 snd_soc_tas2562
 alias of:N*T*Cti,tas2562 snd_soc_tas2562
 alias of:N*T*Cti,tas2562C* snd_soc_tas2562
+alias of:N*T*Cti,tas2563 snd_soc_tas2562
+alias of:N*T*Cti,tas2563C* snd_soc_tas2562
+alias of:N*T*Cti,tas2564 snd_soc_tas2562
+alias of:N*T*Cti,tas2564C* snd_soc_tas2562
+alias of:N*T*Cti,tas2110 snd_soc_tas2562
+alias of:N*T*Cti,tas2110C* snd_soc_tas2562
 alias usb:v*p*d*dc*dsc*dp*ic02isc0Dip00in* cdc_mbim
 alias usb:v0BDBp*d*dc*dsc*dp*ic02isc0Eip00in* cdc_mbim
 alias usb:v12D1p*d*dc*dsc*dp*ic02isc0Eip00in* cdc_mbim

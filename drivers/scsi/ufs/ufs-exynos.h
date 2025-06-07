@@ -17,28 +17,23 @@
 #endif
 #include <linux/platform_device.h>
 
-#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
-#include <soc/samsung/exynos-itmon.h>
-#endif
+#define UFS_VER_0004	4
+#define UFS_VER_0005	5
 
 #define EOM_DEF_VREF_MAX	256
 
+#define RV_SUCCESS	0
+
 #define H8T_GRANULARITY		100
 
-#define EXYNOS_PHY_BIAS		0x1000C30C
-
-/* For Pad retention */
-#define PMU_TOP_OUT		0x3B20
-#define PAD_RTO_UFS_EMBD	0x40000
-
-#define PMU_UFS_OUT		0x1FA0
-#define IP_INISO_PHY		0x8000
-
-/* inject an error to RX */
+#define BIT_POS_DBG_DL_RX_INFO_FORCE	28
 #define BIT_POS_DBG_DL_RX_INFO_TYPE	18
-#define BIT_POS_DBG_DL_RX_INFO_FORCE	(1 << 28)
-#define RX_BUFFER_OVERFLOW		(1 << 15)
-#define DL_RX_INFO_TYPE_ERROR_DETECTED  (21 << BIT_POS_DBG_DL_RX_INFO_TYPE)
+#define DL_RX_INFO_TYPE_ERROR_DETECTED  21
+
+enum {
+	UFS_S_MON_LV1 = (1 << 0),
+	UFS_S_MON_LV2 = (1 << 1),
+};
 
 struct ext_cxt {
 	u32 offset;
@@ -50,7 +45,7 @@ struct ext_cxt {
  * H_UTP_BOOST and H_FATAL_ERR arn't in here because they were just
  * defined to enable some callback functions explanation.
  */
-typedef enum {
+enum exynos_host_state {
 	H_DISABLED = 0,
 	H_RESET = 1,
 	H_LINK_UP = 2,
@@ -59,14 +54,20 @@ typedef enum {
 	H_REQ_BUSY = 5,
 	H_HIBERN8 = 6,
 	H_SUSPEND = 7,
-} exynos_host_state;
+};
 
-typedef enum {
+enum exynos_clk_state {
 	C_OFF = 0,
 	C_ON,
-} exynos_clk_state;
+};
 
-typedef enum {
+enum exynos_ufs_ext_blks {
+	EXT_SYSREG = 0,
+	EXT_BLK_MAX,
+#define EXT_BLK_MAX 1
+};
+
+enum exynos_ufs_param_id {
 	UFS_S_PARAM_EOM_VER = 0,
 	UFS_S_PARAM_EOM_SZ,
 	UFS_S_PARAM_EOM_OFS,
@@ -74,12 +75,21 @@ typedef enum {
 	UFS_S_PARAM_H8_D_MS,
 	UFS_S_PARAM_MON,
 	UFS_S_PARAM_NUM,
-} exynos_ufs_param_id;
+};
 
-typedef enum {
+enum exynos_ufs_ah8_state {
 	UFS_STATE_AH8,
 	UFS_STATE_IDLE,
-} exynos_ufs_ah8_state;
+};
+
+/* UFSHCD states */
+enum {
+	UFSHCD_STATE_RESET,
+	UFSHCD_STATE_ERROR,
+	UFSHCD_STATE_OPERATIONAL,
+	UFSHCD_STATE_EH_SCHEDULED_FATAL,
+	UFSHCD_STATE_EH_SCHEDULED_NON_FATAL,
+};
 
 struct exynos_ufs {
 	struct device *dev;
@@ -94,8 +104,7 @@ struct exynos_ufs {
 	void __iomem *reg_ufsp;			/* ufs protector */
 	void __iomem *reg_phy;			/* phy */
 	void __iomem *reg_cport;		/* cport */
-	void __iomem *reg_pcs;			/* pcs */
-#define NUM_OF_UFS_MMIO_REGIONS 6
+#define NUM_OF_UFS_MMIO_REGIONS 5
 
 	/*
 	 * Do not change the order of remap variables.
@@ -103,29 +112,27 @@ struct exynos_ufs {
 	struct regmap *regmap_sys;		/* io coherency */
 	struct ext_cxt cxt_phy_iso;
 	struct ext_cxt cxt_iocc;
-	struct ext_cxt cxt_pad_ret;
-	bool is_dma_coherent;
 
 	/*
 	 * Do not change the order of clock variables
 	 */
 	struct clk *clk_hci;
 	struct clk *clk_unipro;
-	u32 mclk_gear5;
-	u32 freq_for_1us_cntval;
 
 	/* exynos specific state */
-	exynos_host_state h_state;
-	exynos_host_state h_state_prev;
-	exynos_clk_state c_state;
+	enum exynos_host_state h_state;
+	enum exynos_host_state h_state_prev;
+	enum exynos_clk_state c_state;
 
-	unsigned long mclk_rate;
+	u32 mclk_rate;
 
 	int num_rx_lanes;
 	int num_tx_lanes;
 
-	struct uic_pwr_mode hci_pmd_parm;
-	struct uic_pwr_mode device_pmd_parm;
+	struct uic_pwr_mode req_pmd_parm;
+	struct uic_pwr_mode act_pmd_parm;
+
+	int id;
 
 	/* Support system power mode */
 	int idle_ip_index;
@@ -135,7 +142,6 @@ struct exynos_ufs {
 	struct exynos_pm_qos_request	pm_qos_int;
 #endif
 	s32			pm_qos_int_value;
-	s32			pm_qos_gear5_int;
 
 	/* cal */
 	struct ufs_cal_param	cal_param;
@@ -144,6 +150,8 @@ struct exynos_ufs {
 	void *perf;
 	struct ufs_vs_handle handle;
 
+	u32 peer_available_lane_rx;
+	u32 peer_available_lane_tx;
 	u32 available_lane_rx;
 	u32 available_lane_tx;
 
@@ -169,10 +177,7 @@ struct exynos_ufs {
 	/* value 1 whenever resuming, and then we can deal with
 	   UAC(Unit Attention Condition). */
 	u32 resume_state;
-
-	/* As pmic ldo drop rate is slow, need to track of
-	   device LDO off timestamp */
-	s64 vcc_off_time;
+	bool suspend_done;
 
 	/* This variable is for featuring hw functionality */
 	void *fmp;
@@ -184,15 +189,6 @@ struct exynos_ufs {
 
 	/* cache of hardware contents */
 	unsigned long nexus;
-
-	bool always_on;
-	struct pinctrl *pinctrl;
-	struct pinctrl_state *ufs_stat_wakeup;
-	struct pinctrl_state *ufs_stat_sleep;
-
-#if IS_ENABLED(CONFIG_EXYNOS_ITMON)
-	struct notifier_block itmon_nb;
-#endif
 	bool skip_flush;
 	bool deep_suspended;
 };
@@ -220,12 +216,13 @@ void exynos_ufs_cmd_log_end(struct ufs_vs_handle *,
 #ifdef CONFIG_SCSI_UFS_EXYNOS_FMP
 void exynos_ufs_fmp_init(struct ufs_hba *hba);
 void exynos_ufs_fmp_resume(struct ufs_hba *hba);
-void exynos_ufs_fmp_enable(struct ufs_hba *hba);
-#ifdef CONFIG_KEYS_IN_CUSTOM_KEYSLOT
-int exynos_ufs_fmp_program_key(struct ufs_hba *hba,
-				const union ufs_crypto_cfg_entry *cfg, int slot);
+void exynos_ufs_fmp_dump_info(struct ufs_hba *hba);
+#ifdef CONFIG_KEYS_IN_PRDT
+static inline void exynos_ufs_fmp_set_crypto_cfg(struct ufs_hba *hba)
+{
+}
 #else
-#define exynos_ufs_fmp_program_key NULL
+void exynos_ufs_fmp_set_crypto_cfg(struct ufs_hba *hba);
 #endif
 #else  /* !CONFIG_SCSI_UFS_EXYNOS_FMP */
 static inline void exynos_ufs_fmp_init(struct ufs_hba *hba)
@@ -234,10 +231,12 @@ static inline void exynos_ufs_fmp_init(struct ufs_hba *hba)
 static inline void exynos_ufs_fmp_resume(struct ufs_hba *hba)
 {
 }
-static inline void exynos_ufs_fmp_enable(struct ufs_hba *hba)
+static inline void exynos_ufs_fmp_dump_info(struct ufs_hba *hba)
 {
 }
-#define exynos_ufs_fmp_program_key NULL
+static inline void exynos_ufs_fmp_set_crypto_cfg(struct ufs_hba *hba)
+{
+}
 #endif /* ONFIG_SCSI_UFS_EXYNOS_FMP */
 
 #if IS_ENABLED(CONFIG_SCSI_UFS_EXYNOS_SRPMB)
@@ -253,7 +252,6 @@ static inline struct scsi_device *exynos_ufs_srpmb_sdev(void)
 	return NULL;
 }
 #endif
-int exynos_ufs_check_ah8_fsm_state(struct ufs_hba *hba, u32 state);
 int exynos_ufs_init_mem_log(struct platform_device *pdev);
-int ufs_call_cal(struct exynos_ufs *ufs, void *func);
+int ufs_call_cal(struct exynos_ufs *ufs, int init, void *func);
 #endif /* _UFS_EXYNOS_H_ */

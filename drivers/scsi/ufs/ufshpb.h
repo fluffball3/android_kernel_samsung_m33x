@@ -31,6 +31,7 @@
 
 /* hpb support chunk size */
 #define HPB_LEGACY_CHUNK_HIGH			1
+#define HPB_MULTI_CHUNK_LOW			7
 #define HPB_MULTI_CHUNK_HIGH			255
 
 /* hpb vender defined opcode */
@@ -52,6 +53,7 @@
 
 #define HPB_SUPPORT_VERSION			0x200
 #define HPB_SUPPORT_LEGACY_VERSION		0x100
+#define HPB_MAJOR_VERSION_MASK			0xFF00
 
 enum UFSHPB_MODE {
 	HPB_HOST_CONTROL,
@@ -240,6 +242,8 @@ struct ufshpb_lu {
 	spinlock_t param_lock;
 
 	struct list_head lh_pre_req_free;
+	int cur_read_id;
+	int pre_req_min_tr_len;
 	int pre_req_max_tr_len;
 
 	/* cached L2P map management worker */

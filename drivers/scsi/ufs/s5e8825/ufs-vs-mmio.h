@@ -1,7 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
-/*
- * Copyright 2022 Samsung Electronics Co., Ltd.
- */
 #ifndef _UFS_VS_HANDLE_H_
 #define _UFS_VS_HANDLE_H_
 
@@ -12,27 +8,59 @@ struct ufs_vs_handle {
 	void *unipro;
 	void *pma;
 	void *cport;
-	void *pcs;
 	void (*udelay)(u32 us);
 	void *private;
 };
 
-#define EXYNOS_UFS_MMIO_FUNC(name)					\
-static inline void name##_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)	\
-{									\
-	writel(val, handle->name + ofs);				\
-}									\
-static inline u32 name##_readl(struct ufs_vs_handle *handle, u32 ofs)	\
-{									\
-	return readl(handle->name + ofs);				\
+static inline void std_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->std + ofs);
 }
 
-EXYNOS_UFS_MMIO_FUNC(std);
-EXYNOS_UFS_MMIO_FUNC(hci);
-EXYNOS_UFS_MMIO_FUNC(ufsp);
-EXYNOS_UFS_MMIO_FUNC(unipro);
-EXYNOS_UFS_MMIO_FUNC(cport);
-EXYNOS_UFS_MMIO_FUNC(pcs);
+static inline u32 std_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->std + ofs);
+}
+
+static inline void hci_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->hci + ofs);
+}
+
+static inline u32 hci_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->hci + ofs);
+}
+
+static inline void unipro_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->unipro + ofs);
+}
+
+static inline u32 unipro_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->unipro + ofs);
+}
+
+static inline void cport_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->cport + ofs);
+}
+
+static inline u32 cport_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->cport + ofs);
+}
+
+static inline void ufsp_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->ufsp + ofs);
+}
+
+static inline u32 ufsp_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->ufsp + ofs);
+}
 
 #if defined(__UFS_CAL_FW__)
 
@@ -62,7 +90,15 @@ static inline u32 pma_readl(struct ufs_vs_handle *handle, u32 ofs)
 	return val;
 }
 #else
-EXYNOS_UFS_MMIO_FUNC(pma);
+static inline void pma_writel(struct ufs_vs_handle *handle, u32 val, u32 ofs)
+{
+	writel(val, handle->pma + ofs);
+}
+
+static inline u32 pma_readl(struct ufs_vs_handle *handle, u32 ofs)
+{
+	return readl(handle->pma + ofs);
+}
 #endif
 
 #endif /* _UFS_VS_HANDLE_H_ */

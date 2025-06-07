@@ -39,7 +39,7 @@ config SCSI_UFSHCD
 	select DEVFREQ_GOV_SIMPLE_ONDEMAND
 	select NLS
 	help
-	  This selects the support for UFS devices in Linux, say Y and make
+	This selects the support for UFS devices in Linux, say Y and make
 	  sure that you know the name of your UFS host adapter (the card
 	  inside your computer that "speaks" the UFS protocol, also
 	  called UFS Host Controller), because you will be asked for it.
@@ -54,8 +54,8 @@ config SCSI_UFSHCD_PCI
 	tristate "PCI bus based UFS Controller support"
 	depends on SCSI_UFSHCD && PCI
 	help
-	  This selects the PCI UFS Host Controller Interface. Select this if
-	  you have UFS Host Controller with PCI Interface.
+	This selects the PCI UFS Host Controller Interface. Select this if
+	you have UFS Host Controller with PCI Interface.
 
 	  If you have a controller with this interface, say Y or M here.
 
@@ -74,10 +74,10 @@ config SCSI_UFSHCD_PLATFORM
 	depends on SCSI_UFSHCD
 	depends on HAS_IOMEM
 	help
-	  This selects the UFS host controller support. Select this if
-	  you have an UFS controller on Platform bus.
+	This selects the UFS host controller support. Select this if
+	you have an UFS controller on Platform bus.
 
-	  If you have a controller with this interface, say Y or M here.
+	If you have a controller with this interface, say Y or M here.
 
 	  If unsure, say N.
 
@@ -85,7 +85,7 @@ config SCSI_UFS_CDNS_PLATFORM
 	tristate "Cadence UFS Controller platform driver"
 	depends on SCSI_UFSHCD_PLATFORM
 	help
-	  This selects the Cadence-specific additions to UFSHCD platform driver.
+	This selects the Cadence-specific additions to UFSHCD platform driver.
 
 	  If unsure, say N.
 
@@ -109,7 +109,7 @@ config SCSI_UFS_TEST_MODE
 config SCSI_UFS_QCOM
 	tristate "QCOM specific hooks to UFS controller platform driver"
 	depends on SCSI_UFSHCD_PLATFORM && ARCH_QCOM
-	select QCOM_SCM if SCSI_UFS_CRYPTO
+	select QCOM_SCM
 	select RESET_CONTROLLER
 	help
 	  This selects the QCOM specific additions to UFSHCD platform driver.
@@ -194,6 +194,16 @@ config SCSI_UFS_EXYNOS_DUMP_TO_CONSOLE
 	  Select this if you have UFS host controller on EXYNOS chipset.
 	  If unsure, say N.
 
+config SCSI_UFS_EXYNOS_BLOCK_WDT_RST
+	tristate "Not permit WDT reset for fatal cases to Exynos UFS controller"
+	depends on SCSI_UFSHCD_PLATFORM && (ARCH_EXYNOS || COMPILE_TEST)
+	help
+	  Exynos UFS host generally raise WDT reset for system fatal cases.
+	  This selects blocking the action.
+
+	  Select this if you have UFS host controller on EXYNOS chipset.
+	  If unsure, say N.
+
 config SCSI_UFS_EXYNOS_SRPMB
 	bool "EXYNOS Secure RPMB(Replay Protected Memory Block) UFS Host"
 	depends on SCSI_UFS_EXYNOS && UFS_SRPMB
@@ -220,6 +230,12 @@ choice
 	depends on SCSI_UFS_EXYNOS_FMP
 	default HW_KEYS_IN_CUSTOM_KEYSLOT
 
+config KEYS_IN_PRDT
+	bool "Init fmp to use keys in prdt"
+	depends on SCSI_UFS_EXYNOS_FMP
+	help
+	  Choose here to select that fmp mode to use keys in custom prdt.
+
 config HW_KEYS_IN_CUSTOM_KEYSLOT
 	bool "Init fmp to use hw wrapped keys in custom keyslot"
 	depends on SCSI_UFS_EXYNOS_FMP
@@ -231,12 +247,6 @@ config KEYS_IN_CUSTOM_KEYSLOT
 	depends on SCSI_UFS_EXYNOS_FMP
 	help
 	  Choose here to select that fmp mode to use keys in custom keyslot.
-
-config KEYS_IN_PRDT
-	bool "Init fmp to use keys in prdt"
-	depends on SCSI_UFS_EXYNOS_FMP
-	help
-	  Choose here to select that fmp mode to use keys in prdt
 
 endchoice
 
@@ -266,35 +276,26 @@ config SEC_UFS_FEATURE
 	  Enabling this allows kernel to use SEC specific feature
 	  defined and implemented by SEC.
 
-config SCSI_UFS_FAULT_INJECTION
-	bool "UFS Fault Injection Support"
-	depends on SCSI_UFSHCD && FAULT_INJECTION
-	help
-	  Enable fault injection support in the UFS driver. This makes it easier
-	  to test the UFS error handler and abort handler.
-
-config SEC_UFS_CMD_LOGGING
-	bool "Samsung UFS CMD logging feature"
-	default n
-	depends on SEC_UFS_FEATURE
-	help
-	  This selects support for command logging.
-	  Select this option if this feature is needed on working.
-
-	  If unsure, say N.
-
-config SCSI_UFS_HWMON
-	bool "UFS Temperature Notification"
-	depends on SCSI_UFSHCD=HWMON || HWMON=y
-	help
-	  This provides support for UFS hardware monitoring. If enabled,
-	  a hardware monitoring device will be created for the UFS device.
-
-	  If unsure, say N.
-
 config EXYNOS_UFS_EOM
 	tristate "SEC UFS eom feature"
 	depends on SCSI_UFSHCD
 	help
 	  Enable UFS eom feature.
 	  defined and implemented by SEC.
+
+config SEC_UFS_WB_FEATURE
+	tristate "SEC specific UFS Write Booster Support"
+	depends on SCSI_UFSHCD && SEC_UFS_FEATURE
+	help
+	  Enable Samsung Write Booster feature support
+	  Enabling this allows kernel to use SEC WB feature defined
+	  and implemented by SEC.
+
+config SCSI_UFS_TEST_MODE
+	bool "Samsung UFS TEST feature"
+	depends on SCSI_UFSHCD && SEC_UFS_FEATURE
+	help
+	  This selects support for test mode for debugging.
+	  Select this option if this feature is needed on working.
+
+	  If unsure, say N.

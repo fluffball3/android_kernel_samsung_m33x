@@ -73,8 +73,6 @@ enum ufs_event_type {
 	UFS_EVT_LINK_STARTUP_FAIL,
 	UFS_EVT_RESUME_ERR,
 	UFS_EVT_SUSPEND_ERR,
-	UFS_EVT_WL_SUSP_ERR,
-	UFS_EVT_WL_RES_ERR,
 
 	/* abnormal events */
 	UFS_EVT_DEV_RESET,
@@ -83,6 +81,19 @@ enum ufs_event_type {
 
 	UFS_EVT_CNT,
 };
+
+/* UFSHCD error handling flags */
+enum {
+	UFSHCD_EH_IN_PROGRESS = (1 << 0),
+};
+
+#define ufshcd_set_eh_in_progress(h) \
+	((h)->eh_flags |= UFSHCD_EH_IN_PROGRESS)
+#define ufshcd_eh_in_progress(h) \
+	((h)->eh_flags & UFSHCD_EH_IN_PROGRESS)
+#define ufshcd_clear_eh_in_progress(h) \
+	((h)->eh_flags &= ~UFSHCD_EH_IN_PROGRESS)
+
 
 /**
  * struct uic_command - UIC command structure
@@ -108,6 +119,10 @@ enum ufs_pm_op {
 	UFS_SYSTEM_PM,
 	UFS_SHUTDOWN_PM,
 };
+
+#define ufshcd_is_runtime_pm(op) ((op) == UFS_RUNTIME_PM)
+#define ufshcd_is_system_pm(op) ((op) == UFS_SYSTEM_PM)
+#define ufshcd_is_shutdown_pm(op) ((op) == UFS_SHUTDOWN_PM)
 
 /* Host <-> Device UniPro Link state */
 enum uic_link_state {
@@ -138,31 +153,24 @@ enum uic_link_state {
 	((h)->curr_dev_pwr_mode = UFS_SLEEP_PWR_MODE)
 #define ufshcd_set_ufs_dev_poweroff(h) \
 	((h)->curr_dev_pwr_mode = UFS_POWERDOWN_PWR_MODE)
-#define ufshcd_set_ufs_dev_deepsleep(h) \
-	((h)->curr_dev_pwr_mode = UFS_DEEPSLEEP_PWR_MODE)
 #define ufshcd_is_ufs_dev_active(h) \
 	((h)->curr_dev_pwr_mode == UFS_ACTIVE_PWR_MODE)
 #define ufshcd_is_ufs_dev_sleep(h) \
 	((h)->curr_dev_pwr_mode == UFS_SLEEP_PWR_MODE)
 #define ufshcd_is_ufs_dev_poweroff(h) \
 	((h)->curr_dev_pwr_mode == UFS_POWERDOWN_PWR_MODE)
-#define ufshcd_is_ufs_dev_deepsleep(h) \
-	((h)->curr_dev_pwr_mode == UFS_DEEPSLEEP_PWR_MODE)
 
 /*
  * UFS Power management levels.
- * Each level is in increasing order of power savings, except DeepSleep
- * which is lower than PowerDown with power on but not PowerDown with
- * power off.
+ * Each level is in increasing order of power savings.
  */
 enum ufs_pm_level {
-	UFS_PM_LVL_0,
-	UFS_PM_LVL_1,
-	UFS_PM_LVL_2,
-	UFS_PM_LVL_3,
-	UFS_PM_LVL_4,
-	UFS_PM_LVL_5,
-	UFS_PM_LVL_6,
+	UFS_PM_LVL_0, /* UFS_ACTIVE_PWR_MODE, UIC_LINK_ACTIVE_STATE */
+	UFS_PM_LVL_1, /* UFS_ACTIVE_PWR_MODE, UIC_LINK_HIBERN8_STATE */
+	UFS_PM_LVL_2, /* UFS_SLEEP_PWR_MODE, UIC_LINK_ACTIVE_STATE */
+	UFS_PM_LVL_3, /* UFS_SLEEP_PWR_MODE, UIC_LINK_HIBERN8_STATE */
+	UFS_PM_LVL_4, /* UFS_POWERDOWN_PWR_MODE, UIC_LINK_HIBERN8_STATE */
+	UFS_PM_LVL_5, /* UFS_POWERDOWN_PWR_MODE, UIC_LINK_OFF_STATE */
 	UFS_PM_LVL_MAX
 };
 
@@ -223,8 +231,6 @@ struct ufshcd_lrb {
 #endif
 
 	bool req_abort_skip;
-
-	ANDROID_VENDOR_DATA(1);
 
 	ANDROID_KABI_RESERVE(1);
 };
@@ -305,6 +311,7 @@ struct ufs_pwr_mode_info {
  * @get_ufs_hci_version: called to get UFS HCI version
  * @clk_scale_notify: notifies that clks are scaled up/down
  * @setup_clocks: called before touching any of the controller registers
+ * @setup_regulators: called before accessing the host controller
  * @hce_enable_notify: called before and after HCE enable bit is set to allow
  *                     variant specific Uni-Pro initialization.
  * @link_startup_notify: called before and after Link startup is carried out
@@ -335,6 +342,7 @@ struct ufs_hba_variant_ops {
 				    enum ufs_notify_change_status);
 	int	(*setup_clocks)(struct ufs_hba *, bool,
 				enum ufs_notify_change_status);
+	int     (*setup_regulators)(struct ufs_hba *, bool);
 	int	(*hce_enable_notify)(struct ufs_hba *,
 				     enum ufs_notify_change_status);
 	int	(*link_startup_notify)(struct ufs_hba *,
@@ -349,8 +357,7 @@ struct ufs_hba_variant_ops {
 					enum ufs_notify_change_status);
 	int	(*apply_dev_quirks)(struct ufs_hba *hba);
 	void	(*fixup_dev_quirks)(struct ufs_hba *hba);
-	int     (*suspend)(struct ufs_hba *, enum ufs_pm_op,
-					enum ufs_notify_change_status);
+	int     (*suspend)(struct ufs_hba *, enum ufs_pm_op);
 	int     (*resume)(struct ufs_hba *, enum ufs_pm_op);
 	void	(*dbg_register_dump)(struct ufs_hba *hba);
 	int	(*phy_initialization)(struct ufs_hba *);
@@ -491,27 +498,6 @@ struct ufs_stats {
 	struct ufs_event_hist event[UFS_EVT_CNT];
 };
 
-/**
- * enum ufshcd_state - UFS host controller state
- * @UFSHCD_STATE_RESET: Link is not operational. Postpone SCSI command
- *	processing.
- * @UFSHCD_STATE_OPERATIONAL: The host controller is operational and can process
- *	SCSI commands.
- * @UFSHCD_STATE_EH_SCHEDULED_NON_FATAL: The error handler has been scheduled.
- *	SCSI commands may be submitted to the controller.
- * @UFSHCD_STATE_EH_SCHEDULED_FATAL: The error handler has been scheduled. Fail
- *	newly submitted SCSI commands with error code DID_BAD_TARGET.
- * @UFSHCD_STATE_ERROR: An unrecoverable error occurred, e.g. link recovery
- *	failed. Fail all SCSI commands with error code DID_ERROR.
- */
-enum ufshcd_state {
-	UFSHCD_STATE_RESET,
-	UFSHCD_STATE_OPERATIONAL,
-	UFSHCD_STATE_EH_SCHEDULED_NON_FATAL,
-	UFSHCD_STATE_EH_SCHEDULED_FATAL,
-	UFSHCD_STATE_ERROR,
-};
-
 enum ufshcd_quirks {
 	/* Interrupt aggregation support is broken */
 	UFSHCD_QUIRK_BROKEN_INTR_AGGR			= 1 << 0,
@@ -612,9 +598,9 @@ enum ufshcd_quirks {
 
 	/*
 	 * This quirk needs to be enabled if the host controller cannot
-	 * support physical host configuration.
+	 * support interface configuration.
 	 */
-	UFSHCD_QUIRK_SKIP_PH_CONFIGURATION		= 1 << 16,
+	UFSHCD_QUIRK_SKIP_INTERFACE_CONFIGURATION	= 1 << 16,
 
 	/*
 	 * This quirk needs to be enabled if the host controller supports inline
@@ -695,26 +681,6 @@ enum ufshcd_caps {
 	 * This would increase power savings.
 	 */
 	UFSHCD_CAP_AGGR_POWER_COLLAPSE			= 1 << 9,
-
-	/*
-	 * This capability allows the host controller driver to use DeepSleep,
-	 * if it is supported by the UFS device. The host controller driver must
-	 * support device hardware reset via the hba->device_reset() callback,
-	 * in order to exit DeepSleep state.
-	 */
-	UFSHCD_CAP_DEEPSLEEP				= 1 << 10,
-
-	/*
-	 * This capability allows the host controller driver to use temperature
-	 * notification if it is supported by the UFS device.
-	 */
-	UFSHCD_CAP_TEMP_NOTIF				= 1 << 11,
-
-	/*
-	 * Enable WriteBooster when scaling up the clock and disable
-	 * WriteBooster when scaling the clock down.
-	 */
-	UFSHCD_CAP_WB_WITH_CLK_SCALING			= 1 << 12,
 };
 
 struct ufs_hba_variant_params {
@@ -782,7 +748,6 @@ struct ufs_hba_monitor {
  * @lrb: local reference block
  * @cmd_queue: Used to allocate command tags from hba->host->tag_set.
  * @outstanding_tasks: Bits representing outstanding task requests
- * @outstanding_lock: Protects @outstanding_reqs.
  * @outstanding_reqs: Bits representing outstanding transfer requests
  * @capabilities: UFS Controller Capabilities
  * @nutrs: Transfer Request Queue depth supported by controller
@@ -794,11 +759,11 @@ struct ufs_hba_monitor {
  * @sg_entry_size: size of struct ufshcd_sg_entry (may include variant fields)
  * @irq: Irq number of the controller
  * @active_uic_cmd: handle of active UIC command
- * @uic_cmd_mutex: mutex for UIC command
+ * @uic_cmd_mutex: mutex for uic command
  * @tmf_tag_set: TMF tag set.
  * @tmf_queue: Used to allocate TMF tags.
  * @pwr_done: completion for power mode change
- * @ufshcd_state: UFSHCD state
+ * @ufshcd_state: UFSHCD states
  * @eh_flags: Error handling flags
  * @intr_mask: Interrupt Mask Bits
  * @ee_ctrl_mask: Exception event control mask
@@ -855,10 +820,6 @@ struct ufs_hba {
 	struct scsi_device *sdev_ufs_device;
 	struct scsi_device *sdev_rpmb;
 
-#ifdef CONFIG_SCSI_UFS_HWMON
-	struct device *hwmon_device;
-#endif
-
 	enum ufs_dev_pwr_mode curr_dev_pwr_mode;
 	enum uic_link_state uic_link_state;
 	/* Desired UFS power management level during runtime PM */
@@ -875,13 +836,17 @@ struct ufs_hba {
 	struct ufshcd_lrb *lrb;
 
 	unsigned long outstanding_tasks;
-	spinlock_t outstanding_lock;
 	unsigned long outstanding_reqs;
 
 	u32 capabilities;
 	int nutrs;
 	int nutmrs;
+#if 0
+	/*
+	 * This has been moved into struct ufs_hba_add_info because of the GKI.
+	 */
 	u32 reserved_slot;
+#endif
 	u32 ufs_version;
 	const struct ufs_hba_variant_ops *vops;
 	struct ufs_hba_variant_params *vps;
@@ -898,19 +863,21 @@ struct ufs_hba {
 
 	struct blk_mq_tag_set tmf_tag_set;
 	struct request_queue *tmf_queue;
+#if 0
+	/*
+	 * This has been moved into struct ufs_hba_add_info because of the GKI.
+	 */
 	struct request **tmf_rqs;
+#endif
 
 	struct uic_command *active_uic_cmd;
 	struct mutex uic_cmd_mutex;
 	struct completion *uic_async_done;
 
-	enum ufshcd_state ufshcd_state;
+	u32 ufshcd_state;
 	u32 eh_flags;
 	u32 intr_mask;
-	u16 ee_ctrl_mask; /* Exception event mask */
-	u16 ee_drv_mask;  /* Exception event mask for driver */
-	u16 ee_usr_mask;  /* Exception event mask for user (via debugfs) */
-	struct mutex ee_ctrl_mutex;
+	u16 ee_ctrl_mask;
 	bool is_powered;
 	bool shutting_down;
 	struct semaphore host_sem;
@@ -933,13 +900,14 @@ struct ufs_hba {
 	/* Device management request data */
 	struct ufs_dev_cmd dev_cmd;
 	ktime_t last_dme_cmd_tstamp;
-	int nop_out_timeout;
 
 	/* Keeps information of the UFS device connected to this host */
 	struct ufs_dev_info dev_info;
 	bool auto_bkops_enabled;
 	struct ufs_vreg_info vreg_info;
 	struct list_head clk_list_head;
+
+	bool wlun_dev_clr_ua;
 
 	/* Number of requests aborts */
 	int req_abort_count;
@@ -966,9 +934,12 @@ struct ufs_hba {
 
 	struct device		bsg_dev;
 	struct request_queue	*bsg_queue;
+	bool wb_buf_flush_enabled;
+	bool wb_enabled;
 	struct delayed_work rpm_dev_flush_recheck_work;
 
-#ifdef CONFIG_SCSI_UFS_HPB
+#if 0
+	/* This has been moved into struct ufs_hba_add_info. */
 	struct ufshpb_dev_info ufshpb_dev;
 #endif
 
@@ -982,14 +953,7 @@ struct ufs_hba {
 #endif
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *debugfs_root;
-	struct delayed_work debugfs_ee_work;
-	u32 debugfs_ee_rate_limit_ms;
 #endif
-	u32 luns_avail;
-	bool complete_put;
-
-	ANDROID_VENDOR_DATA(1);
-	ANDROID_OEM_DATA_ARRAY(1, 2);
 
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
@@ -1021,8 +985,16 @@ static inline bool ufshcd_is_rpm_autosuspend_allowed(struct ufs_hba *hba)
 
 static inline bool ufshcd_is_intr_aggr_allowed(struct ufs_hba *hba)
 {
-	return (hba->caps & UFSHCD_CAP_INTR_AGGR) &&
-		!(hba->quirks & UFSHCD_QUIRK_BROKEN_INTR_AGGR);
+/* DWC UFS Core has the Interrupt aggregation feature but is not detectable*/
+#ifndef CONFIG_SCSI_UFS_DWC
+	if ((hba->caps & UFSHCD_CAP_INTR_AGGR) &&
+	    !(hba->quirks & UFSHCD_QUIRK_BROKEN_INTR_AGGR))
+		return true;
+	else
+		return false;
+#else
+return true;
+#endif
 }
 
 static inline bool ufshcd_can_aggressive_pc(struct ufs_hba *hba)
@@ -1052,11 +1024,6 @@ static inline bool ufshcd_is_user_access_allowed(struct ufs_hba *hba)
 	return !hba->shutting_down;
 }
 
-static inline bool ufshcd_enable_wb_if_scaling_up(struct ufs_hba *hba)
-{
-	return hba->caps & UFSHCD_CAP_WB_WITH_CLK_SCALING;
-}
-
 #define ufshcd_writel(hba, val, reg)	\
 	writel((val), (hba)->mmio_base + (reg))
 #define ufshcd_readl(hba, reg)	\
@@ -1082,11 +1049,10 @@ static inline void ufshcd_rmwl(struct ufs_hba *hba, u32 mask, u32 val, u32 reg)
 int ufshcd_alloc_host(struct device *, struct ufs_hba **);
 void ufshcd_dealloc_host(struct ufs_hba *);
 int ufshcd_hba_enable(struct ufs_hba *hba);
-int ufshcd_init(struct ufs_hba *, void __iomem *, unsigned int);
+int ufshcd_init(struct ufs_hba * , void __iomem * , unsigned int);
 int ufshcd_link_recovery(struct ufs_hba *hba);
 int ufshcd_make_hba_operational(struct ufs_hba *hba);
 void ufshcd_remove(struct ufs_hba *);
-int ufshcd_uic_hibern8_enter(struct ufs_hba *hba);
 int ufshcd_uic_hibern8_exit(struct ufs_hba *hba);
 void ufshcd_delay_us(unsigned long us, unsigned long tolerance);
 int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
@@ -1095,6 +1061,12 @@ int ufshcd_wait_for_register(struct ufs_hba *hba, u32 reg, u32 mask,
 void ufshcd_parse_dev_ref_clk_freq(struct ufs_hba *hba, struct clk *refclk);
 void ufshcd_update_evt_hist(struct ufs_hba *hba, u32 id, u32 val);
 void ufshcd_hba_stop(struct ufs_hba *hba);
+void ufshcd_complete_requests(struct ufs_hba *hba);
+void ufshcd_release_scsi_cmd(struct ufs_hba *hba,
+				    struct ufshcd_lrb *lrbp);
+void ufshcd_err_handling_prepare(struct ufs_hba *hba);
+void ufshcd_err_handling_unprepare(struct ufs_hba *hba);
+
 
 static inline void check_upiu_size(void)
 {
@@ -1130,42 +1102,23 @@ static inline bool ufshcd_keep_autobkops_enabled_except_suspend(
 
 static inline u8 ufshcd_wb_get_query_index(struct ufs_hba *hba)
 {
-	if (hba->dev_info.wb_buffer_type == WB_BUF_MODE_LU_DEDICATED)
+	if (hba->dev_info.b_wb_buffer_type == WB_BUF_MODE_LU_DEDICATED)
 		return hba->dev_info.wb_dedicated_lu;
 	return 0;
 }
 
-#ifdef CONFIG_SCSI_UFS_HWMON
-void ufs_hwmon_probe(struct ufs_hba *hba, u8 mask);
-void ufs_hwmon_remove(struct ufs_hba *hba);
-#else
-static inline void ufs_hwmon_probe(struct ufs_hba *hba, u8 mask) {}
-static inline void ufs_hwmon_remove(struct ufs_hba *hba) {}
-#endif
-
-#ifdef CONFIG_PM
-extern int ufshcd_runtime_suspend(struct device *dev);
-extern int ufshcd_runtime_resume(struct device *dev);
-#endif
-#ifdef CONFIG_PM_SLEEP
-extern int ufshcd_system_suspend(struct device *dev);
-extern int ufshcd_system_resume(struct device *dev);
-extern int ufshcd_system_freeze(struct device *dev);
-extern int ufshcd_system_thaw(struct device *dev);
-extern int ufshcd_system_restore(struct device *dev);
-#endif
+extern int ufshcd_runtime_suspend(struct ufs_hba *hba);
+extern int ufshcd_runtime_resume(struct ufs_hba *hba);
+extern int ufshcd_runtime_idle(struct ufs_hba *hba);
+extern int ufshcd_system_suspend(struct ufs_hba *hba);
+extern int ufshcd_system_resume(struct ufs_hba *hba);
 extern int ufshcd_shutdown(struct ufs_hba *hba);
-
-extern int ufshcd_dme_configure_adapt(struct ufs_hba *hba,
-				      int agreed_gear,
-				      int adapt_val);
 extern int ufshcd_dme_set_attr(struct ufs_hba *hba, u32 attr_sel,
 			       u8 attr_set, u32 mib_val, u8 peer);
 extern int ufshcd_dme_get_attr(struct ufs_hba *hba, u32 attr_sel,
 			       u32 *mib_val, u8 peer);
 extern int ufshcd_config_pwr_mode(struct ufs_hba *hba,
 			struct ufs_pa_layer_attr *desired_pwr_mode);
-extern int ufshcd_uic_change_pwr_mode(struct ufs_hba *hba, u8 mode);
 
 /* UIC command interfaces for DME primitives */
 #define DME_LOCAL	0
@@ -1238,9 +1191,6 @@ int ufshcd_read_desc_param(struct ufs_hba *hba,
 			   u8 param_offset,
 			   u8 *param_read_buf,
 			   u8 param_size);
-int ufshcd_query_attr_retry(struct ufs_hba *hba, enum query_opcode opcode,
-			    enum attr_idn idn, u8 index, u8 selector,
-			    u32 *attr_val);
 int ufshcd_query_attr(struct ufs_hba *hba, enum query_opcode opcode,
 		      enum attr_idn idn, u8 index, u8 selector, u32 *attr_val);
 int ufshcd_query_attr_retry(struct ufs_hba *hba,
@@ -1267,7 +1217,6 @@ void ufshcd_map_desc_id_to_length(struct ufs_hba *hba, enum desc_idn desc_id,
 				  int *desc_length);
 
 u32 ufshcd_get_local_unipro_ver(struct ufs_hba *hba);
-int ufshcd_get_vreg(struct device *dev, struct ufs_vreg *vreg);
 
 int ufshcd_send_uic_cmd(struct ufs_hba *hba, struct uic_command *uic_cmd);
 
@@ -1277,10 +1226,6 @@ int ufshcd_exec_raw_upiu_cmd(struct ufs_hba *hba,
 			     int msgcode,
 			     u8 *desc_buff, int *buff_len,
 			     enum query_opcode desc_op);
-
-int ufshcd_wb_toggle(struct ufs_hba *hba, bool enable);
-int ufshcd_suspend_prepare(struct device *dev);
-void ufshcd_resume_complete(struct device *dev);
 
 /* Wrapper functions for safely calling variant operations */
 static inline const char *ufshcd_get_var_name(struct ufs_hba *hba)
@@ -1312,6 +1257,11 @@ static inline u32 ufshcd_vops_get_ufs_hci_version(struct ufs_hba *hba)
 	return ufshcd_readl(hba, REG_UFS_VERSION);
 }
 
+static inline bool ufshcd_has_utrlcnr(struct ufs_hba *hba)
+{
+	return (hba->ufs_version >= ufshci_version(3, 0));
+}
+
 static inline int ufshcd_vops_clk_scale_notify(struct ufs_hba *hba,
 			bool up, enum ufs_notify_change_status status)
 {
@@ -1336,6 +1286,14 @@ static inline int ufshcd_vops_setup_clocks(struct ufs_hba *hba, bool on,
 	return 0;
 }
 
+static inline int ufshcd_vops_setup_regulators(struct ufs_hba *hba, bool status)
+{
+	if (hba->vops && hba->vops->setup_regulators)
+		return hba->vops->setup_regulators(hba, status);
+
+	return 0;
+}
+
 static inline int ufshcd_vops_hce_enable_notify(struct ufs_hba *hba,
 						bool status)
 {
@@ -1353,16 +1311,8 @@ static inline int ufshcd_vops_link_startup_notify(struct ufs_hba *hba,
 	return 0;
 }
 
-static inline int ufshcd_vops_phy_initialization(struct ufs_hba *hba)
-{
-	if (hba->vops && hba->vops->phy_initialization)
-		return hba->vops->phy_initialization(hba);
-
-	return 0;
-}
-
 static inline int ufshcd_vops_pwr_change_notify(struct ufs_hba *hba,
-				  enum ufs_notify_change_status status,
+				  bool status,
 				  struct ufs_pa_layer_attr *dev_max_params,
 				  struct ufs_pa_layer_attr *dev_req_params)
 {
@@ -1401,11 +1351,10 @@ static inline void ufshcd_vops_fixup_dev_quirks(struct ufs_hba *hba)
 		hba->vops->fixup_dev_quirks(hba);
 }
 
-static inline int ufshcd_vops_suspend(struct ufs_hba *hba, enum ufs_pm_op op,
-				enum ufs_notify_change_status status)
+static inline int ufshcd_vops_suspend(struct ufs_hba *hba, enum ufs_pm_op op)
 {
 	if (hba->vops && hba->vops->suspend)
-		return hba->vops->suspend(hba, op, status);
+		return hba->vops->suspend(hba, op);
 
 	return 0;
 }
@@ -1424,12 +1373,21 @@ static inline void ufshcd_vops_dbg_register_dump(struct ufs_hba *hba)
 		hba->vops->dbg_register_dump(hba);
 }
 
-static inline int ufshcd_vops_device_reset(struct ufs_hba *hba)
+static inline void ufshcd_vops_device_reset(struct ufs_hba *hba)
 {
-	if (hba->vops && hba->vops->device_reset)
-		return hba->vops->device_reset(hba);
+	if (hba->vops && hba->vops->device_reset) {
+		int err = hba->vops->device_reset(hba);
 
-	return -EOPNOTSUPP;
+		if (!err) {
+			ufshcd_set_ufs_dev_active(hba);
+			if (ufshcd_is_wb_allowed(hba)) {
+				hba->wb_enabled = false;
+				hba->wb_buf_flush_enabled = false;
+			}
+		}
+		if (err != -EOPNOTSUPP)
+			ufshcd_update_evt_hist(hba, UFS_EVT_DEV_RESET, err);
+	}
 }
 
 static inline void ufshcd_vops_config_scaling_param(struct ufs_hba *hba,
@@ -1459,45 +1417,6 @@ static inline u8 ufshcd_scsi_to_upiu_lun(unsigned int scsi_lun)
 
 int ufshcd_dump_regs(struct ufs_hba *hba, size_t offset, size_t len,
 		     const char *prefix);
-
-int __ufshcd_write_ee_control(struct ufs_hba *hba, u32 ee_ctrl_mask);
-int ufshcd_write_ee_control(struct ufs_hba *hba);
-int ufshcd_update_ee_control(struct ufs_hba *hba, u16 *mask, u16 *other_mask,
-			     u16 set, u16 clr);
-
-static inline int ufshcd_update_ee_drv_mask(struct ufs_hba *hba,
-					    u16 set, u16 clr)
-{
-	return ufshcd_update_ee_control(hba, &hba->ee_drv_mask,
-					&hba->ee_usr_mask, set, clr);
-}
-
-static inline int ufshcd_update_ee_usr_mask(struct ufs_hba *hba,
-					    u16 set, u16 clr)
-{
-	return ufshcd_update_ee_control(hba, &hba->ee_usr_mask,
-					&hba->ee_drv_mask, set, clr);
-}
-
-static inline int ufshcd_rpm_get_sync(struct ufs_hba *hba)
-{
-	return pm_runtime_get_sync(&hba->sdev_ufs_device->sdev_gendev);
-}
-
-static inline int ufshcd_rpm_put_sync(struct ufs_hba *hba)
-{
-	return pm_runtime_put_sync(&hba->sdev_ufs_device->sdev_gendev);
-}
-
-static inline int ufshcd_rpm_put(struct ufs_hba *hba)
-{
-	return pm_runtime_put(&hba->sdev_ufs_device->sdev_gendev);
-}
-
-int ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp);
-void ufshcd_clk_scaling_start_busy(struct ufs_hba *hba);
-void ufshcd_clk_scaling_update_busy(struct ufs_hba *hba);
-void ufshcd_add_command_trace(struct ufs_hba *hba, unsigned int tag,
-				     enum ufs_trace_str_t str_t);
-
+int ufshcd_uic_hibern8_enter(struct ufs_hba *hba);
+int ufshcd_uic_hibern8_exit(struct ufs_hba *hba);
 #endif /* End of Header */

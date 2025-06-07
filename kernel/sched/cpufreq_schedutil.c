@@ -300,10 +300,10 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 }
 EXPORT_SYMBOL_GPL(schedutil_cpu_util);
 
-unsigned long sched_cpu_util(int cpu, unsigned long max)
+unsigned long sched_cpu_util(int cpu)
 {
-	return schedutil_cpu_util(cpu, cpu_util_cfs(cpu_rq(cpu)), max,
-				  ENERGY_UTIL, NULL);
+	unsigned long min, max;
+	return schedutil_cpu_util(cpu, cpu_util_cfs(cpu_rq(cpu)), &min, &max);
 }
 
 static unsigned long sugov_get_util(struct sugov_cpu *sg_cpu)

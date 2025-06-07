@@ -14,21 +14,19 @@
 #define HCI_INVALID_UTR_OFFSET_ADDR	0x20
 #define HCI_INVALID_DIN_OFFSET_ADDR	0x24
 #define HCI_VENDOR_SPECIFIC_IS		0x38
-#define AH8_H8_ENTER		(1 << 13)
+ #define AH8_H8_ENTER		(1 << 13)
 #define HCI_VENDOR_SPECIFIC_IE		0x3C
-#define AH8_TIMEOUT			BIT(12)
-#define AH8_ERR_UECPA_EN		BIT(10)
-#define AH8_ERR_UECDL_EN		BIT(9)
-#define AH8_ERR_UECN_EN			BIT(8)
-#define AH8_ERR_UECT_EN			BIT(7)
-#define AH8_ERR_UECDME_EN		BIT(6)
-#define AH8_ERR_AT_PRE_PROC		BIT(2)
+#define AH8_ERR_UECPA_EN	BIT(10)
+#define AH8_ERR_UECDL_EN	BIT(9)
+#define AH8_ERR_UECN_EN		BIT(8)
+#define AH8_ERR_UECT_EN		BIT(7)
+#define AH8_ERR_UECDME_EN	BIT(6)
 /* When the controller is in auto-hibernation sequence and UIC error happens,
  * report as UIC error with IS.UE register.
  */
-#define AH8_ERR_REPORT_UE		(AH8_ERR_UECPA_EN | AH8_ERR_UECDL_EN |\
-					AH8_ERR_UECN_EN | AH8_ERR_UECT_EN |\
-					AH8_ERR_UECDME_EN)
+#define AH8_ERR_REPORT_UE	(AH8_ERR_UECPA_EN | AH8_ERR_UECDL_EN |\
+				 AH8_ERR_UECN_EN | AH8_ERR_UECT_EN |\
+				 AH8_ERR_UECDME_EN)
 
  #define AH8_H8_ENTER_EN	(1 << 13)
 #define HCI_UTRL_NEXUS_TYPE		0x40
@@ -57,9 +55,7 @@
 #define HCI_ERROR_EN_DME_LAYER		0x88
 #define HCI_UFSHCI_V2P1_CTRL			0X8C
 #define IA_TICK_SEL				BIT(16)
-#define UIC_CMD_COMPLETE_SEL			BIT(8)
 #define HCI_REQ_HOLD_EN			0xAC
-#define HCI_CONTROLLER_DP		0x1
 
 #define HCI_CLKSTOP_CTRL		0xB0
  #define REFCLKOUT_STOP			BIT(4)
@@ -103,26 +99,10 @@
  #define HCI_IOP_ACG_DISABLE_EN		BIT(0)
 #define HCI_MPHY_REFCLK_SEL		0x108
  #define MPHY_REFCLK_SEL		BIT(0)
-
-/*
- * This type makes 1st DW and another DW be logged.
- * The second one is the head of CDB for COMMAND UPIU and
- * the head of data for DATA UPIU.
- */
-#define HCI_PH_CPORT_LOG_CTRL		0x110
-#define CPORT_LOG_EN			BIT(0)
-#define HCI_PH_CPORT_LOG_CFG		0x114
-#define TX_LOG_TYPE			BIT(1)
-#define RX_LOG_TYPE			BIT(5)
-#define CPORT_LOG_TYPE			(TX_LOG_TYPE | RX_LOG_TYPE)
-
 #define HCI_SMU_RD_ABORT_MATCH_INFO		0x118
 #define HCI_SMU_WR_ABORT_MATCH_INFO		0x11C
 #define HCI_DBR_DUPLICATION_INFO		0x120
 #define HCI_INVALID_PRDT_CTRL		0x130
-
-#define HCI_VS_INT_MERGE2PH		0x140
-#define VS_INT_MERGE2PH_EN		BIT(0)
 
 #define HCI_DBR_TIMER_CONFIG		0x140
 #define HCI_UTRL_DBR_TIMER_ENABLE		0x144
@@ -148,10 +128,6 @@
 #define HCI_AH8_STATE_ERROR		BIT(16)
 #define HCI_AH8_HIBERNATION_STATE	BIT(8)
 #define HCI_AH8_IDLE_STATE		BIT(0)
-
-#define HCI_CLKMODE			0x710
-#define REF_CLK_MODE			(2 << 12)
-#define PMA_CLKDIV_VAL			(2 << 8)
 
 /* Device fatal error */
 #define DFES_ERR_EN	BIT(31)
@@ -191,10 +167,6 @@
 #define UNIP_PA_RXTERMINATION			0x3210	/* PA_RXTERMINATION */
 #define UNIP_PA_MAXRXHSGEAR			0x321C	/* PA_MaxRxHSGear */
 #define UNIP_PA_HIBERN8TIME			0x329C	/* PA_Hibern8Time */
-#define UNIP_PA_DBG_RESUME_HIBERNATE		0x3940	/* PA_DBG_RESUME_HIBERNATE */
-
-#define RX_PWRMODE(x)		((x) << 0)
-#define TX_PWRMODE(x)		((x) << 4)
 
 #define UNIP_PA_DBG_OPTION_SUITE_1   0x39A8
 #define UNIP_PA_DBG_OPTION_SUITE_2   0x39B4
