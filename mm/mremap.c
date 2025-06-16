@@ -390,63 +390,6 @@ static inline bool move_normal_pud(struct vm_area_struct *vma,
 }
 #endif
 
-#ifdef CONFIG_HAVE_MOVE_PUD
-static bool move_normal_pud(struct vm_area_struct *vma, unsigned long old_addr,
-		  unsigned long new_addr, pud_t *old_pud, pud_t *new_pud)
-{
-	spinlock_t *old_ptl, *new_ptl;
-	struct mm_struct *mm = vma->vm_mm;
-	pud_t pud;
-
-	/*
-	 * The destination pud shouldn't be established, free_pgtables()
-	 * should have released it.
-	 */
-	if (WARN_ON_ONCE(!pud_none(*new_pud)))
-		return false;
-
-	/*
-	 * We hold both exclusive mmap_lock and rmap_lock at this point and
-	 * cannot block. If we cannot immediately take exclusive ownership
-	 * of the VMA fallback to the move_ptes().
-	 */
-	if (!trylock_vma_ref_count(vma))
-		return false;
-
-	/*
-	 * We don't have to worry about the ordering of src and dst
-	 * ptlocks because exclusive mmap_lock prevents deadlock.
-	 */
-	old_ptl = pud_lock(vma->vm_mm, old_pud);
-	new_ptl = pud_lockptr(mm, new_pud);
-	if (new_ptl != old_ptl)
-		spin_lock_nested(new_ptl, SINGLE_DEPTH_NESTING);
-
-	/* Clear the pud */
-	pud = *old_pud;
-	pud_clear(old_pud);
-
-	VM_BUG_ON(!pud_none(*new_pud));
-
-	/* Set the new pud */
-	set_pud_at(mm, new_addr, new_pud, pud);
-	flush_tlb_range(vma, old_addr, old_addr + PUD_SIZE);
-	if (new_ptl != old_ptl)
-		spin_unlock(new_ptl);
-	spin_unlock(old_ptl);
-
-	unlock_vma_ref_count(vma);
-	return true;
-}
-#else
-static inline bool move_normal_pud(struct vm_area_struct *vma,
-		unsigned long old_addr, unsigned long new_addr, pud_t *old_pud,
-		pud_t *new_pud)
-{
-	return false;
-}
-#endif
-
 enum pgt_entry {
 	NORMAL_PMD,
 	HPAGE_PMD,

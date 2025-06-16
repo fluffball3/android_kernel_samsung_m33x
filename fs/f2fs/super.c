@@ -2166,7 +2166,8 @@ static int f2fs_disable_checkpoint(struct f2fs_sb_info *sbi)
 
 	while (!f2fs_time_over(sbi, DISABLE_TIME)) {
 		f2fs_down_write(&sbi->gc_lock);
-		err = f2fs_gc(sbi, true, false, false, NULL_SEGNO);
+		err = __f2fs_gc(sbi, true, false, false, NULL_SEGNO, init_victim_map);
+		init_victim_map = false;
 		if (err == -ENODATA) {
 			err = 0;
 			break;
