@@ -263,6 +263,12 @@ exit_idle:
 static void do_idle(void)
 {
 	int cpu = smp_processor_id();
+
+	/*
+	 * Check if we need to update blocked load
+	 */
+	nohz_run_idle_balance(cpu);
+
 	/*
 	 * If the arch has a polling bit, we maintain an invariant:
 	 *
@@ -451,7 +457,7 @@ static void
 dequeue_task_idle(struct rq *rq, struct task_struct *p, int flags)
 {
 	raw_spin_unlock_irq(&rq->lock);
-	pr_auto(ASL6, "bad: scheduling from the idle thread!\n");
+	printk(KERN_ERR "bad: scheduling from the idle thread!\n");
 
 	trace_android_rvh_dequeue_task_idle(p);
 	dump_stack();

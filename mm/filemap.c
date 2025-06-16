@@ -2232,6 +2232,7 @@ ssize_t generic_file_buffered_read(struct kiocb *iocb,
 		return 0;
 
 	iov_iter_truncate(iter, inode->i_sb->s_maxbytes);
+	trace_android_vh_filemap_read(filp, iocb->ki_pos, iov_iter_count(iter));
 
 	index = *ppos >> PAGE_SHIFT;
 	prev_index = ra->prev_pos >> PAGE_SHIFT;
@@ -3114,6 +3115,7 @@ vm_fault_t filemap_map_pages(struct vm_fault *vmf,
 #ifdef CONFIG_PAGE_BOOST_RECORDING
 	head_pgoff = xas.xa_index;
 #endif
+
 	if (!(vmf->flags & FAULT_FLAG_SPECULATIVE) &&
 	    filemap_map_pmd(vmf, head)) {
 		ret = VM_FAULT_NOPAGE;
@@ -3165,6 +3167,7 @@ out:
 		record_io_info(file, head_pgoff, last_pgoff - head_pgoff + 1);
 #endif
 	WRITE_ONCE(file->f_ra.mmap_miss, mmap_miss);
+	trace_android_vh_filemap_map_pages(file, first_pgoff, last_pgoff, ret);
 	return ret;
 }
 EXPORT_SYMBOL(filemap_map_pages);
@@ -3613,6 +3616,7 @@ again:
 			break;
 		copied = status;
 
+		trace_android_vh_io_statistics(mapping, page->index, 1, false, false);
 		cond_resched();
 
 		iov_iter_advance(i, copied);

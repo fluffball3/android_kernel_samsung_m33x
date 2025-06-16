@@ -126,7 +126,7 @@ unsigned long vma_pad_pages(struct vm_area_struct *vma)
 	if (!is_pgsize_migration_enabled())
 		return 0;
 
-	return vma->vm_flags >> VM_PAD_SHIFT;
+	return (vma->vm_flags & VM_PAD_MASK) >> VM_PAD_SHIFT;
 }
 
 static __always_inline bool str_has_suffix(const char *str, const char *suffix)
@@ -397,7 +397,7 @@ void split_pad_vma(struct vm_area_struct *vma, struct vm_area_struct *new,
 	nr_vma2_pages = vma_pages(second);
 
 	if (nr_vma2_pages >= nr_pad_pages) { 			/* Case 1 & 3 */
-		first->vm_flags &= ~VM_PAD_MASK;
+		vma_set_pad_pages(first, 0);
 		vma_set_pad_pages(second, nr_pad_pages);
 	} else {						/* Case 2 */
 		vma_set_pad_pages(first, nr_pad_pages - nr_vma2_pages);

@@ -13,6 +13,7 @@
  * page size in Android.
  */
 
+#include <linux/pgsize_migration_inline.h>
 #include <linux/mm.h>
 #include <linux/seq_file.h>
 #include <linux/sizes.h>

@@ -97,7 +97,6 @@
 #include <linux/scs.h>
 #include <linux/io_uring.h>
 #include <linux/cpufreq_times.h>
-#include <linux/task_integrity.h>
 
 #include <asm/pgalloc.h>
 #include <linux/uaccess.h>
@@ -113,6 +112,7 @@
 #undef CREATE_TRACE_POINTS
 #include <trace/hooks/sched.h>
 
+#include <linux/task_integrity.h>
 #ifdef CONFIG_SECURITY_DEFEX
 #include <linux/defex.h>
 #endif
@@ -120,6 +120,7 @@
 #ifdef CONFIG_KDP_CRED
 #include <linux/kdp.h>
 #endif
+
 /*
  * Minimum number of threads to boot the kernel
  */

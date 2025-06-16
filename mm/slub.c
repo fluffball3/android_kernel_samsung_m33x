@@ -321,12 +321,14 @@ static inline void set_freepointer(struct kmem_cache *s, void *object, void *fp)
 #endif
 
 	freeptr_addr = (unsigned long)kasan_reset_tag((void *)freeptr_addr);
+
 #ifdef CONFIG_KDP
 	if (kdp_enable && is_kdp_kmem_cache(s))
 		uh_call(UH_APP_KDP, SET_FREEPTR, (u64)object, (u64)s->offset, (u64)fp,
 				(u64)freelist_ptr(s, fp, freeptr_addr));
 	else
 #endif
+
 	*(void **)freeptr_addr = freelist_ptr(s, fp, freeptr_addr);
 }
 
@@ -727,9 +729,9 @@ static void slab_bug(struct kmem_cache *s, char *fmt, ...)
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
-	pr_auto(ASL7, "=============================================================================\n");
-	pr_auto(ASL7, "BUG %s (%s): %pV\n", s->name, print_tainted(), &vaf);
-	pr_auto(ASL7, "-----------------------------------------------------------------------------\n\n");
+	pr_err("=============================================================================\n");
+	pr_err("BUG %s (%s): %pV\n", s->name, print_tainted(), &vaf);
+	pr_err("-----------------------------------------------------------------------------\n\n");
 	va_end(args);
 }
 
@@ -3070,11 +3072,13 @@ static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 	s = slab_pre_alloc_hook(s, &objcg, 1, gfpflags);
 	if (!s)
 		return NULL;
+
 #ifdef CONFIG_KDP
 	/* kdp does not want to alloc from kfence */
 	if (is_kdp_kmem_cache(s))
 		goto redo;
 #endif
+
 	object = kfence_alloc(s, orig_size, gfpflags);
 	if (unlikely(object))
 		goto out;
@@ -5015,6 +5019,7 @@ static void process_slab(struct loc_track *t, struct kmem_cache *s,
 	if (is_kdp_kmem_cache(s))
 		return;
 #endif
+
 	__fill_map(obj_map, s, page);
 
 	for_each_object(p, s, addr, page->objects)

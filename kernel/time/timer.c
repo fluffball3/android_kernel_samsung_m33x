@@ -2110,6 +2110,7 @@ void __sched usleep_range_state(unsigned long min, unsigned long max,
 			break;
 	}
 }
+EXPORT_SYMBOL_GPL(usleep_range_state);
 
 /**
  * usleep_range - Sleep for an approximate time

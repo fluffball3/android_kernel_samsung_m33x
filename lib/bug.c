@@ -52,6 +52,8 @@
 
 #include <trace/hooks/bug.h>
 
+#include <trace/hooks/bug.h>
+
 extern struct bug_entry __start___bug_table[], __stop___bug_table[];
 
 static inline unsigned long bug_addr(const struct bug_entry *bug)

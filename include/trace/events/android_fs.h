@@ -26,7 +26,6 @@ DEFINE_EVENT(android_fs_data_end_template, android_fs_datawrite_end,
 	TP_PROTO(struct inode *inode, loff_t offset, int bytes),
 	     TP_ARGS(inode, offset, bytes));
 
-
 #ifdef CONFIG_F2FS_ML_BASED_STREAM_SEPARATION
 DEFINE_EVENT(android_fs_separation_template,
 			android_fs_separation_start,
@@ -45,6 +44,7 @@ DEFINE_EVENT(android_fs_data_wb_template, android_fs_datawrite_start_wb,
 	TP_ARGS(inode, offset, bytes, pid, pathname, command, time, is_cache,
 	is_file, is_fuse, write_chunk, arr));
 #endif
+
 #endif /* _TRACE_ANDROID_FS_H */
 
 /* This part must be outside protection */

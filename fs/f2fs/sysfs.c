@@ -16,6 +16,7 @@
 #include <linux/ioprio.h>
 #include <linux/sysfs.h>
 #include <linux/string.h>
+
 #include "f2fs.h"
 #include "segment.h"
 #include "gc.h"
@@ -582,6 +583,42 @@ static ssize_t f2fs_sbi_show(struct f2fs_attr *a,
 	if (!strcmp(a->attr.name, "streamid_bias"))
 		return sprintf(buf, "%lld\n", sbi->logistic_bias);
 #endif
+	if (!strcmp(a->attr.name, "gc_segment_mode"))
+		return sysfs_emit(buf, "%u\n", sbi->gc_segment_mode);
+
+	if (!strcmp(a->attr.name, "gc_reclaimed_segments")) {
+		return sysfs_emit(buf, "%u\n",
+			sbi->gc_reclaimed_segs[sbi->gc_segment_mode]);
+	}
+
+	if (!strcmp(a->attr.name, "ckpt_thread_ioprio")) {
+		struct ckpt_req_control *cprc = &sbi->cprc_info;
+		int len = 0;
+		int class = IOPRIO_PRIO_CLASS(cprc->ckpt_thread_ioprio);
+		int data = IOPRIO_PRIO_DATA(cprc->ckpt_thread_ioprio);
+
+		if (class == IOPRIO_CLASS_RT)
+			len += scnprintf(buf + len, PAGE_SIZE - len, "rt,");
+		else if (class == IOPRIO_CLASS_BE)
+			len += scnprintf(buf + len, PAGE_SIZE - len, "be,");
+		else
+			return -EINVAL;
+
+		len += scnprintf(buf + len, PAGE_SIZE - len, "%d\n", data);
+		return len;
+	}
+
+#ifdef CONFIG_F2FS_FS_COMPRESSION
+	if (!strcmp(a->attr.name, "compr_written_block"))
+		return sysfs_emit(buf, "%llu\n", sbi->compr_written_block);
+
+	if (!strcmp(a->attr.name, "compr_saved_block"))
+		return sysfs_emit(buf, "%llu\n", sbi->compr_saved_block);
+
+	if (!strcmp(a->attr.name, "compr_new_inode"))
+		return sysfs_emit(buf, "%u\n", sbi->compr_new_inode);
+#endif
+
 	if (!strcmp(a->attr.name, "gc_segment_mode"))
 		return sysfs_emit(buf, "%u\n", sbi->gc_segment_mode);
 
@@ -1754,6 +1791,7 @@ int f2fs_register_sysfs(struct f2fs_sb_info *sbi)
 			pr_err("Can not create sysfs link for userdata(%d)\n",
 					err);
 	}
+
 	sbi->s_feature_list_kobj.kset = &f2fs_kset;
 	init_completion(&sbi->s_feature_list_kobj_unregister);
 	err = kobject_init_and_add(&sbi->s_feature_list_kobj,

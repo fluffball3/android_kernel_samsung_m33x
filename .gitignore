@@ -40,6 +40,7 @@
 *.so.dbg
 *.su
 *.symtypes
+*.symversions
 *.tab.[ch]
 *.tar
 *.xz
@@ -123,7 +124,6 @@ GTAGS
 # id-utils files
 ID
 
-*.orig
 *~
 \#*#
 

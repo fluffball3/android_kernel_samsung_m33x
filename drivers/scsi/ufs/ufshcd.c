@@ -38,7 +38,7 @@
 				 UTP_TASK_REQ_COMPL |\
 				 UFSHCD_ERROR_MASK)
 /* UIC command timeout, unit: ms */
-#define UIC_CMD_TIMEOUT	500
+#define UIC_CMD_TIMEOUT	5000
 
 /* NOP OUT retries waiting for NOP IN response */
 #define NOP_OUT_RETRIES    10
@@ -504,9 +504,9 @@ void ufshcd_print_trs(struct ufs_hba *hba, unsigned long bitmap, bool pr_prdt)
 			tag, prdt_length,
 			(u64)lrbp->ucd_prdt_dma_addr);
 
-//		if (pr_prdt)
-//			ufshcd_hex_dump("UPIU PRDT: ", lrbp->ucd_prdt_ptr,
-//				hba->sg_entry_size * prdt_length);
+		if (pr_prdt)
+			ufshcd_hex_dump("UPIU PRDT: ", lrbp->ucd_prdt_ptr,
+				hba->sg_entry_size * prdt_length);
 	}
 }
 
@@ -3844,11 +3844,16 @@ static inline void ufshcd_add_delay_before_dme_cmd(struct ufs_hba *hba)
 			min_sleep_time_us =
 				MIN_DELAY_BEFORE_DME_CMDS_US - delta;
 		else
-			return; /* no more delay required */
+			min_sleep_time_us = 0; /* no more delay required */
 	}
 
-	/* allow sleep for extra 50us if needed */
-	usleep_range(min_sleep_time_us, min_sleep_time_us + 50);
+	if (min_sleep_time_us > 0) {
+		/* allow sleep for extra 50us if needed */
+		usleep_range(min_sleep_time_us, min_sleep_time_us + 50);
+	}
+
+	/* update the last_dme_cmd_tstamp */
+	hba->last_dme_cmd_tstamp = ktime_get();
 }
 
 /**
@@ -4440,7 +4445,7 @@ static int ufshcd_complete_dev_init(struct ufs_hba *hba)
 					QUERY_FLAG_IDN_FDEVICEINIT, 0, &flag_res);
 		if (!flag_res)
 			break;
-		usleep_range(5000, 10000);
+		usleep_range(500, 1000);
 	} while (ktime_before(ktime_get(), timeout));
 
 	if (err) {
@@ -5144,7 +5149,7 @@ ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 		result |= DID_ABORT << 16;
 		break;
 	case OCS_INVALID_COMMAND_STATUS:
-		dev_err(hba->dev,
+		dev_err_ratelimited(hba->dev,
 			"Retrying request with tag %d / cdb %#02x because of invalid command status\n",
 			lrbp->task_tag, lrbp->cmd && lrbp->cmd->cmnd ?
 			lrbp->cmd->cmnd[0] : 0);

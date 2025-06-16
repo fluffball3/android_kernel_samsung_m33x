@@ -71,7 +71,9 @@
 #include <linux/psi.h>
 #include <linux/padata.h>
 #include <linux/khugepaged.h>
+
 #include <linux/sched/cputime.h>
+
 #include <trace/hooks/mm.h>
 #include <trace/hooks/vmscan.h>
 
@@ -4865,6 +4867,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 
 	trace_android_vh_alloc_pages_slowpath_begin(gfp_mask, order, &vh_record);
 	task_cputime(current, &utime, &stime_s);
+
 	/*
 	 * We also sanity check to catch abuse of atomic reserves being used by
 	 * callers that are not in atomic context.
@@ -4876,6 +4879,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 restart:
 	compaction_retries = 0;
 	no_progress_loops = 0;
+	compact_result = COMPACT_SKIPPED;
 	compact_priority = DEF_COMPACT_PRIORITY;
 	cpuset_mems_cookie = read_mems_allowed_begin();
 	zonelist_iter_cookie = zonelist_iter_begin();
@@ -8819,6 +8823,7 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
 	unsigned int max_tries = 5;
 	int ret = 0;
 	bool async_mode = cc->alloc_contig && cc->mode == MIGRATE_ASYNC;
+
 	struct page *page;
 	struct migration_target_control mtc = {
 		.nid = zone_to_nid(cc->zone),

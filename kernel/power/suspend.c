@@ -31,6 +31,7 @@
 #include <linux/compiler.h>
 #include <linux/moduleparam.h>
 #include <linux/wakeup_reason.h>
+
 #include <linux/sec_debug.h>
 #if IS_ENABLED(CONFIG_SEC_PM_DEBUG)
 #include <linux/regulator/machine.h>
