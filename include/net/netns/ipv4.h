@@ -185,9 +185,6 @@ struct netns_ipv4 {
 	atomic_t tfo_active_disable_times;
 	unsigned long tfo_active_disable_stamp;
 	int sysctl_tcp_reflect_tos;
-	u8 sysctl_tcp_plb_enabled;
-	int sysctl_tcp_plb_cong_thresh;
-	u8 sysctl_tcp_plb_idle_rehash_rounds;
 
 	int sysctl_udp_wmem_min;
 	int sysctl_udp_rmem_min;
@@ -233,6 +230,6 @@ struct netns_ipv4 {
 	atomic_t	rt_genid;
 	siphash_key_t	ip_id_key;
 
-	ANDROID_KABI_USE2(1, u8 sysctl_tcp_plb_rehash_rounds, u8 sysctl_tcp_plb_suspend_rto_sec);
+	ANDROID_KABI_RESERVE(1);
 };
 #endif
