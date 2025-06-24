@@ -1643,6 +1643,7 @@ static void configfs_composite_disconnect(struct usb_gadget *gadget)
 	 */
 	acc_disconnect();
 #endif
+
 	gi = container_of(cdev, struct gadget_info, cdev);
 	spin_lock_irqsave(&gi->spinlock, flags);
 	cdev = get_gadget_data(gadget);
@@ -1651,7 +1652,11 @@ static void configfs_composite_disconnect(struct usb_gadget *gadget)
 		return;
 	}
 
-	composite_reset(gadget);
+#ifdef CONFIG_USB_CONFIGFS_UEVENT
+	gi->connected = 0;
+	schedule_work(&gi->work);
+#endif
+	composite_disconnect(gadget);
 	spin_unlock_irqrestore(&gi->spinlock, flags);
 }
 
