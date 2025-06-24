@@ -265,5 +265,4 @@ snd-soc-samsung-slif.ko
 exynos8825_rt5665.ko
 sec_audio_sysfs.ko
 sec_audio_debug.ko
-tcp_westwood.ko
 cfg80211.ko
