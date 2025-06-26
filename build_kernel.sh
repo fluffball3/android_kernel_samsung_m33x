@@ -1,7 +1,7 @@
 #!/bin/bash
 
 KERNEL_HOME="$(pwd)"
-BUILD_ARGS="LOCALVERSION=-Elite3XP-v3.3 KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
+BUILD_ARGS="LOCALVERSION=-Elite3XP-v3.4 KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
 export PATH="$(pwd)/../build-tools/path/linux-x86:$PATH"
 export PATH="$(pwd)/../clang-r522817/bin:$PATH"
 export CC="$(pwd)/../clang-r522817/bin/clang"
