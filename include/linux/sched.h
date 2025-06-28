@@ -1396,10 +1396,13 @@ struct task_struct {
 	ANDROID_KABI_RESERVE(2);
 
 	ANDROID_KABI_USE(3, int latency_nice);
-
+#ifdef CONFIG_KSU_SUSFS
+	ANDROID_KABI_USE(4, u64 susfs_task_state);
+	ANDROID_KABI_USE(5, u64 susfs_last_fake_mnt_id);
+#else
  	ANDROID_KABI_RESERVE(4);
 	ANDROID_KABI_RESERVE(5);
-
+#endif
 #if defined(CONFIG_SYSVIPC)
 	// struct sysv_sem			sysvsem;
 	ANDROID_KABI_USE(6, struct sysv_sem sysvsem);
