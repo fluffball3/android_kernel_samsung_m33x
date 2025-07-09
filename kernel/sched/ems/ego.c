@@ -88,7 +88,7 @@ struct ego_cpu {
 	unsigned long		bw_dl;
 	unsigned long		max;
 
-	unsigned long		util;		/* current pelt util */
+	unsigned long		pelt_util;		/* current pelt util */
 	unsigned long		boosted_util;	/* current boosted util */
 
 	unsigned long		min_cap;
@@ -178,10 +178,10 @@ unsigned long ego_compute_energy(struct ego_policy *egp, unsigned long freq)
 		struct ego_idle *egi = &egc->idle;
 		unsigned long idle_util, idle_ratio_sum;
 
-		states[cpu].util = egc->util;
+		states[cpu].util = egc->pelt_util;
 
 		/* We just guess nomalized value from clkoff/pwroff ratio */
-		idle_util = max((long)(capacity - egc->util), (long) 0);
+		idle_util = max((long)(capacity - egc->pelt_util), (long) 0);
 		idle_ratio_sum = egi->avg_ratio[CLKOFF] + egi->avg_ratio[PWROFF];
 		time[CLKOFF] += (idle_util * egi->avg_ratio[CLKOFF] / idle_ratio_sum);
 		time[PWROFF] += (idle_util * egi->avg_ratio[PWROFF] / idle_ratio_sum);
@@ -931,7 +931,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		unsigned long cpu_util, cpu_io_util, cpu_max;
 		unsigned long cpu_boosted_util;
 
-		egc->util = cpu_util = ego_get_util(egc);
+		egc->pelt_util = cpu_util = ego_get_util(egc);
 		cpu_boosted_util = freqboost_cpu_boost(cpu, cpu_util);
 		cpu_boosted_util = max(cpu_boosted_util,
 					heavytask_cpu_boost(cpu, cpu_util, egp->htask_boost));
@@ -1228,7 +1228,7 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->last_update = 0;
 		egc->bw_dl = 0;
 		egc->max = 0;
-		egc->util = 0;
+		egc->pelt_util = 0;
 		egc->boosted_util = 0;
 		egc->egp = egp;
 		egc->cpu = cpu;
