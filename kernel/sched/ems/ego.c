@@ -85,7 +85,8 @@ struct ego_cpu {
 	unsigned int		iowait_boost;
 	u64			last_update;
 
-	unsigned long		bw_min;
+	unsigned long		bw_dl;
+	unsigned long		max;
 
 	unsigned long		util;		/* current pelt util */
 	unsigned long		boosted_util;	/* current boosted util */
@@ -463,10 +464,6 @@ static bool ego_should_update_freq(struct ego_policy *egp, u64 time)
 		return true;
 	}
 
-	/* If the last frequency wasn't set yet then we can still amend it */
-	if (egp->work_in_progress)
-		return true;
-
 	delta_ns = time - egp->last_freq_update_time;
 
 	/*
@@ -522,10 +519,6 @@ static void ego_update_next_freq(struct ego_policy *egp, u64 time,
 				   unsigned int next_freq)
 {
 	ego_update_freq_variant_param(egp, time, next_freq);
-
-	if (egp->next_freq > next_freq)
-		next_freq = (egp->next_freq + next_freq) >> 1;
-
 	egp->next_freq = next_freq;
 	egp->last_freq_update_time = time;
 }
@@ -558,15 +551,10 @@ static void ego_deferred_update(struct ego_policy *egp, u64 time,
 }
 
 static inline unsigned long
-ego_map_util_freq(unsigned long util,
+ego_map_util_freq(struct ego_policy *egp, unsigned long util,
 		  unsigned long freq, unsigned long cap)
 {
-	return freq * util / cap;
-}
-
-static inline unsigned long ego_map_util_perf(struct ego_policy *egp, unsigned long util)
-{
-	return ((util * (100 + egp->pelt_margin)) / 100);
+	return ((freq * (100 + egp->pelt_margin)) / 100) * util / cap;
 }
 
 /**
@@ -613,17 +601,8 @@ static unsigned int get_next_freq(struct ego_policy *egp,
 	struct cpufreq_policy *policy = egp->policy;
 	unsigned int freq, org_freq, eng_freq = 0;
 
-	if (arch_scale_freq_invariant())
-		freq = policy->cpuinfo.max_freq;
-	else
-		/*
-		 * Apply a 25% margin so that we select a higher frequency than
-		 * the current one before the CPU is fully busy:
-		 */
-		freq = policy->cur + (policy->cur >> 2);
-
 	/* compute pure frequency base on util */
-	org_freq = ego_map_util_freq(util, freq, max);
+	org_freq = ego_map_util_freq(egp, util, policy->cpuinfo.max_freq, max);
 	if ((org_freq == egp->cached_raw_freq || egp->work_in_progress)
 					&& !egp->need_freq_update) {
 		freq = max(egp->org_freq, egp->next_freq);
@@ -683,44 +662,22 @@ skip_find_next_freq:
  * required to meet deadlines.
  */
 unsigned long ego_cpu_util(int cpu, unsigned long util_cfs,
-				 unsigned long *min,
-				 unsigned long *max)
+				 unsigned long max, enum schedutil_type type,
+				 struct task_struct *p)
 {
-	unsigned long util, irq, scale;
+	unsigned long dl_util, util, irq;
 	struct rq *rq = cpu_rq(cpu);
-
-	scale = arch_scale_cpu_capacity(cpu);
 
 	/*
 	 * Early check to see if IRQ/steal time saturates the CPU, can be
 	 * because of inaccuracies in how we track these -- see
 	 * update_irq_load_avg().
 	 */
+
 	irq = cpu_util_irq(rq);
-	if (unlikely(irq >= scale)) {
+	if (unlikely(irq >= max)) {
 		util = irq;
-		if (min)
-			*min = scale;
-		if (max)
-			*max = scale;
 		goto out;
-	}
-
-	if (min) {
-		/*
-		 * The minimum utilization returns the highest level between:
-		 * - the computed DL bandwidth needed with the IRQ pressure which
-		 *   steals time to the deadline task.
-		 * - The minimum performance requirement for CFS and/or RT.
-		 */
-		*min = max(irq + cpu_bw_dl(rq), uclamp_rq_get(rq, UCLAMP_MIN));
-
-		/*
-		 * When an RT task is runnable and uclamp is not used, we must
-		 * ensure that the task will run at maximum compute capacity.
-		 */
-		if (!uclamp_is_used() && rt_rq_is_runnable(&rq->rt))
-			*min = max(*min, scale);
 	}
 
 	/*
@@ -728,19 +685,38 @@ unsigned long ego_cpu_util(int cpu, unsigned long util_cfs,
 	 * CFS tasks and we use the same metric to track the effective
 	 * utilization (PELT windows are synchronized) we can directly add them
 	 * to obtain the CPU's actual utilization.
+	 *
+	 * CFS and RT utilization can be boosted or capped, depending on
+	 * utilization clamp constraints requested by currently RUNNABLE
+	 * tasks.
+	 * When there are no CFS RUNNABLE tasks, clamps are released and
+	 * frequency will be gracefully reduced with the utilization decay.
 	 */
 	util = util_cfs + cpu_util_rt(rq);
-	util += cpu_util_dl(rq);
+	if (type == FREQUENCY_UTIL)
+		util = uclamp_rq_util_with(rq, util, p);
+	dl_util = cpu_util_dl(rq);
 
 	/*
-	 * The maximum hint is a soft bandwidth requirement, which can be lower
-	 * than the actual utilization because of uclamp_max requirements.
+	 * For frequency selection we do not make cpu_util_dl() a permanent part
+	 * of this sum because we want to use cpu_bw_dl() later on, but we need
+	 * to check if the CFS+RT+DL sum is saturated (ie. no idle time) such
+	 * that we select f_max when there is no idle time.
+	 *
+	 * NOTE: numerical errors or stop class might cause us to not quite hit
+	 * saturation when we should -- something for later.
 	 */
-	if (max)
-		*max = min(scale, uclamp_rq_get(rq, UCLAMP_MAX));
-
-	if (util >= scale)
+	if (util + dl_util >= max) {
+		util = util + dl_util;
 		goto out;
+	}
+
+	/*
+	 * OTOH, for energy computation we need the estimated running time, so
+	 * include util_dl and ignore dl_bw.
+	 */
+	if (type == ENERGY_UTIL)
+		util += dl_util;
 
 	/*
 	 * There is still idle time; further improve the number by using the
@@ -751,42 +727,39 @@ unsigned long ego_cpu_util(int cpu, unsigned long util_cfs,
 	 *   U' = irq + --------- * U
 	 *                 max
 	 */
-	util = scale_irq_capacity(util, irq, scale);
+	util = scale_irq_capacity(util, irq, max);
 	util += irq;
+
+	/*
+	 * Bandwidth required by DEADLINE must always be granted while, for
+	 * FAIR and RT, we use blocked utilization of IDLE CPUs as a mechanism
+	 * to gracefully reduce the frequency when no tasks show up for longer
+	 * periods of time.
+	 *
+	 * Ideally we would like to set bw_dl as min/guaranteed freq and util +
+	 * bw_dl as requested freq. However, cpufreq is not yet ready for such
+	 * an interface. So, we only do the latter for now.
+	 */
+	if (type == FREQUENCY_UTIL)
+		util += cpu_bw_dl(rq);
 
 out:
 	trace_ego_sched_util(cpu, util, util_cfs, cpu_util_rt(rq),
 		cpu_util_dl(rq), cpu_bw_dl(rq), cpu_util_irq(rq));
 
-	return min(scale, util);
+	return min(max, util);
 }
 
-unsigned long ego_effective_cpu_perf(struct ego_policy *egp, int cpu, unsigned long actual,
-				 unsigned long min,
-				 unsigned long max)
+static unsigned long ego_get_util(struct ego_cpu *egc)
 {
-	/* Add dvfs headroom to actual utilization */
-	actual = ego_map_util_perf(egp, actual);
-	/* Actually we don't need to target the max performance */
-	if (actual < max)
-		max = actual;
+	struct rq *rq = cpu_rq(egc->cpu);
+	unsigned long util = ml_cpu_util(egc->cpu);
+	unsigned long max = arch_scale_cpu_capacity(egc->cpu);
 
-	/*
-	* Ensure at least minimum performance while providing more compute
-	* capacity when possible.
-	*/
-	return max(min, max);
-}
+	egc->max = max;
+	egc->bw_dl = cpu_bw_dl(rq);
 
-static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
-{
-	struct ego_policy *egp = egc->egp;
-	unsigned long min, max, util = ml_cpu_util(egc->cpu);
-
-	util = ego_cpu_util(egc->cpu, util, &min, &max);
-	util = max(util, boost);
-	egc->bw_min = min;
-	egc->util = ego_effective_cpu_perf(egp, egc->cpu, util, min, max);
+	return ego_cpu_util(egc->cpu, util, max, FREQUENCY_UTIL, NULL);
 }
 
 /**
@@ -863,7 +836,8 @@ static void ego_iowait_boost(struct ego_cpu *egc, u64 time,
  * ego_iowait_apply() - Apply the IO boost to a CPU.
  * @egc: the ego data for the cpu to boost
  * @time: the update time from the caller
- * @max_cap: the max CPU capacity
+ * @util: the utilization to (eventually) boost
+ * @max: the maximum value the utilization can be boosted to
  *
  * A CPU running a task which woken up after an IO operation can have its
  * utilization boosted to speed up the completion of those IO operations.
@@ -878,8 +852,10 @@ static void ego_iowait_boost(struct ego_cpu *egc, u64 time,
  * being more conservative on tasks which does sporadic IO operations.
  */
 static unsigned long ego_iowait_apply(struct ego_cpu *egc, u64 time,
-			       unsigned long max_cap)
+					unsigned long util, unsigned long max)
 {
+	unsigned long boost;
+
 	/* No boost currently required */
 	if (!egc->iowait_boost)
 		return 0;
@@ -902,10 +878,11 @@ static unsigned long ego_iowait_apply(struct ego_cpu *egc, u64 time,
 	egc->iowait_boost_pending = false;
 
 	/*
-	 * egc->util is already in capacity scale; convert iowait_boost
+	 * @util is already in capacity scale; convert iowait_boost
 	 * into the same scale so we can compare.
 	 */
-	return (egc->iowait_boost * max_cap) >> SCHED_CAPACITY_SHIFT;
+	boost = (egc->iowait_boost * max) >> SCHED_CAPACITY_SHIFT;
+	return boost;
 }
 
 /*
@@ -914,7 +891,7 @@ static unsigned long ego_iowait_apply(struct ego_cpu *egc, u64 time,
  */
 static inline void ignore_dl_rate_limit(struct ego_cpu *egc, struct ego_policy *egp)
 {
-	if (cpu_bw_dl(cpu_rq(egc->cpu)) > egc->bw_min)
+	if (cpu_bw_dl(cpu_rq(egc->cpu)) > egc->bw_dl)
 		egp->limits_changed = true;
 }
 
@@ -942,41 +919,40 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 {
 	struct ego_policy *egp = egc->egp;
 	struct cpufreq_policy *policy = egp->policy;
-	unsigned long util = 0, io_util = 0, max_cap;
+	unsigned long util = 0, io_util = 0, max = 1;
 	unsigned int cpu;
-
-	max_cap = arch_scale_cpu_capacity(egc->cpu);
 
 	for_each_cpu(cpu, policy->cpus) {
 		struct ego_cpu *egc = &per_cpu(ego_cpu, cpu);
-		unsigned long boost;
+		unsigned long cpu_util, cpu_io_util, cpu_max;
 		unsigned long cpu_boosted_util;
 
-		boost = ego_iowait_apply(egc, time, max_cap);
-		ego_get_util(egc, boost);
-		util = max(egc->util, util);
-
-		cpu_boosted_util = freqboost_cpu_boost(cpu, util);
+		egc->util = cpu_util = ego_get_util(egc);
+		cpu_boosted_util = freqboost_cpu_boost(cpu, cpu_util);
 		cpu_boosted_util = max(cpu_boosted_util,
-					heavytask_cpu_boost(cpu, util, egp->htask_boost));
+					heavytask_cpu_boost(cpu, cpu_util, egp->htask_boost));
 		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
 					cpu_boosted_util, egp->pelt_boost);
 		egc->boosted_util = cpu_boosted_util;
+		cpu_max = egc->max;
+
+		cpu_io_util = ego_iowait_apply(egc, time, cpu_util, cpu_max);
 
 		/* find heaviest util and cpu */
 		if (util < cpu_boosted_util) {
 			util = cpu_boosted_util;
 			egp->heaviest_cpu = cpu;
 		}
-
 		/* find heaviest io util */
-		io_util = max(io_util, ego_iowait_apply(egc, time, max_cap));
+		io_util = max(io_util, cpu_io_util);
+		/* find heaviest max */
+		max = max(max, cpu_max);
 
-		trace_ego_cpu_util(cpu, egp->pelt_boost, util, io_util, cpu_boosted_util);
+		trace_ego_cpu_util(cpu, egp->pelt_boost, cpu_util, io_util, cpu_boosted_util);
 	}
 
 	util = max(util, io_util);
-	return get_next_freq(egp, util, max_cap);
+	return get_next_freq(egp, util, max);
 }
 
 static void
@@ -1128,7 +1104,7 @@ struct cpufreq_governor energy_aware_gov;
 static int ego_kthread_create(struct ego_policy *egp)
 {
 	struct task_struct *thread;
-	struct sched_param param = { .sched_priority = MAX_USER_RT_PRIO - 1 };
+	struct sched_param param = { .sched_priority = MAX_RT_PRIO / 2 };
 	struct cpufreq_policy *policy = egp->policy;
 	int ret;
 
@@ -1246,7 +1222,8 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->iowait_boost_pending = false;
 		egc->iowait_boost = 0;
 		egc->last_update = 0;
-		egc->bw_min = 0;
+		egc->bw_dl = 0;
+		egc->max = 0;
 		egc->util = 0;
 		egc->boosted_util = 0;
 		egc->egp = egp;
