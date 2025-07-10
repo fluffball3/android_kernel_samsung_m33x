@@ -1959,6 +1959,7 @@ bool cpufreq_driver_test_flags(u16 flags)
 {
 	return !!(cpufreq_driver->flags & flags);
 }
+EXPORT_SYMBOL_GPL(cpufreq_driver_test_flags);
 
 /**
  *	cpufreq_get_current_driver - return current driver's name
