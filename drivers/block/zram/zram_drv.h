@@ -87,6 +87,7 @@ struct zram_stats {
 	atomic64_t notify_free;	/* no. of swap slot free notifications */
 	atomic64_t same_pages;		/* no. of same element filled pages */
 	atomic64_t huge_pages;		/* no. of huge pages */
+	atomic64_t huge_pages_since;	/* no. of huge pages since zram set up */
 	atomic64_t pages_stored;	/* no. of pages currently stored */
 	atomic_long_t max_used_pages;	/* no. of maximum pages stored */
 	atomic64_t writestall;		/* no. of write slow paths */
@@ -179,14 +180,13 @@ struct zram {
 	/*
 	 * zram is claimed so open request will be failed
 	 */
-	bool claim; /* Protected by bdev->bd_mutex */
-	struct file *backing_dev;
+	bool claim; /* Protected by disk->open_mutex */
 #ifdef CONFIG_ZRAM_WRITEBACK
+	struct file *backing_dev;
 	spinlock_t wb_limit_lock;
 	bool wb_limit_enable;
 	u64 bd_wb_limit;
 	struct block_device *bdev;
-	unsigned int old_block_size;
 	unsigned long *bitmap;
 	unsigned long nr_pages;
 #endif
@@ -196,7 +196,7 @@ struct zram {
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
 	struct task_struct *wbd;
 	wait_queue_head_t wbd_wait;
-	u8 *wb_table;
+	u16 *wb_table;
 	unsigned long *chunk_bitmap;
 	unsigned long nr_lru_pages;
 	bool wbd_running;
