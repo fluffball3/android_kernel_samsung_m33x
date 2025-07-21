@@ -658,6 +658,12 @@ static ssize_t backing_dev_store(struct device *dev,
 	}
 
 	nr_pages = i_size_read(inode) >> PAGE_SHIFT;
+	/* Refuse to use zero sized device (also prevents self reference) */
+	if (!nr_pages) {
+		err = -EINVAL;
+		goto out;
+	}
+
 	bitmap_sz = BITS_TO_LONGS(nr_pages) * sizeof(long);
 	bitmap = kvzalloc(bitmap_sz, GFP_KERNEL);
 	if (!bitmap) {
@@ -2894,10 +2900,11 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 	if (zram_test_flag(zram, index, ZRAM_WB)) {
 		struct bio_vec bvec;
 
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
 		bvec.bv_page = page;
 		bvec.bv_len = PAGE_SIZE;
 		bvec.bv_offset = 0;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
+
 		atomic64_inc(&zram->stats.bd_objreads);
 		ppr = zram_test_flag(zram, index, ZRAM_PPR);
 		if (ppr)
@@ -2921,6 +2928,11 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 		return read_from_bdev(zram, &bvec, blk_idx, bio, partial_io);
 #else
 		zram_slot_unlock(zram, index);
+
+		bvec.bv_page = page;
+		bvec.bv_len = PAGE_SIZE;
+		bvec.bv_offset = 0;
+
 		return read_from_bdev(zram, &bvec,
 				zram_get_element(zram, index),
 				bio, partial_io);
@@ -2980,6 +2992,12 @@ static int __zram_bvec_read(struct zram *zram, struct page *page, u32 index,
 	spin_unlock_irqrestore(&zram->list_lock, flags);
 #endif
 	zram_slot_unlock(zram, index);
+
+#ifndef CONFIG_ZRAM_LRU_WRITEBACK
+	/* Should NEVER happen. Return bio error if it does. */
+	if (WARN_ON(ret))
+		pr_err("Decompression failed! err=%d, page=%u\n", ret, index);
+#endif
 
 	return ret;
 }
