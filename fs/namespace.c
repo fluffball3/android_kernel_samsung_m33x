@@ -2474,23 +2474,16 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 	hlist_for_each_entry_safe(child, n, &tree_list, mnt_hash) {
 		struct mount *q;
 		hlist_del_init(&child->mnt_hash);
-#ifdef CONFIG_KDP_NS
-		q = __lookup_mnt(((struct kdp_mount *)child->mnt_parent)->mnt,
-#else
-		q = __lookup_mnt(&child->mnt_parent->mnt,
-#endif
-				 child->mnt_mountpoint);
-		if (q)
-			mnt_change_mountpoint(child, smp, q);
+
 		/* Notice when we are propagating across user namespaces */
 		if (child->mnt_parent->mnt_ns->user_ns != user_ns)
 			lock_mnt_tree(child);
-#ifdef CONFIG_KDP_NS
-		nsflags = ((struct kdp_mount *)child)->mnt->mnt_flags & ~MNT_LOCKED;
-		kdp_assign_mnt_flags(((struct kdp_mount *)child)->mnt, nsflags);
-#else
+
 		child->mnt.mnt_flags &= ~MNT_LOCKED;
-#endif
+		q = __lookup_mnt(&child->mnt_parent->mnt,
+				 child->mnt_mountpoint);
+		if (q)
+			mnt_change_mountpoint(child, smp, q);
 		commit_tree(child);
 	}
 	put_mountpoint(smp);
