@@ -11,7 +11,7 @@ do.systemless=1
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=m33x
-supported.versions=12-15
+supported.versions=12-16
 supported.patchlevels=2021-01-2099-01
 supported.vendorpatchlevels=2021-01-2099-01
 '; } # end properties
