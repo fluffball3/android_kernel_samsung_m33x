@@ -1,6 +1,6 @@
 #!/bin/bash
 
-E35P_VERSION="v3.5_rc-koroneisturtleisdoggoishuman"
+E35P_VERSION="v3.5_rc2"
 
 set -e
 
