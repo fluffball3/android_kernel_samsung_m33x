@@ -28,14 +28,14 @@ static char *exynos_wow_event_name[] = { "CCNT", "RW_ACITVE", "RW_DATA", "RW_REQ
 
 static int exynos_wow_set_polling(struct exynos_wow_data *data)
 {
-	schedule_delayed_work(&data->dwork, msecs_to_jiffies(data->polling_delay));
+	queue_delayed_work(system_power_efficient_wq, &data->dwork, msecs_to_jiffies(data->polling_delay));
 
 	return 0;
 }
 
 static int exynos_wow_start_polling(struct exynos_wow_data *data)
 {
-	schedule_delayed_work(&data->dwork, 0);
+	queue_delayed_work(system_power_efficient_wq, &data->dwork, 0);
 
 	return 0;
 }
