@@ -30,24 +30,6 @@ static inline void print_task_info(struct task_struct *p)
 		cpumask_pr_args(p->cpus_ptr));
 }
 
-//copied straight from fair.c
-#ifdef CONFIG_FAIR_GROUP_SCHED
-/* runqueue on which this entity is (to be) queued */
-static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
-{
-	return se->cfs_rq;
-}
-#else
-static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
-{
-	struct task_struct *p = task_of(se);
-	struct rq *rq = task_rq(p);
-
-	return &rq->cfs;
-}
-#endif
-//copied straight from fair.c
-
 static int ems_panic_notifier_call(struct notifier_block *nb,
 				   unsigned long l, void *buf)
 {
