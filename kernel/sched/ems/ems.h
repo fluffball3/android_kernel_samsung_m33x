@@ -934,6 +934,15 @@ static inline struct sched_entity *get_task_entity(struct sched_entity *se)
 	return se;
 }
 
+static inline struct cfs_rq *cfs_rq_of(struct sched_entity *se)
+{
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	return se->cfs_rq;
+#else
+	return &task_rq(task_of(se))->cfs;
+#endif
+}
+
 static inline bool can_migrate(struct task_struct *p, int dst_cpu)
 {
 	if (p->exit_state)
