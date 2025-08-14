@@ -222,8 +222,6 @@ extern uint slsi_sg_host_align_mask;
 		} \
 	} while (0)
 
-#define SLSI_ENSURE_NULL_TERMINATED(str, size) ((str)[(size) - 1] = '\0')
-
 /*------------------------------------------------------------------*/
 /* Endian conversion. */
 /*------------------------------------------------------------------*/
