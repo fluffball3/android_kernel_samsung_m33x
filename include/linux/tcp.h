@@ -231,13 +231,13 @@ struct tcp_sock {
 	u32	chrono_stat[3];	/* Time in jiffies for chrono_stat stats */
 	u8	chrono_type:2,	/* current chronograph type */
 		rate_app_limited:1,  /* rate_{delivered,interval_us} limited? */
-		tlp_orig_data_app_limited:1, /* app-limited before TLP rtx? */
 		fastopen_connect:1, /* FASTOPEN_CONNECT sockopt */
 		fastopen_no_cookie:1, /* Allow send/recv SYN+data without a cookie */
 		is_sack_reneg:1,    /* in recovery from loss with SACK reneg? */
 		fastopen_client_fail:2; /* reason why fastopen failed */
 	u8	nonagle     : 4,/* Disable Nagle algorithm?             */
 		thin_lto    : 1,/* Use linear timeouts for thin streams */
+		recvmsg_inq : 1,/* Indicate # of bytes in queue upon recvmsg */
 		repair      : 1,
 		frto        : 1;/* F-RTO (RFC5682) activated in CA_Loss */
 	u8	repair_queue;
@@ -266,10 +266,6 @@ struct tcp_sock {
 	u32	packets_out;	/* Packets which are "in flight"	*/
 	u32	retrans_out;	/* Retransmitted packets out		*/
 	u32	max_packets_out;  /* max packets_out in last window */
-
-	u32	recvmsg_inq : 1,/* Indicate # of bytes in queue upon recvmsg */
-		fast_ack_mode:1;/* ack ASAP if >1 rcv_mss received? */
-
 /* GENKSYMS hack to preserve the ABI because of f4ce91ce12a7 ("tcp: fix
  * tcp_cwnd_validate() to not forget is_cwnd_limited")
  */
@@ -399,7 +395,6 @@ struct tcp_sock {
 		u32		  probe_seq_start;
 		u32		  probe_seq_end;
 	} mtu_probe;
-	u32     plb_rehash;     /* PLB-triggered rehash attempts */
 	u32	mtu_info; /* We received an ICMP_FRAG_NEEDED / ICMPV6_PKT_TOOBIG
 			   * while socket was owned by user.
 			   */
