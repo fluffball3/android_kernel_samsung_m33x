@@ -518,7 +518,12 @@ static u32 bbr_tso_segs_goal(struct sock *sk)
 static void bbr_save_cwnd(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	return  bbr_tso_segs_generic(sk, tp->mss_cache, GSO_LEGACY_MAX_SIZE);
+	struct bbr *bbr = inet_csk_ca(sk);
+
+	if (bbr->prev_ca_state < TCP_CA_Recovery && bbr->mode != BBR_PROBE_RTT)
+		bbr->prior_cwnd = tcp_snd_cwnd(tp);  /* this cwnd is good enough */
+	else  /* loss recovery or BBR_PROBE_RTT have temporarily cut cwnd */
+		bbr->prior_cwnd = max(bbr->prior_cwnd, tcp_snd_cwnd(tp));
 }
 
 static void bbr_cwnd_event(struct sock *sk, enum tcp_ca_event event)
@@ -1069,7 +1074,7 @@ static int bbr_update_ecn_alpha(struct sock *sk)
 
 	/* See if we should use ECN sender logic for this connection. */
 	if (!bbr->ecn_eligible && bbr_can_use_ecn(sk) &&
-	    bbr_param(sk, ecn_factor) &&
+		!!bbr_param(sk, ecn_factor) &&
 	    (bbr->min_rtt_us <= bbr_ecn_max_rtt_us ||
 	     !bbr_ecn_max_rtt_us))
 		bbr->ecn_eligible = 1;
@@ -1176,7 +1181,7 @@ static bool bbr_is_inflight_too_high(const struct sock *sk,
 	}
 
 	if (rs->delivered_ce > 0 && rs->delivered > 0 &&
-	    bbr->ecn_eligible && bbr_param(sk, ecn_thresh)) {
+	    bbr->ecn_eligible && !!bbr_param(sk, ecn_thresh)) {
 		ecn_thresh = (u64)rs->delivered * bbr_param(sk, ecn_thresh) >>
 				BBR_SCALE;
 		if (rs->delivered_ce > ecn_thresh) {
@@ -1374,7 +1379,7 @@ static void bbr_adapt_lower_bounds(struct sock *sk,
 		return;
 
 	/* ECN response. */
-	if (bbr->ecn_in_round && bbr_param(sk, ecn_factor)) {
+	if (bbr->ecn_in_round && !!bbr_param(sk, ecn_factor)) {
 		bbr_init_lower_bounds(sk, false);
 		bbr_ecn_lower_bounds(sk, &ecn_inflight_lo);
 	}
@@ -1530,10 +1535,10 @@ static void bbr_pick_probe_wait(struct sock *sk)
 
 	/* Decide the random round-trip bound for wait until probe: */
 	bbr->rounds_since_probe =
-		get_random_u32_below(bbr_param(sk, bw_probe_rand_rounds));
+		prandom_u32_max(bbr_param(sk, bw_probe_rand_rounds));
 	/* Decide the random wall clock bound for wait until probe: */
 	bbr->probe_wait_us = bbr_param(sk, bw_probe_base_us) +
-			     get_random_u32_below(bbr_param(sk, bw_probe_rand_us));
+			     prandom_u32_max(bbr_param(sk, bw_probe_rand_us));
 }
 
 static void bbr_set_cycle_idx(struct sock *sk, int cycle_idx)
