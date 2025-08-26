@@ -983,7 +983,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 {
 	struct ego_policy *egp = egc->egp;
 	struct cpufreq_policy *policy = egp->policy;
-	unsigned long util = 0, cpu_util, max_cap;
+	unsigned long util = 0, max_cap;
 	unsigned int cpu;
 
 	max_cap = arch_scale_cpu_capacity(egc->cpu);
@@ -994,13 +994,10 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 
 		boost = ego_iowait_apply(egc, time, max_cap);
 		ego_get_util(egc, boost);
-		egc->pelt_util = cpu_util = egc->util;
+		egc->pelt_util = egc->util;
 
-		cpu_boosted_util = freqboost_cpu_boost(cpu, cpu_util);
-		cpu_boosted_util = max(cpu_boosted_util,
-					heavytask_cpu_boost(cpu, cpu_util, egp->htask_boost));
 		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
-					cpu_boosted_util, egp->pelt_boost);
+					egc->util, egp->pelt_boost);
 		egc->boosted_util = cpu_boosted_util;
 
 		/* find heaviest util and cpu */
@@ -1009,8 +1006,6 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 			egp->heaviest_cpu = cpu;
 		}
 		util = max(util, egc->util);
-
-		trace_ego_cpu_util(cpu, egp->pelt_boost, cpu_util, util, cpu_boosted_util);
 	}
 
 	return get_next_freq(egp, util, max_cap);
