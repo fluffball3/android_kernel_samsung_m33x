@@ -891,10 +891,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		ego_get_util(egc, boost);
 		egc->pelt_util = egc->util;
 
-		cpu_boosted_util = freqboost_cpu_boost(cpu, egc->util);
-		cpu_boosted_util = max(cpu_boosted_util,
-					heavytask_cpu_boost(cpu, egc->util, egp->htask_boost));
-		cpu_boosted_util = get_boost_pelt_util(cpu_boosted_util, egp->pelt_boost);
+		cpu_boosted_util = get_boost_pelt_util(egc->util, egp->pelt_boost);
 		egc->boosted_util = cpu_boosted_util;
 
 		/* find heaviest util and cpu */
