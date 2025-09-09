@@ -15,6 +15,7 @@ if [ "$(uname -m)" != "x86_64" ]; then
   exit 1
 fi
 
+export PYTHON="$(command -v python2)"
 export PATH="$(pwd)/kernel_build/bin:$PATH"
 
 # Configs
@@ -127,7 +128,7 @@ mv "$MODULES_DIR/0.0"/* "$MODULES_DIR/"
 rm -rf "$MODULES_DIR/0.0"
 
 echo "Building dtb image..."
-python2 "$MKDTBOIMG" create "$OUT_DTBIMAGE" --custom0=0x00000000 --custom1=0xff000000 --version=0 --page_size=2048 "$IN_DTB" || exit 1
+"$PYTHON" "$MKDTBOIMG" create "$OUT_DTBIMAGE" --custom0=0x00000000 --custom1=0xff000000 --version=0 --page_size=2048 "$IN_DTB" || echo "Error! Make sure python2 is installed or python2 venv is being used, then try again"
 
 echo "Building boot image..."
 
