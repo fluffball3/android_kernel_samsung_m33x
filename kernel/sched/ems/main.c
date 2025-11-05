@@ -8,6 +8,7 @@
 #include <linux/pm_qos.h>
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
+//#include <linux/panic_notifier.h>
 
 #include "../sched.h"
 #include "ems.h"
@@ -425,10 +426,6 @@ int cpuctl_task_group_idx(struct task_struct *p)
 	int idx;
 	struct cgroup_subsys_state *css;
 
-	// Halium: prevent kernel panic due to hardcoded CGROUP_COUNT value
-	// FIXME: see if we can adapt boost groups to our usecase
-	return CGROUP_ROOT;
-
 	rcu_read_lock();
 	css = task_css(p, cpu_cgrp_id);
 	idx = css->id - 1;
@@ -686,19 +683,11 @@ void ems_dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 		lb_dequeue_misfit_task(p, rq);
 }
 
-#define ems_for_each_sched_entity(se) \
-	for (; (se); (se) = (se)->parent)
-
 void ems_replace_next_task_fair(struct rq *rq, struct task_struct **p_ptr,
 				struct sched_entity **se_ptr, bool *repick,
 				bool simple, struct task_struct *prev)
 {
 	tex_replace_next_task_fair(rq, p_ptr, se_ptr, repick, simple, prev);
-
-	if (*repick && simple) {
-		ems_for_each_sched_entity(*se_ptr)
-			set_next_entity(cfs_rq_of(*se_ptr), *se_ptr);
-	}
 }
 
 void ems_check_preempt_wakeup(struct rq *rq, struct task_struct *p,
@@ -778,18 +767,6 @@ void ems_sched_fork_init(struct task_struct *p)
 void ems_schedule(struct task_struct *prev,
 		struct task_struct *next, struct rq *rq)
 {
-	/* check nr running */
-	if (unlikely(((get_sched_class(next) != EMS_SCHED_IDLE)
-				&& !rq->nr_running)))
-		BUG_ON(1);
-
-	/* check rt on_rq */
-	if (get_sched_class(next) == EMS_SCHED_RT) {
-		struct sched_rt_entity *rt_se = &next->rt;
-		if (unlikely(!rt_se->on_rq))
-			BUG_ON(1);
-	}
-
 	if (prev == next)
 		return;
 
@@ -829,6 +806,11 @@ void ems_set_binder_priority(struct binder_transaction *t, struct task_struct *p
 {
 	if (t && t->need_reply && ems_boosted_tex(current))
 		ems_boosted_tex(p) = 1;
+
+	if (t && t->need_reply
+			&& emstune_get_cur_level() == 2
+			&& get_tex_level(current) < NOT_TEX)
+		ems_binder_task(p) = 1;
 }
 
 void ems_restore_binder_priority(struct binder_transaction *t, struct task_struct *p)
