@@ -290,7 +290,7 @@ extern struct mlt __percpu *pcpu_mlt;		/* active ratio tracking */
 
 #define NR_RUN_UNIT		100
 #define NR_RUN_ROUNDS_UNIT	50
-#define NR_RUN_UP_UNIT	99
+#define NR_RUN_UP_UNIT 99
 extern int mlt_avg_nr_run(struct rq *rq);
 extern void mlt_enqueue_task(struct rq *rq);
 extern void mlt_dequeue_task(struct rq *rq);
@@ -324,6 +324,9 @@ extern unsigned long ml_cpu_util(int cpu);
 extern unsigned long ml_cpu_util_with(struct task_struct *p, int dst_cpu);
 extern unsigned long ml_cpu_util_without(int cpu, struct task_struct *p);
 extern unsigned long ml_cpu_load_avg(int cpu);
+extern unsigned long ml_cpu_util_est(int cpu);
+extern unsigned long ml_cpu_util_est_with(struct task_struct *p, int cpu);
+extern unsigned long ml_cpu_util_est_without(int cpu, struct task_struct *p);
 
 #define MLT_PERIOD_SIZE		(4 * NSEC_PER_MSEC)
 #define MLT_PERIOD_COUNT	8
@@ -536,7 +539,6 @@ enum {
 #define TEX_WINDOW_COUNT	(3)
 #define TEX_FULL_WINDOWS	(TEX_WINDOW * TEX_WINDOW_COUNT)
 
-extern void set_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *se);
 extern bool is_boosted_tex_task(struct task_struct *p);
 extern bool is_important_task(struct task_struct *p);
 extern void tex_enqueue_task(struct task_struct *p, int cpu);
@@ -773,7 +775,6 @@ static inline int is_misfit_task_util(unsigned long util)
 extern int profile_sched_init(struct kobject *);
 extern int profile_sched_data(void);
 extern int profile_get_htask_ratio(int cpu);
-extern int profile_get_fps(void);
 extern u64 profile_get_cpu_wratio_busy(int cpu);
 extern void profile_enqueue_task(struct rq *rq, struct task_struct *p);
 extern void get_system_sched_data(struct system_profile_data *);
