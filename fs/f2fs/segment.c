@@ -2915,20 +2915,16 @@ static bool need_new_seg(struct f2fs_sb_info *sbi, int type)
 {
 	struct curseg_info *curseg = CURSEG_I(sbi, type);
 
-	if (force)
-		new_curseg(sbi, type, true);
-	else if (!is_set_ckpt_flags(sbi, CP_CRC_RECOVERY_FLAG) &&
-					curseg->seg_type == CURSEG_WARM_NODE)
-		new_curseg(sbi, type, false);
-	else if (curseg->alloc_type == LFS &&
-			is_next_segment_free(sbi, curseg, type) &&
-			likely(!is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
-		new_curseg(sbi, type, false);
-	else if (f2fs_need_SSR(sbi) &&
-			get_ssr_segment(sbi, type, SSR, 0))
-		change_curseg(sbi, type, true);
-	else
-		new_curseg(sbi, type, false);
+	if (!is_set_ckpt_flags(sbi, CP_CRC_RECOVERY_FLAG) &&
+		curseg->seg_type == CURSEG_WARM_NODE)
+		return true;
+	if (curseg->alloc_type == LFS &&
+		is_next_segment_free(sbi, curseg, type) &&
+		likely(!is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
+		return true;
+	if (!f2fs_need_SSR(sbi) || !get_ssr_segment(sbi, type, SSR, 0))
+		return true;
+	return false;
 
 	stat_inc_seg_type(sbi, curseg);
 	sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
@@ -3816,7 +3812,7 @@ void __update_summary_of_block(struct f2fs_sb_info *sbi,
 	/* change the current segment */
 	if (segno != curseg->segno) {
 		curseg->next_segno = segno;
-		change_curseg(sbi, type, true);
+		change_curseg(sbi, type);
 	}
 
 	curseg->next_blkoff = GET_BLKOFF_FROM_SEG0(sbi, blkaddr);
@@ -3825,7 +3821,7 @@ void __update_summary_of_block(struct f2fs_sb_info *sbi,
 	/* restore current segment */
 	if (old_cursegno != curseg->segno) {
 		curseg->next_segno = old_cursegno;
-		change_curseg(sbi, type, true);
+		change_curseg(sbi, type);
 	}
 	curseg->next_blkoff = old_blkoff;
 
