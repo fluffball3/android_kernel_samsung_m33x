@@ -251,6 +251,7 @@ static int find_recessive_cpu(struct task_struct *task,
 	struct cpumask candidate_cpus;
 	struct frt_dom *dom, *prefer_dom;
 	int nr_cpus_allowed;
+	int cpu_prio, max_prio = -1;
 	struct tp_env env = {
 		.p = task,
 	};
@@ -295,10 +296,10 @@ static int find_recessive_cpu(struct task_struct *task,
 				continue;
 
 			cpu_util = frt_cpu_util(cpu);
-
-			if (cpu_util < min_util ||
-				(cpu_util == min_util && task_cpu(task) == cpu)) {
+			if ((cpu_prio > max_prio)
+				|| (cpu_prio == max_prio && cpu_util < min_util)) {
 				min_util = cpu_util;
+				max_prio = cpu_prio;
 				best_cpu = cpu;
 			}
 		}

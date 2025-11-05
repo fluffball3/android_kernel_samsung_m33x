@@ -29,6 +29,9 @@ static void ems_hook_select_task_rq_fair(void *data,
 {
 	int cpu;
 
+	if ((sd_flag == SD_BALANCE_WAKE) || (sd_flag == SD_BALANCE_FORK))
+		ems_last_waked(p) = ktime_get_ns();
+
 	cpu = ems_select_task_rq_fair(p, prev_cpu, sd_flag, wake_flags);
 
 	*new_cpu = cpu;
@@ -40,6 +43,9 @@ static void ems_hook_select_task_rq_rt(void *data,
 			int sd_flag, int wake_flags, int *new_cpu)
 {
 	int cpu;
+
+	if ((sd_flag == SD_BALANCE_WAKE) || (sd_flag == SD_BALANCE_FORK))
+		ems_last_waked(p) = ktime_get_ns();
 
 	cpu = ems_select_task_rq_rt(p, prev_cpu, sd_flag, wake_flags);
 
@@ -273,16 +279,6 @@ static void ems_hook_syscall_prctl_finished(void *data, int option, struct task_
 	ems_render(p) = 1;
 }
 
-static void ems_hook_new_task_stats(void *data, struct task_struct *p)
-{
-	ems_last_waked(p) = ktime_get_ns();
-}
-
-static void ems_hook_try_to_wake_up(void *data, struct task_struct *p)
-{
-	ems_last_waked(p) = ktime_get_ns();
-}
-
 int hook_init(void)
 {
 	int ret;
@@ -402,14 +398,6 @@ int hook_init(void)
 		return ret;
 
 	ret = register_trace_android_vh_arch_set_freq_scale(ems_hook_arch_set_freq_scale, NULL);
-	if (ret)
-		return ret;
-
-	ret = register_trace_android_rvh_new_task_stats(ems_hook_new_task_stats, NULL);
-	if (ret)
-		return ret;
-
-	ret = register_trace_android_rvh_try_to_wake_up(ems_hook_try_to_wake_up, NULL);
 	if (ret)
 		return ret;
 
