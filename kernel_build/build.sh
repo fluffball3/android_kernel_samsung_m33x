@@ -43,6 +43,12 @@ OUT_KERNEL="$OUTDIR/arch/arm64/boot/Image"
 OUT_BOOTIMG="$(pwd)/kernel_build/AnyKernel3/boot.img"
 OUT_VENDORBOOTIMG="$(pwd)/kernel_build/AnyKernel3/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
+AOSP_KERNEL="$(pwd)/kernel_build/tmp/Image"
+MAGISKBOOT="$(pwd)/kernel_build/AnyKernel3/tools/magiskboot"
+OUT_BOOTIMG_AOSP="$(pwd)/kernel_build/AnyKernel3/boot_aosp.img"
+OUT_AOSPZIP="$(pwd)/kernel_build/Elite3XP-AOSP-${E35P_VERSION}_m33x.zip"
+OUT_AOSPTAR="$(pwd)/kernel_build/Elite3XP-AOSP-${E35P_VERSION}_m33x.tar"
+OUT_SIGNEDKERNELZIP_AOSP="$(pwd)/kernel_build/Elite3XP-AOSP-${E35P_VERSION}_m33x-signed.zip"
 
 # Kernel-side
 BUILD_ARGS="LOCALVERSION=-Elite3XP-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
@@ -137,7 +143,22 @@ $MKBOOTIMG --header_version 4 \
     --output "$OUT_BOOTIMG" \
     --ramdisk "$PREBUILT_RAMDISK" \
     --os_version 12.0.0 \
-    --os_patch_level 2024-01 || exit 1
+    --os_patch_level 2025-10 || exit 1
+
+cp $OUT_KERNEL $AOSP_KERNEL
+
+# // AOSP_MODE Patch script from flopkernel-series //
+# Patch kernel: aosp_mode=0 -> aosp_mode=1
+"$MAGISKBOOT" hexpatch "$AOSP_KERNEL" \
+    616f73705f6d6f64653d30 \
+    616f73705f6d6f64653d31 || exit 1
+
+$MKBOOTIMG --header_version 4 \
+    --kernel "$AOSP_KERNEL" \
+    --output "$OUT_BOOTIMG_AOSP" \
+    --ramdisk "$PREBUILT_RAMDISK" \
+    --os_version 12.0.0 \
+    --os_patch_level 2025-10 || exit 1
 
 echo "Done!"
 echo "Building vendor_boot image..."
@@ -161,26 +182,35 @@ $MKBOOTIMG --header_version 4 \
     --os_patch_level 2024-01 || exit 1
 
 cd "$DIR"
-
 echo "Done!"
-
 echo "Building zip..."
 cd "$(pwd)/kernel_build/AnyKernel3"
-rm -f "$OUT_KERNELZIP"
-cp "$OUT_KERNEL" Image
-zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4
-java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
 
-echo "Done! Output: $OUT_SIGNEDKERNELZIP"
-echo "Building tar..."
+rm -f "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP"
+cp "$OUT_KERNEL" Image
+zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4 Image_orig boot_aosp.img
+java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
 
 rm -f "$OUT_KERNELTAR"
 lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG" > boot.img.lz4
 lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
 tar -cf "$OUT_KERNELTAR" boot.img.lz4 vendor_boot.img.lz4
-cd "$DIR"
 
-echo "Done! Output: $OUT_KERNELTAR"
+echo "Done! Output: Non-AOSP"
+
+rm -f "$OUT_AOSPZIP" "$OUT_SIGNEDKERNELZIP_AOSP"
+mv Image Image_orig
+cp "$AOSP_KERNEL" Image
+zip -r9 "$OUT_AOSPZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4 Image_orig boot_aosp.img
+java -jar "$ZIPSIGNER" "$OUT_AOSPZIP" "$OUT_SIGNEDKERNELZIP_AOSP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
+
+rm -f "$OUT_AOSPTAR"
+lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG_AOSP" > boot.img.lz4
+lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
+tar -cf "$OUT_AOSPTAR" boot.img.lz4 vendor_boot.img.lz4
+
+cd "$DIR"
+echo "Done! Output: AOSP"
 echo "Cleaning..."
-rm -f "${OUT_VENDORBOOTIMG}" "${OUT_BOOTIMG}"
+rm -f "${OUT_VENDORBOOTIMG}" "${OUT_BOOTIMG}" "${OUT_BOOTIMG_AOSP}"
 kfinish
