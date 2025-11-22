@@ -95,8 +95,8 @@ struct exynos_context {
 #endif
 #endif
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-#define MAX(x, y) ((x) < (y) ? (y) : (x))
+// #define MIN(x, y) ((x) < (y) ? (x) : (y))
+// #define MAX(x, y) ((x) < (y) ? (y) : (x))
 #define CSTD_UNUSED(x) ((void)(x))
 
 enum { DEBUG = 1, INFO, WARNING, ERROR };
