@@ -401,10 +401,6 @@ struct cfs_bandwidth {
 	ktime_t			period;
 	u64			quota;
 	u64			runtime;
-	u64			burst;
-	u64			buffer;
-	u64			max_overrun;
-	u64			runtime_at_period_start;
 	s64			hierarchical_quota;
 
 	u8			idle;
@@ -417,9 +413,7 @@ struct cfs_bandwidth {
 	/* Statistics: */
 	int			nr_periods;
 	int			nr_throttled;
-	int			nr_burst;
 	u64			throttled_time;
-	u64			burst_time;
 #endif
 };
 
@@ -528,7 +522,8 @@ extern void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
 			struct sched_entity *parent);
 extern void init_cfs_bandwidth(struct cfs_bandwidth *cfs_b);
 
-extern void start_cfs_bandwidth(struct cfs_bandwidth *cfs_b, int init);
+extern void __refill_cfs_bandwidth_runtime(struct cfs_bandwidth *cfs_b);
+extern void start_cfs_bandwidth(struct cfs_bandwidth *cfs_b);
 extern void unthrottle_cfs_rq(struct cfs_rq *cfs_rq);
 
 extern void free_rt_sched_group(struct task_group *tg);
