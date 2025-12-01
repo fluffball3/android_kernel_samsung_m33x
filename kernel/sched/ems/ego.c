@@ -976,7 +976,7 @@ static int get_boost_pelt_util(int capacity, int util, int boost)
         }
         margin /= 100;
 #endif
-	if (util + margin < 135)
+	if (util + margin < 125)
 		return util + margin;
 	return (util + margin) * 135/100; 	//boost by 35%
 }
