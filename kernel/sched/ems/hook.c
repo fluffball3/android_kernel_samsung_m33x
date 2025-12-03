@@ -231,6 +231,11 @@ static void ems_hook_sched_overutilized_tp(void *data,
 	trace_sched_overutilized(overutilized);
 }
 
+static void ems_rvh_cpu_cgroup_online(void *unused, struct cgroup_subsys_state *css)
+{
+	ems_init_cgroup_map(css);
+}
+
 static void ems_hook_binder_wake_up_ilocked(void *data, struct task_struct *p,
 		bool sync, struct binder_proc *proc)
 {
@@ -412,6 +417,7 @@ int hook_init(void)
 	WARN_ON(register_trace_pelt_se_tp(ems_hook_pelt_se_tp, NULL));
 	WARN_ON(register_trace_sched_overutilized_tp(ems_hook_sched_overutilized_tp, NULL));
 
+	register_trace_android_rvh_cpu_cgroup_online(ems_rvh_cpu_cgroup_online, NULL);
 	register_trace_android_rvh_wake_up_new_task(ems_wake_up_new_task, NULL);
 
 	return 0;
