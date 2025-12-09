@@ -799,6 +799,8 @@ static inline void __rcu **ma_slots(struct maple_node *mn, enum maple_type mt)
 	}
 }
 
+extern int lockdep_is_held(const void *);
+
 static inline bool mt_locked(const struct maple_tree *mt)
 {
 	return mt_external_lock(mt) ? mt_lock_is_held(mt) :
