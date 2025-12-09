@@ -101,7 +101,7 @@ static bool align_4gb_no_straddle(unsigned long *gap_end, struct vm_unmapped_are
 	return true;
 }
 
-#if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(5, 1, 0) > LINUX_VERSION_CODE)
 /**
  * align_and_check() - Align the specified pointer to the provided alignment and
  *                     check that it is still in range. For Kernel versions below
@@ -181,7 +181,7 @@ static bool align_and_check(unsigned long *gap_end, unsigned long gap_start,
 static unsigned long kbase_unmapped_area_topdown(struct vm_unmapped_area_info
 		*info, bool is_shader_code, bool is_same_4gb_page)
 {
-#if (KERNEL_VERSION(6, 1, 0) > LINUX_VERSION_CODE)
+#if (KERNEL_VERSION(5, 1, 0) > LINUX_VERSION_CODE)
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
 	unsigned long length, low_limit, high_limit, gap_start, gap_end;
