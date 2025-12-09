@@ -3589,6 +3589,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 		if (new_vma->vm_ops && new_vma->vm_ops->open)
 			new_vma->vm_ops->open(new_vma);
 
+#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
 		/*
 		 * As the VMA is linked right now, it may be hit by the
 		 * speculative page fault handler. But we don't want it to
@@ -3599,6 +3600,7 @@ struct vm_area_struct *copy_vma(struct vm_area_struct **vmap,
 		 */
 		vm_write_begin(new_vma);
 		vma_link(mm, new_vma, prev, rb_link, rb_parent);
+#endif
 
 		if (vma_link(mm, new_vma, prev))
 			goto out_vma_link;
