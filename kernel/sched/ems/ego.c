@@ -976,7 +976,8 @@ static int get_boost_pelt_util(int capacity, int util, int boost)
         }
         margin /= 100;
 #endif
-	return util + margin;
+	margin = util + margin;
+	return margin + (margin - 252) / 10;
 }
 
 static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
