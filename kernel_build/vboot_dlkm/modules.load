@@ -17,6 +17,7 @@ phy-exynos-usbdrd-super.ko
 pinctrl-samsung-s2mpu13.ko
 pinctrl-samsung-s2mpu14.ko
 pinctrl-samsung-core.ko
+exynos-adv-tracer.ko
 pwm-samsung.ko
 clk-exynos-audss.ko
 pl330.ko
