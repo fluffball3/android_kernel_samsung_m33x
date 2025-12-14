@@ -23,7 +23,7 @@ clk-exynos-audss.ko
 pl330.ko
 samsung-dma.ko
 dss.ko
-exynos-ecc-handler.ko
+exynos-itmon.ko
 exynos-pmu-if.ko
 exynos-flexpmu-dbg.ko
 exynos-pd.ko
