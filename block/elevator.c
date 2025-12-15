@@ -617,8 +617,8 @@ static inline bool elv_support_iosched(struct request_queue *q)
 }
 
 /*
- * For single queue devices, default to using kyber. If we have multiple
- * queues or kyber is not available, default to "none".
+ * For single queue devices, default to using ssg. If we have multiple
+ * queues or ssg is not available, default to "none".
  */
 static struct elevator_type *elevator_get_default(struct request_queue *q)
 {
@@ -628,7 +628,7 @@ static struct elevator_type *elevator_get_default(struct request_queue *q)
 	if (q->nr_hw_queues != 1)
 		return NULL;
 
-	return elevator_get(q, "kyber", false);
+	return elevator_get(q, "ssg", false);
 }
 
 /*
