@@ -182,6 +182,7 @@ static __init int sched_init_debug(void)
 	debugfs_create_u32("idle_min_granularity_ns", 0644, NULL,
 			&sysctl_sched_idle_min_granularity);
 
+	debugfs_create_u32("min_granularity_ns", 0644, NULL, &sysctl_sched_min_granularity);
 	debugfs_create_u32("latency_warn_ms", 0644, NULL, &sysctl_resched_latency_warn_ms);
 	debugfs_create_u32("latency_warn_once", 0644, NULL, &sysctl_resched_latency_warn_once);
 
