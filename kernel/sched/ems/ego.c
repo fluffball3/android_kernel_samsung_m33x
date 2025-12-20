@@ -86,6 +86,7 @@ struct ego_cpu {
 	u64			last_update;
 
 	unsigned long		util;
+	unsigned long		prev_util;
 	unsigned long		bw_min;
 
 	unsigned long		pelt_util;		/* current pelt util */
@@ -983,14 +984,14 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 {
 	struct ego_policy *egp = egc->egp;
 	struct cpufreq_policy *policy = egp->policy;
-	unsigned long util = 0, max_cap;
+	unsigned long util = 0, max_cap, cpu_boosted_util;
 	unsigned int cpu;
 
 	max_cap = arch_scale_cpu_capacity(egc->cpu);
 
 	for_each_cpu(cpu, policy->cpus) {
 		struct ego_cpu *egc = &per_cpu(ego_cpu, cpu);
-		unsigned long cpu_boosted_util, boost;
+		unsigned long boost;
 
 		boost = ego_iowait_apply(egc, time, max_cap);
 		ego_get_util(egc, boost);
@@ -1008,7 +1009,10 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		util = max(util, egc->util);
 	}
 
-	return get_next_freq(egp, util, max_cap);
+	cpu_boosted_util = util + egc->prev_util / 5;
+	egc->prev_util = util;
+
+	return get_next_freq(egp, cpu_boosted_util, max_cap);
 }
 
 static void
@@ -1279,6 +1283,7 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->iowait_boost = 0;
 		egc->last_update = 0;
 		egc->util = 0;
+		egc->prev_util = 0;
 		egc->bw_min = 0;
 		egc->pelt_util = 0;
 		egc->boosted_util = 0;
