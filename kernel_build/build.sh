@@ -45,7 +45,7 @@ OUT_VENDORBOOTIMG="$(pwd)/kernel_build/AnyKernel3/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
 
 # Kernel-side
-BUILD_ARGS="LOCALVERSION=-Elite3XP-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
+BUILD_ARGS="LOCALVERSION=-E35P-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
 
 kfinish() {
     rm -rf "$TMPDIR"
