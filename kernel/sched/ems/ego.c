@@ -86,6 +86,7 @@ struct ego_cpu {
 	u64			last_update;
 
 	unsigned long		util;
+	unsigned long		prev_util;
 	unsigned long		bw_min;
 
 	unsigned long		pelt_util;	/* current pelt util */
@@ -892,7 +893,9 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		egc->pelt_util = egc->util;
 
 		cpu_boosted_util = get_boost_pelt_util(egc->util, egp->pelt_boost);
+		cpu_boosted_util = cpu_boosted_util + (egc->prev_util / 5);
 		egc->boosted_util = cpu_boosted_util;
+		egc->prev_util = egc->util;
 
 		/* find heaviest util and cpu */
 		if (util < cpu_boosted_util) {
@@ -1174,6 +1177,7 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->iowait_boost = 0;
 		egc->last_update = 0;
 		egc->util = 0;
+		egc->prev_util = 0;
 		egc->bw_min = 0;
 		egc->pelt_util = 0;
 		egc->boosted_util = 0;
