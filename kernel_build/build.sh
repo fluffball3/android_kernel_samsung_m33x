@@ -45,7 +45,7 @@ OUT_VENDORBOOTIMG="$(pwd)/kernel_build/AnyKernel3/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
 
 # Kernel-side
-BUILD_ARGS="LOCALVERSION=-E35P-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
+BUILD_ARGS="LOCALVERSION=-E35P-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=YubiYubi"
 
 kfinish() {
     rm -rf "$TMPDIR"
@@ -170,8 +170,10 @@ rm -f "$OUT_KERNELZIP"
 cp "$OUT_KERNEL" Image
 zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4
 java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
+rm -f "$OUT_KERNELZIP"
+mv "$OUT_SIGNEDKERNELZIP" "$OUT_KERNELZIP"
 
-echo "Done! Output: $OUT_SIGNEDKERNELZIP"
+echo "Done! Output: $OUT_KERNELZIP (signed)"
 echo "Building tar..."
 
 rm -f "$OUT_KERNELTAR"
