@@ -47,12 +47,8 @@ exynos-ufcc.ko
 exynos-afm.ko
 mcu_ipc.ko
 shm_ipc.ko
-exynos_dit.ko
-cpif_memlogger.ko
-cpif_page.ko
-direct_dm.ko
-hook.ko
 cpif.ko
+cpif_page.ko
 gnss_mbox.ko
 gnssif.ko
 exynos_pm_qos.ko
