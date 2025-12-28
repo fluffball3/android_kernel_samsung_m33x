@@ -47,6 +47,7 @@ exynos-ufcc.ko
 exynos-afm.ko
 mcu_ipc.ko
 shm_ipc.ko
+direct_dm.ko
 cpif.ko
 cpif_page.ko
 gnss_mbox.ko
