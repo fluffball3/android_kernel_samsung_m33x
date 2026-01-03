@@ -68,6 +68,12 @@ export TARGET_SOC=s5e8825
 export LLVM=1 LLVM_IAS=1
 export ARCH=arm64
 
+# Skip Samsung FIPS/FMP build-time integrity/HMAC embedding.
+: "${SKIP_FIPS_CRYPTO_INTEGRITY:=1}"
+: "${SKIP_EXYNOS_FMP_INTEGRITY:=1}"
+export SKIP_FIPS_CRYPTO_INTEGRITY
+export SKIP_EXYNOS_FMP_INTEGRITY
+
 if [ ! -d "$PARENT_DIR/clang-r530567" ]; then
     git clone https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r530567 "$PARENT_DIR/clang-r530567" --depth=1
 fi
