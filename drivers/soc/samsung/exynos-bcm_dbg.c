@@ -588,7 +588,7 @@ static void exynos_bcm_show_mif_work_func(struct work_struct *work)
 						* (1<<10) / bcm_show_bw->old_time;
 		__exynos_bcm_trace_mem_bw(bcm_show_bw->new_bw, bcm_show_bw->old_time);
 
-		queue_delayed_work(system_power_efficient_wq, &bcm_show_bw->bw_work,
+		schedule_delayed_work(&bcm_show_bw->bw_work,
 				msecs_to_jiffies(bcm_calc->sample_time));
 
 		mutex_unlock(&bcm_show_bw->lock);
@@ -600,7 +600,7 @@ static void exynos_bcm_show_mif_work_func(struct work_struct *work)
 			exynos_bcm_get_data(&bcm_show_bw->mem_bw[index], &dummy[0], &dummy[1],
 					&dummy[2]);
 			bcm_show_bw->dump_time[index] = bcm_show_bw->old_time;
-			queue_delayed_work(system_power_efficient_wq, &bcm_show_bw->bw_work,
+			schedule_delayed_work(&bcm_show_bw->bw_work,
 					msecs_to_jiffies(bcm_calc->sample_time));
 
 			bcm_show_bw->num_sample--;
@@ -621,7 +621,7 @@ static void exynos_bcm_calc_work_func(struct work_struct *work)
 	mutex_lock(&bcm_calc->lock);
 	if (bcm_calc->enable) {
 		exynos_bcm_find_dump_data(bcm_calc->data);
-		queue_delayed_work(system_power_efficient_wq, &bcm_calc->work,
+		schedule_delayed_work(&bcm_calc->work,
 			msecs_to_jiffies(bcm_calc->sample_time));
 	}
 	mutex_unlock(&bcm_calc->lock);
@@ -665,7 +665,7 @@ bool exynos_bcm_calc_enable(int enable)
 		bcm_calc->enable = enable;
 		exynos_bcm_dbg_run(1, data);
 		/* start 50ms worker to gathering logs */
-		queue_delayed_work(system_power_efficient_wq, &bcm_calc->work,
+		schedule_delayed_work(&bcm_calc->work,
 				msecs_to_jiffies(bcm_calc->sample_time));
 	}
 	else if (!enable && bcm_calc->enable){
@@ -701,7 +701,7 @@ void exynos_bcm_get_data(u64 *freq_stat0, u64 *freq_stat1, u64
 			cancel_delayed_work(&bcm_calc->work);
 			exynos_bcm_find_dump_data(bcm_dbg_data);
 			__exynos_bcm_get_data(bcm_calc, freq_stat0, freq_stat1, freq_stat2, freq_stat3);
-			queue_delayed_work(system_power_efficient_wq, &bcm_calc->work, msecs_to_jiffies(bcm_calc->sample_time));
+			schedule_delayed_work(&bcm_calc->work, msecs_to_jiffies(bcm_calc->sample_time));
 		}
 		mutex_unlock(&bcm_calc->lock);
 	}
@@ -3792,7 +3792,7 @@ static ssize_t show_bcm_calc(struct device *dev,
 				bcm_calc->acc_data[i].pmcnt[4], bcm_calc->acc_data[i].pmcnt[5],
 				bcm_calc->acc_data[i].pmcnt[6], bcm_calc->acc_data[i].pmcnt[7]);
 
-	queue_delayed_work(system_power_efficient_wq, &bcm_calc->work, msecs_to_jiffies(bcm_calc->sample_time));
+	schedule_delayed_work(&bcm_calc->work, msecs_to_jiffies(bcm_calc->sample_time));
 	mutex_unlock(&bcm_calc->lock);
 
 	return count;
@@ -4177,7 +4177,7 @@ static ssize_t store_bcm_dbg_show_mif_auto(struct file *fp, struct kobject *kobj
 	bcm_show_bw->dump_time = kzalloc(sizeof(u64) * num_sample, GFP_KERNEL);
 	bcm_show_bw->new_time = sched_clock();
 
-	queue_delayed_work(system_power_efficient_wq, &bcm_show_bw->bw_work,
+	schedule_delayed_work(&bcm_show_bw->bw_work,
 			msecs_to_jiffies(bcm_calc->sample_time));
 	mutex_unlock(&bcm_show_bw->lock);
 
@@ -4214,7 +4214,7 @@ static ssize_t store_bcm_dbg_show_mif_ctrl(struct file *fp, struct kobject *kobj
 		if (!bcm_show_bw->mem_bw)
 			bcm_show_bw->mem_bw = kzalloc(sizeof(u64), GFP_KERNEL);
 
-		queue_delayed_work(system_power_efficient_wq, &bcm_show_bw->bw_work,
+		schedule_delayed_work(&bcm_show_bw->bw_work,
 				msecs_to_jiffies(bcm_calc->sample_time));
 		mutex_unlock(&bcm_show_bw->lock);
 	} else {
