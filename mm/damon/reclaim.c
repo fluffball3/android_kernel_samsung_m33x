@@ -372,7 +372,7 @@ static int enabled_store(const char *val,
 		return rc;
 
 	if (enabled)
-		queue_delayed_work(system_power_efficient_wq, &damon_reclaim_timer, 0);
+		schedule_delayed_work(&damon_reclaim_timer, 0);
 
 	return 0;
 }
