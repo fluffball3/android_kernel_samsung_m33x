@@ -1,6 +1,6 @@
 #!/bin/bash
 
-E35P_VERSION="v3.69999"
+E35P_VERSION="v3.75"
 
 set -e
 
