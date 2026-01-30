@@ -358,7 +358,7 @@ static void damon_reclaim_timer_fn(struct work_struct *work)
 	}
 
 	if (enabled)
-		queue_delayed_work(system_power_efficient_wq, &damon_reclaim_timer,
+		schedule_delayed_work(&damon_reclaim_timer,
 			msecs_to_jiffies(ENABLE_CHECK_INTERVAL_MS));
 }
 static DECLARE_DELAYED_WORK(damon_reclaim_timer, damon_reclaim_timer_fn);
