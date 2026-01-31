@@ -542,12 +542,9 @@ static void exit_mm(void)
 	mm_update_next_owner(mm);
 	trace_android_vh_exit_mm(mm);
 	mmput(mm);
-#ifdef CONFIG_ANDROID_SIMPLE_LMK
-	clear_thread_flag(TIF_MEMDIE);
-#else
 	if (test_thread_flag(TIF_MEMDIE))
 		exit_oom_victim();
-#endif
+
 #if defined(CONFIG_MEMORY_ZEROISATION)
 	trace_android_vh_mz_exit(current);
 #endif
