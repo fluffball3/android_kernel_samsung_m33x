@@ -621,10 +621,10 @@ static int __init populate_rootfs(void)
 {
 	/* Load the built in initramfs */
 	char *err = unpack_to_rootfs(__initramfs_start, __initramfs_size);
-	if (err)
+	if (err && !IS_ENABLED(CONFIG_INITRAMFS_DONT_SKIP))
 		panic("%s", err); /* Failed to decompress INTERNAL initramfs */
 
-	if (!initrd_start || IS_ENABLED(CONFIG_INITRAMFS_FORCE))
+	if (!IS_ENABLED(CONFIG_INITRAMFS_DONT_SKIP) && (!initrd_start || IS_ENABLED(CONFIG_INITRAMFS_FORCE)))
 		goto done;
 
 	if (IS_ENABLED(CONFIG_BLK_DEV_RAM))
