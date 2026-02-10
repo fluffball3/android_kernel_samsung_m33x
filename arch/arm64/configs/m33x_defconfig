@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 5.10.247 Kernel Configuration
+# Linux/arm64 5.10.248 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="Android (12085363, +pgo, +bolt, +lto, +mlgo, based on r530567) clang version 19.0.0 (https://android.googlesource.com/toolchain/llvm-project 97a699bf4812a18fb657c2779f5296a4ab2694d2)"
 CONFIG_GCC_VERSION=0
@@ -5866,7 +5866,6 @@ CONFIG_STAGING=y
 # CONFIG_RTL8192U is not set
 # CONFIG_RTLLIB is not set
 # CONFIG_RTL8723BS is not set
-# CONFIG_R8712U is not set
 # CONFIG_R8188EU is not set
 # CONFIG_RTS5208 is not set
 
@@ -7376,21 +7375,6 @@ CONFIG_SUPPORT_USB_TYPEC_OPS=y
 #
 CONFIG_KSU=y
 # CONFIG_KSU_DEBUG is not set
-
-#
-# KernelSU - SUSFS
-#
-CONFIG_KSU_SUSFS=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
-CONFIG_KSU_SUSFS_SUS_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-CONFIG_KSU_SUSFS_ENABLE_LOG=y
-CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-CONFIG_KSU_SUSFS_SUS_MAP=y
-# end of KernelSU - SUSFS
 # end of KernelSU
 # end of Device Drivers
 
