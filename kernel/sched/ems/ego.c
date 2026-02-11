@@ -1002,7 +1002,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		util = max(util, egc->util);
 	}
 
-	cpu_boosted_util = util + egc->prev_util / 4;
+	cpu_boosted_util = util + egc->prev_util / 5;
 	egc->prev_util = util;
 
 	return get_next_freq(egp, cpu_boosted_util, max_cap);
