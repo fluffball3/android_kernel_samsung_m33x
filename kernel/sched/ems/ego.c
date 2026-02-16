@@ -815,7 +815,7 @@ unsigned long ego_effective_cpu_perf(int cpu, unsigned long actual,
 
 static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 {
-	unsigned long min, max, util = ml_cpu_util(egc->cpu);
+	unsigned long min, max, util = cpu_util_cfs_boost(egc->cpu);
 
 	util = ego_cpu_util(egc->cpu, util, &min, &max);
 	util = max(util, boost);
