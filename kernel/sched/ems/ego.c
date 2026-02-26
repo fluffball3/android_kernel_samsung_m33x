@@ -718,7 +718,7 @@ unsigned long ego_effective_cpu_perf(int cpu, unsigned long actual,
 
 static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 {
-	unsigned long min, max, util = ml_cpu_util(egc->cpu);
+	unsigned long min, max, util = cpu_util_cfs(egc->cpu);
 	unsigned long scale = arch_scale_cpu_capacity(egc->cpu);
 	unsigned long cpu_threshold;
 
