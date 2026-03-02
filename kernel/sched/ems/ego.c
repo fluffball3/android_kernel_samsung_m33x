@@ -51,6 +51,7 @@ struct ego_policy {
 
 	bool			limits_changed;
 	bool			need_freq_update;
+	bool			need_util_boost;
 
 	/* EGO specific */
 	struct cpumask		cpus;
@@ -93,7 +94,6 @@ struct ego_cpu {
 	unsigned long		boosted_util;	/* current boosted util */
 
 	unsigned long		min_cap;
-	bool 			is_utilized;
 
 	/* idle state */
 	struct ego_idle		idle;
@@ -1000,9 +1000,6 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 
 		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
 					egc->util, egp->pelt_boost);
-		cpu_boosted_util = cpu_boosted_util + (egc->prev_util * egc->is_utilized) / 5;
-
-		egc->prev_util = egc->util;
 		egc->boosted_util = cpu_boosted_util;
 
 		/* find heaviest util and cpu */
@@ -1012,6 +1009,9 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		}
 		util = max(util, egc->util);
 	}
+
+	cpu_boosted_util = util + (egc->prev_util * egp->need_util_boost) / 5;
+	egc->prev_util = util;
 
 	return get_next_freq(egp, cpu_boosted_util, max_cap);
 }
@@ -1276,6 +1276,7 @@ static int ego_start(struct cpufreq_policy *policy)
 	egp->work_in_progress		= false;
 	egp->limits_changed		= false;
 	egp->need_freq_update		= false;
+	egp->need_util_boost		= false;
 	egp->cached_raw_freq		= 0;
 
 	for_each_cpu(cpu, policy->cpus) {
@@ -1288,7 +1289,6 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->bw_min = 0;
 		egc->pelt_util = 0;
 		egc->boosted_util = 0;
-		egc->is_utilized = 0;
 		egc->egp = egp;
 		egc->cpu = cpu;
 		egc->min_cap = ULONG_MAX;
