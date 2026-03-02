@@ -992,7 +992,8 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 
 		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
 					egc->util, egp->pelt_boost);
-		egc->boosted_util = cpu_boosted_util;
+		cpu_boosted_util = cpu_boosted_util + egc->prev_util / 5;
+		egc->boosted_util = egc->prev_util = cpu_boosted_util;
 
 		/* find heaviest util and cpu */
 		if (util < cpu_boosted_util) {
@@ -1001,9 +1002,6 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		}
 		util = max(util, egc->util);
 	}
-
-	cpu_boosted_util = util + egc->prev_util / 5;
-	egc->prev_util = util;
 
 	return get_next_freq(egp, cpu_boosted_util, max_cap);
 }
