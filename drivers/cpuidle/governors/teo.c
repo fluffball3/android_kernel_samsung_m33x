@@ -359,9 +359,6 @@ static int teo_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 		      bool *stop_tick)
 {
 	struct teo_cpu *cpu_data = per_cpu_ptr(&teo_cpus, dev->cpu);
-#ifdef CONFIG_SCHED_EMS
-	struct ego_policy *egp = egc->egp;
-#endif
 	s64 latency_req = cpuidle_governor_latency_req(dev->cpu);
 	unsigned int idx_intercept_sum = 0;
 	unsigned int intercept_sum = 0;
@@ -398,10 +395,6 @@ static int teo_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	}
 
 	cpu_data->utilized = teo_cpu_is_utilized(dev->cpu, cpu_data);
-#ifdef CONFIG_SCHED_EMS
-	egp->need_util_boost = cpu_data->utilized;
-#endif
-
 	/*
 	 * If the CPU is being utilized over the threshold and there are only 2
 	 * states to choose from, the metrics need not be considered, so choose
