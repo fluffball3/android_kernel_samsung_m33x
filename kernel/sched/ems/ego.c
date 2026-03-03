@@ -93,6 +93,7 @@ struct ego_cpu {
 	unsigned long		boosted_util;	/* current boosted util */
 
 	unsigned long		min_cap;
+	bool			is_utilized;
 
 	/* idle state */
 	struct ego_idle		idle;
@@ -122,6 +123,19 @@ get_diff_num_levels(struct cpufreq_policy *policy, unsigned int freq)
 
 	return abs(index1 - index2);
 }
+
+/*
+ * (stripped from TEO Governor)
+ * The number of bits to shift the CPU's capacity by in order to determine
+ * the utilized threshold.
+ *
+ * 6 was chosen based on testing as the number that achieved the best balance
+ * of power and performance on average.
+ *
+ * The resulting threshold is high enough to not be triggered by background
+ * noise and low enough to react quickly when activity starts to ramp up.
+ */
+#define UTIL_THRESHOLD_SHIFT 6
 
 #define ESG_MAX_DELAY_PERIODS 5
 /*
@@ -720,6 +734,9 @@ static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 	unsigned long min, max, util = cpu_util_cfs_boost(egc->cpu);
 
 	util = schedutil_cpu_util(egc->cpu, util, &min, &max);
+	// cpu being utilized or not
+	egc->is_utilized = util > (arch_scale_cpu_capacity(egc->cpu) >> UTIL_THRESHOLD_SHIFT);
+
 	util = max(util, boost);
 	egc->bw_min = min;
 	egc->util = ego_effective_cpu_perf(egc->cpu, util, min, max);
@@ -893,7 +910,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		egc->pelt_util = egc->util;
 
 		cpu_boosted_util = get_boost_pelt_util(egc->util, egp->pelt_boost);
-		cpu_boosted_util = cpu_boosted_util + (egc->prev_util / 5);
+		cpu_boosted_util = cpu_boosted_util + ((egc->prev_util * egc->is_utilized) / 5);
 		egc->boosted_util = cpu_boosted_util;
 		egc->prev_util = egc->util;
 
@@ -1181,6 +1198,7 @@ static int ego_start(struct cpufreq_policy *policy)
 		egc->bw_min = 0;
 		egc->pelt_util = 0;
 		egc->boosted_util = 0;
+		egc->is_utilized = 0;
 		egc->egp = egp;
 		egc->cpu = cpu;
 		egc->min_cap = ULONG_MAX;
