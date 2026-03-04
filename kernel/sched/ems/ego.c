@@ -853,24 +853,25 @@ static inline void ignore_dl_rate_limit(struct ego_cpu *egc, struct ego_policy *
 		egp->limits_changed = true;
 }
 
-static int get_boost_pelt_util(int capacity, int util, int boost)
+static int get_boost_pelt_util(int util, int boost)
 {
+#if AMIGO_BUILD_VER >= 4
+	return util + util * boost / 100;
+#else
 	long long margin;
 
-#if AMIGO_BUILD_VER >= 4
-	margin = util * boost / 100;
-#else
-        if (!boost)
-                return util;
+	if (!boost)
+		return util;
 
-        if (boost > 0) {
-                margin = max(capacity - util, 0) * boost;
-        } else {
-                margin = util * boost;
-        }
-        margin /= 100;
-#endif
+	if (boost > 0) {
+		margin = max(capacity - util, 0) * boost;
+	} else {
+			margin = util * boost;
+	}
+	margin /= 100;
+
 	return util + margin;
+#endif
 }
 
 static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
@@ -893,8 +894,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		cpu_boosted_util = freqboost_cpu_boost(cpu, egc->util);
 		cpu_boosted_util = max(cpu_boosted_util,
 					heavytask_cpu_boost(cpu, egc->util, egp->htask_boost));
-		cpu_boosted_util = get_boost_pelt_util(capacity_cpu(cpu),
-					cpu_boosted_util, egp->pelt_boost);
+		cpu_boosted_util = get_boost_pelt_util(cpu_boosted_util, egp->pelt_boost);
 		egc->boosted_util = cpu_boosted_util;
 
 		/* find heaviest util and cpu */
