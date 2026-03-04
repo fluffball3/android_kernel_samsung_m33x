@@ -769,31 +769,50 @@ TRACE_EVENT(ego_sched_util,
 		__entry->dl, __entry->bwdl, __entry->irq)
 );
 
-TRACE_EVENT(ego_cpu_util,
+TRACE_EVENT(ego_next_freq_util,
 
-	TP_PROTO(int cpu, unsigned long pelt_boost, unsigned long util, unsigned long io_util, unsigned long bst_util),
+	TP_PROTO(unsigned long util),
 
-	TP_ARGS(cpu, pelt_boost, util, io_util, bst_util),
+	TP_ARGS(util),
 
 	TP_STRUCT__entry(
-		__field( int,		cpu				)
-		__field( unsigned long,	pelt_boost			)
-		__field( unsigned long,	util				)
-		__field( unsigned long,	io_util				)
-		__field( unsigned long,	bst_util			)
+		__field( unsigned long,	util)
 	),
 
 	TP_fast_assign(
-		__entry->cpu			= cpu;
-		__entry->pelt_boost		= pelt_boost;
-		__entry->util			= util;
-		__entry->io_util		= io_util;
-		__entry->bst_util		= bst_util;
+		__entry->util	= util;
 	),
 
-	TP_printk("cpu=%d pelt_boost=%ld, util=%ld io_util=%ld bst_util=%ld",
-		__entry->cpu, __entry->pelt_boost, __entry->util, __entry->io_util,
-		__entry->bst_util)
+	TP_printk("next_freq_util=%ld", __entry->util)
+);
+
+TRACE_EVENT(ego_next_util_shared_debug,
+
+	TP_PROTO(int cpu, unsigned long max_cap, unsigned long boost, unsigned long cpu_boosted_util, unsigned long prev_util, bool is_utilized),
+
+	TP_ARGS(cpu, max_cap, boost, cpu_boosted_util, prev_util, is_utilized),
+
+	TP_STRUCT__entry(
+		__field( int,		cpu				)
+		__field( unsigned long,	max_cap			)
+		__field( unsigned long,	boost			)
+		__field( unsigned long,	cpu_boosted_util				)
+		__field( unsigned long,	prev_util				)
+		__field( bool,		is_utilized				)
+	),
+
+	TP_fast_assign(
+		__entry->cpu				= cpu;
+		__entry->max_cap			= max_cap;
+		__entry->max_cap			= boost;
+		__entry->cpu_boosted_util	= cpu_boosted_util;
+		__entry->cpu_boosted_util	= prev_util;
+		__entry->cpu_boosted_util	= is_utilized;
+	),
+
+	TP_printk("cpu=%d, max_cap=%ld, boost=%ld, cpu_boosted_util=%ld, prev_util=%ld, is_utilized=%d",
+				__entry->cpu, __entry->max_cap, __entry->boost, __entry->cpu_boosted_util,
+				__entry->prev_util, __entry->is_utilized)
 );
 
 TRACE_EVENT(ego_cpu_idle_ratio,
