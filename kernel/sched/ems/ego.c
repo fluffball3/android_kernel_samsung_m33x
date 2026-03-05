@@ -135,7 +135,7 @@ get_diff_num_levels(struct cpufreq_policy *policy, unsigned int freq)
  * The resulting threshold is high enough to not be triggered by background
  * noise and low enough to react quickly when activity starts to ramp up.
  */
-#define UTIL_THRESHOLD_SHIFT 6
+#define UTIL_THRESHOLD_SHIFT 5
 
 #define ESG_MAX_DELAY_PERIODS 5
 /*
