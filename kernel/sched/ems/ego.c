@@ -914,7 +914,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		egc->boosted_util = cpu_boosted_util;
 		egc->prev_util = egc->util;
 
-		trace_ego_next_util_shared_debug(egc->cpu, max_cap, boost, cpu_boosted_util, egc->prev_util, egc->is_utilized);
+		trace_ego_next_freq_shared_debug(egc->cpu, max_cap, boost, cpu_boosted_util, egc->prev_util, egc->is_utilized);
 
 		/* find heaviest util and cpu */
 		if (util < cpu_boosted_util) {
@@ -923,7 +923,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		}
 	}
 
-	trace_ego_next_freq_util(util);
+	trace_ego_next_freq_shared_util(util);
 
 	return get_next_freq(egp, util, max_cap);
 }
