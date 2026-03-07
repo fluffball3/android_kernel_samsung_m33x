@@ -769,7 +769,7 @@ TRACE_EVENT(ego_sched_util,
 		__entry->dl, __entry->bwdl, __entry->irq)
 );
 
-TRACE_EVENT(ego_next_freq_util,
+TRACE_EVENT(ego_next_freq_shared_util,
 
 	TP_PROTO(unsigned long util),
 
@@ -786,7 +786,7 @@ TRACE_EVENT(ego_next_freq_util,
 	TP_printk("next_freq_util=%ld", __entry->util)
 );
 
-TRACE_EVENT(ego_next_util_shared_debug,
+TRACE_EVENT(ego_next_freq_shared_debug,
 
 	TP_PROTO(int cpu, unsigned long max_cap, unsigned long boost, unsigned long cpu_boosted_util, unsigned long prev_util, bool is_utilized),
 
@@ -804,10 +804,10 @@ TRACE_EVENT(ego_next_util_shared_debug,
 	TP_fast_assign(
 		__entry->cpu				= cpu;
 		__entry->max_cap			= max_cap;
-		__entry->max_cap			= boost;
+		__entry->boost				= boost;
 		__entry->cpu_boosted_util	= cpu_boosted_util;
-		__entry->cpu_boosted_util	= prev_util;
-		__entry->cpu_boosted_util	= is_utilized;
+		__entry->prev_util			= prev_util;
+		__entry->is_utilized		= is_utilized;
 	),
 
 	TP_printk("cpu=%d, max_cap=%ld, boost=%ld, cpu_boosted_util=%ld, prev_util=%ld, is_utilized=%d",
