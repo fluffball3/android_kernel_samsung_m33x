@@ -872,27 +872,6 @@ static inline void ignore_dl_rate_limit(struct ego_cpu *egc, struct ego_policy *
 		egp->limits_changed = true;
 }
 
-static int get_boost_pelt_util(int util, int boost)
-{
-#if AMIGO_BUILD_VER >= 4
-	return util + util * boost / 100;
-#else
-	long long margin;
-
-	if (!boost)
-		return util;
-
-	if (boost > 0) {
-		margin = max(capacity - util, 0) * boost;
-	} else {
-			margin = util * boost;
-	}
-	margin /= 100;
-
-	return util + margin;
-#endif
-}
-
 static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 {
 	struct ego_policy *egp = egc->egp;
@@ -910,8 +889,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		ego_get_util(egc, boost);
 		egc->pelt_util = egc->util;
 
-		cpu_boosted_util = get_boost_pelt_util(egc->util, egp->pelt_boost);
-		cpu_boosted_util = cpu_boosted_util + ((egc->prev_util * egc->is_utilized) / 5);
+		cpu_boosted_util = egc->util + ((egc->prev_util * egc->is_utilized) / 5);
 		egc->boosted_util = cpu_boosted_util;
 		egc->prev_util = egc->util;
 
