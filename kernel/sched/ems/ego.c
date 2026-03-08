@@ -740,6 +740,7 @@ static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 
 	// cpu being utilized or not
 	egc->is_utilized = util > (arch_scale_cpu_capacity(egc->cpu) >> UTIL_THRESHOLD_SHIFT);
+	trace_ego_get_util(util, egc->util, egc->is_utilized);
 }
 
 /**
