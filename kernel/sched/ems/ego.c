@@ -734,12 +734,12 @@ static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 	unsigned long min, max, util = cpu_util_cfs_boost(egc->cpu);
 
 	util = schedutil_cpu_util(egc->cpu, util, &min, &max);
-	// cpu being utilized or not
-	egc->is_utilized = util > (arch_scale_cpu_capacity(egc->cpu) >> UTIL_THRESHOLD_SHIFT);
-
 	util = max(util, boost);
 	egc->bw_min = min;
 	egc->util = ego_effective_cpu_perf(egc->cpu, util, min, max);
+
+	// cpu being utilized or not
+	egc->is_utilized = util > (arch_scale_cpu_capacity(egc->cpu) >> UTIL_THRESHOLD_SHIFT);
 }
 
 /**
