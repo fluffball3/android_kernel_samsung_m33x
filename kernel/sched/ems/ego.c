@@ -732,6 +732,7 @@ unsigned long ego_effective_cpu_perf(int cpu, unsigned long actual,
 static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 {
 	unsigned long min, max, util = ml_cpu_util(egc->cpu);
+	unsigned long scale = arch_scale_cpu_capacity(egc->cpu);
 
 	util = schedutil_cpu_util(egc->cpu, util, &min, &max);
 	util = max(util, boost);
@@ -739,7 +740,7 @@ static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 	egc->util = ego_effective_cpu_perf(egc->cpu, util, min, max);
 
 	// cpu being utilized or not
-	egc->is_utilized = util > (arch_scale_cpu_capacity(egc->cpu) >> UTIL_THRESHOLD_SHIFT);
+	egc->is_utilized = util > (scale >> (UTIL_THRESHOLD_SHIFT + (scale == SCHED_CAPACITY_SCALE)));
 	trace_ego_get_util(util, egc->util, egc->is_utilized);
 }
 
