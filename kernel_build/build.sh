@@ -1,6 +1,6 @@
 #!/bin/bash
 
-E35P_VERSION="v3.93"
+E35P_VERSION="v3.935_miku_miko"
 
 set -e
 
