@@ -9,7 +9,6 @@ zsmalloc.ko
 lzo.ko
 lzo-rle.ko
 ssg.ko
-blk-sec-common.ko
 blk-sec-stats.ko
 phy-exynos-mipi-dsim.ko
 phy-exynos-mipi.ko
