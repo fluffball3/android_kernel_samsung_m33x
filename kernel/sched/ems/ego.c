@@ -124,19 +124,6 @@ get_diff_num_levels(struct cpufreq_policy *policy, unsigned int freq)
 	return abs(index1 - index2);
 }
 
-/*
- * (stripped from TEO Governor)
- * The number of bits to shift the CPU's capacity by in order to determine
- * the utilized threshold.
- *
- * 6 was chosen based on testing as the number that achieved the best balance
- * of power and performance on average.
- *
- * The resulting threshold is high enough to not be triggered by background
- * noise and low enough to react quickly when activity starts to ramp up.
- */
-#define UTIL_THRESHOLD_SHIFT 1
-
 #define ESG_MAX_DELAY_PERIODS 5
 /*
  * Return true if we can delay frequency update because the requested frequency
@@ -733,15 +720,17 @@ static void ego_get_util(struct ego_cpu *egc, unsigned long boost)
 {
 	unsigned long min, max, util = ml_cpu_util(egc->cpu);
 	unsigned long scale = arch_scale_cpu_capacity(egc->cpu);
+	unsigned long cpu_threshold;
 
 	util = schedutil_cpu_util(egc->cpu, util, &min, &max);
 	util = max(util, boost);
 	egc->bw_min = min;
 	egc->util = ego_effective_cpu_perf(egc->cpu, util, min, max);
 
-	// cpu being utilized or not
-	egc->is_utilized = util > (scale >> (UTIL_THRESHOLD_SHIFT + (scale == SCHED_CAPACITY_SCALE)));
-	trace_ego_get_util(util, egc->util, egc->is_utilized);
+	// cpu properly utilized or not
+	cpu_threshold = scale >> (scale == SCHED_CAPACITY_SCALE);
+	egc->is_utilized = (egc->prev_util + util) > cpu_threshold;
+	trace_ego_get_util(util, egc->util, egc->prev_util, egc->is_utilized);
 }
 
 /**
