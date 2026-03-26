@@ -771,23 +771,25 @@ TRACE_EVENT(ego_sched_util,
 
 TRACE_EVENT(ego_get_util,
 
-			TP_PROTO(unsigned long util, unsigned long eff_util, bool is_utilized),
+			TP_PROTO(unsigned long util, unsigned long eff_util, unsigned long prev_util, bool is_utilized),
 
-			TP_ARGS(util, eff_util, is_utilized),
+			TP_ARGS(util, eff_util, prev_util, is_utilized),
 
 			TP_STRUCT__entry(
 				__field( unsigned long,	util)
 				__field( unsigned long,	eff_util)
+				__field( unsigned long,	prev_util)
 				__field( bool,		is_utilized)
 			),
 
 			TP_fast_assign(
 				__entry->util			= util;
 				__entry->eff_util		= eff_util;
+				__entry->prev_util		= prev_util;
 				__entry->is_utilized	= is_utilized;
 			),
 
-			TP_printk("util=%ld, eff_util=%ld, is_utilized=%ld", __entry->util, __entry->eff_util, __entry->is_utilized)
+			TP_printk("util=%ld, eff_util=%ld, prev_util=%ld, is_utilized=%ld", __entry->util, __entry->eff_util, __entry->prev_util, __entry->is_utilized)
 );
 
 TRACE_EVENT(ego_next_freq_shared_util,
