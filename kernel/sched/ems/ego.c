@@ -879,7 +879,7 @@ static unsigned int ego_next_freq_shared(struct ego_cpu *egc, u64 time)
 		ego_get_util(egc, boost);
 		egc->pelt_util = egc->util;
 
-		cpu_boosted_util = egc->util + ((egc->prev_util * egc->is_utilized) / 8);
+		cpu_boosted_util = egc->util + ((egc->prev_util * egc->is_utilized) / 10);
 		egc->boosted_util = cpu_boosted_util;
 		egc->prev_util = egc->util;
 
