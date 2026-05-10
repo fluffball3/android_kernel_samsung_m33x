@@ -1,6 +1,6 @@
 #!/bin/bash
 
-E35P_VERSION="v3.0"
+E35P_VERSION="v3.945"
 
 set -e
 
@@ -15,6 +15,7 @@ if [ "$(uname -m)" != "x86_64" ]; then
   exit 1
 fi
 
+export PYTHON="$(command -v python2)"
 export PATH="$(pwd)/kernel_build/bin:$PATH"
 
 # Configs
@@ -31,9 +32,11 @@ DLKM_RAMDISK_DIR="$TMPDIR/ramdisk_dlkm"
 PREBUILT_RAMDISK="$(pwd)/kernel_build/boot/ramdisk"
 MODULES_DIR="$DLKM_RAMDISK_DIR/lib/modules"
 
+ZIPSIGNER="$(pwd)/kernel_build/bin/zipsigner-3.0.jar"
 MKBOOTIMG="$(pwd)/kernel_build/mkbootimg/mkbootimg.py"
 MKDTBOIMG="$(pwd)/kernel_build/dtb/mkdtboimg.py"
 
+OUT_SIGNEDKERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x-signed.zip"
 OUT_KERNELZIP="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.zip"
 OUT_KERNELTAR="$(pwd)/kernel_build/Elite3XP-${E35P_VERSION}_m33x.tar"
 OUT_KERNEL="$OUTDIR/arch/arm64/boot/Image"
@@ -42,7 +45,7 @@ OUT_VENDORBOOTIMG="$(pwd)/kernel_build/AnyKernel3/vendor_boot.img"
 OUT_DTBIMAGE="$TMPDIR/dtb.img"
 
 # Kernel-side
-BUILD_ARGS="LOCALVERSION=-Elite3XP-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=Inudesu"
+BUILD_ARGS="LOCALVERSION=-E35P-${E35P_VERSION} KBUILD_BUILD_USER=fluffyball21 KBUILD_BUILD_HOST=YubiYubi"
 
 kfinish() {
     rm -rf "$TMPDIR"
@@ -66,16 +69,16 @@ export LLVM=1 LLVM_IAS=1
 export ARCH=arm64
 
 if [ ! -d "$PARENT_DIR/clang-r416183b" ]; then
-    git clone https://github.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b "$PARENT_DIR/clang-r416183b" --depth=1
+    git clone https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b "$PARENT_DIR/clang-r416183b" --depth=1
 fi
 
 if [ ! -d "$PARENT_DIR/build-tools" ]; then
     git clone https://android.googlesource.com/platform/prebuilts/build-tools "$PARENT_DIR/build-tools" --depth=1
 fi
 
-make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS m33x_defconfig
+make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS m33x_defconfig >/dev/null
 make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS dtbs >/dev/null
-make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS >/dev/null
+make -j$(nproc --all) -C $(pwd) O=out $BUILD_ARGS
 make -j$(nproc --all) -C $(pwd) O=out INSTALL_MOD_STRIP="--strip-debug --keep-section=.ARM.attributes" INSTALL_MOD_PATH="$MODULES_OUTDIR" modules_install >/dev/null
 
 rm -rf "$TMPDIR"
@@ -125,7 +128,7 @@ mv "$MODULES_DIR/0.0"/* "$MODULES_DIR/"
 rm -rf "$MODULES_DIR/0.0"
 
 echo "Building dtb image..."
-python2 "$MKDTBOIMG" create "$OUT_DTBIMAGE" --custom0=0x00000000 --custom1=0xff000000 --version=0 --page_size=2048 "$IN_DTB" || exit 1
+"$PYTHON" "$MKDTBOIMG" create "$OUT_DTBIMAGE" --custom0=0x00000000 --custom1=0xff000000 --version=0 --page_size=2048 "$IN_DTB" || echo "Error! Make sure python2 is installed or python2 venv is being used, then try again"
 
 echo "Building boot image..."
 
@@ -164,21 +167,22 @@ echo "Done!"
 echo "Building zip..."
 cd "$(pwd)/kernel_build/AnyKernel3"
 rm -f "$OUT_KERNELZIP"
-zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder
+cp "$OUT_KERNEL" Image
+zip -r9 "$OUT_KERNELZIP" * -x .git README.md *placeholder boot.img boot.img.lz4 vendor_boot.img.lz4
+java -jar "$ZIPSIGNER" "$OUT_KERNELZIP" "$OUT_SIGNEDKERNELZIP" || echo "JAVA error! Make sure you have java!! Zip was not signed so use disable signature verification in TWRP"
+rm -f "$OUT_KERNELZIP"
+mv "$OUT_SIGNEDKERNELZIP" "$OUT_KERNELZIP"
 
-cd "$DIR"
-echo "Done! Output: $OUT_KERNELZIP"
-
+echo "Done! Output: $OUT_KERNELZIP (signed)"
 echo "Building tar..."
-cd "$(pwd)/kernel_build"
+
 rm -f "$OUT_KERNELTAR"
 lz4 -c -12 -B6 --content-size "$OUT_BOOTIMG" > boot.img.lz4
 lz4 -c -12 -B6 --content-size "$OUT_VENDORBOOTIMG" > vendor_boot.img.lz4
 tar -cf "$OUT_KERNELTAR" boot.img.lz4 vendor_boot.img.lz4
 cd "$DIR"
-rm -f boot.img.lz4 vendor_boot.img.lz4
-echo "Done! Output: $OUT_KERNELTAR"
 
+echo "Done! Output: $OUT_KERNELTAR"
 echo "Cleaning..."
 rm -f "${OUT_VENDORBOOTIMG}" "${OUT_BOOTIMG}"
 kfinish
