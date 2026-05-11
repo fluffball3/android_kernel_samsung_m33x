@@ -126,7 +126,7 @@ unsigned long vma_pad_pages(struct vm_area_struct *vma)
 	if (!is_pgsize_migration_enabled())
 		return 0;
 
-	return vma->vm_flags >> VM_PAD_SHIFT;
+	return (vma->vm_flags & VM_PAD_MASK) >> VM_PAD_SHIFT;
 }
 
 static __always_inline bool str_has_suffix(const char *str, const char *suffix)
@@ -257,19 +257,11 @@ static const struct vm_operations_struct pad_vma_ops = {
 };
 
 /*
- * Returns a new VMA representing the padding in @vma, if no padding
- * in @vma returns NULL.
+ * Initialize @pad VMA fields with information from the original @vma.
  */
-struct vm_area_struct *get_pad_vma(struct vm_area_struct *vma)
+static void init_pad_vma(struct vm_area_struct *vma, struct vm_area_struct *pad)
 {
-	struct vm_area_struct *pad;
-
-	if (!is_pgsize_migration_enabled() || !(vma->vm_flags & VM_PAD_MASK))
-		return NULL;
-
-	pad = kzalloc(sizeof(struct vm_area_struct), GFP_KERNEL);
-
-	*pad = *vma;
+	memcpy(pad, vma, sizeof(struct vm_area_struct));
 
 	/* Remove file */
 	pad->vm_file = NULL;
@@ -285,60 +277,34 @@ struct vm_area_struct *get_pad_vma(struct vm_area_struct *vma)
 
 	/* Remove padding bits */
 	pad->vm_flags &= ~VM_PAD_MASK;
-
-	return pad;
 }
 
 /*
- * Returns a new VMA exclusing the padding from @vma; if no padding in
- * @vma returns @vma.
+ * Calls the show_pad_vma_fn on the @pad VMA.
  */
-struct vm_area_struct *get_data_vma(struct vm_area_struct *vma)
+void show_map_pad_vma(struct vm_area_struct *vma, struct seq_file *m,
+		      void *func, bool smaps)
 {
-	struct vm_area_struct *data;
+	struct vm_area_struct pad;
 
 	if (!is_pgsize_migration_enabled() || !(vma->vm_flags & VM_PAD_MASK))
-		return vma;
-
-	data = kzalloc(sizeof(struct vm_area_struct), GFP_KERNEL);
-
-	*data = *vma;
-
-	/* Adjust the end to the start of the padding section */
-	data->vm_end = VMA_PAD_START(data);
-
-	return data;
-}
-
-/*
- * Calls the show_pad_vma_fn on the @pad VMA, and frees the copies of @vma
- * and @pad.
- */
-void show_map_pad_vma(struct vm_area_struct *vma, struct vm_area_struct *pad,
-		      struct seq_file *m, void *func, bool smaps)
-{
-	if (!pad)
 		return;
 
-	/*
-	 * This cannot happen. If @pad vma was allocated the corresponding
-	 * @vma should have the VM_PAD_MASK bit(s) set.
-	 */
-	BUG_ON(!(vma->vm_flags & VM_PAD_MASK));
+	init_pad_vma(vma, &pad);
 
-	/*
-	 * This cannot happen. @pad is a section of the original VMA.
-	 * Therefore @vma cannot be null if @pad is not null.
-	 */
-	BUG_ON(!vma);
+	/* The pad VMA should be anonymous. */
+	BUG_ON(pad.vm_file);
+
+	/* The pad VMA should be PROT_NONE. */
+	BUG_ON(pad.vm_flags & (VM_READ|VM_WRITE|VM_EXEC));
+
+	/* The pad VMA itself cannot have padding; infinite recursion */
+	BUG_ON(pad.vm_flags & VM_PAD_MASK);
 
 	if (smaps)
-		((show_pad_smaps_fn)func)(m, pad);
+		((show_pad_smaps_fn)func)(m, &pad);
 	else
-		((show_pad_maps_fn)func)(m, pad);
-
-	kfree(pad);
-	kfree(vma);
+		((show_pad_maps_fn)func)(m, &pad);
 }
 
 /*
@@ -397,24 +363,12 @@ void split_pad_vma(struct vm_area_struct *vma, struct vm_area_struct *new,
 	nr_vma2_pages = vma_pages(second);
 
 	if (nr_vma2_pages >= nr_pad_pages) { 			/* Case 1 & 3 */
-		first->vm_flags &= ~VM_PAD_MASK;
+		vma_set_pad_pages(first, 0);
 		vma_set_pad_pages(second, nr_pad_pages);
 	} else {						/* Case 2 */
 		vma_set_pad_pages(first, nr_pad_pages - nr_vma2_pages);
 		vma_set_pad_pages(second, nr_vma2_pages);
 	}
-}
-
-/*
- * Sets the correct padding bits / flags for a VMA split.
- */
-unsigned long vma_pad_fixup_flags(struct vm_area_struct *vma,
-				  unsigned long newflags)
-{
-	if (newflags & VM_PAD_MASK)
-		return (newflags & ~VM_PAD_MASK) | (vma->vm_flags & VM_PAD_MASK);
-	else
-		return newflags;
 }
 
 /*

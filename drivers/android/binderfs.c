@@ -58,6 +58,11 @@ enum binderfs_stats_mode {
 	binderfs_stats_mode_global,
 };
 
+struct binder_features {
+	bool oneway_spam_detection;
+	bool freeze_notification;
+};
+
 static const struct constant_table binderfs_param_stats[] = {
 	{ "global", binderfs_stats_mode_global },
 	{}
@@ -67,6 +72,11 @@ static const struct fs_parameter_spec binderfs_fs_parameters[] = {
 	fsparam_u32("max",	Opt_max),
 	fsparam_enum("stats",	Opt_stats_mode, binderfs_param_stats),
 	{}
+};
+
+static struct binder_features binder_features = {
+	.oneway_spam_detection = true,
+	.freeze_notification = true,
 };
 
 static inline struct binderfs_info *BINDERFS_SB(const struct super_block *sb)
@@ -122,8 +132,8 @@ static int binderfs_binder_device_create(struct inode *ref_inode,
 	mutex_lock(&binderfs_minors_mutex);
 	if (++info->device_count <= info->mount_opts.max)
 		minor = ida_alloc_max(&binderfs_minors,
-				      use_reserve ? BINDERFS_MAX_MINOR :
-						    BINDERFS_MAX_MINOR_CAPPED,
+				      use_reserve ? BINDERFS_MAX_MINOR - 1 :
+						    BINDERFS_MAX_MINOR_CAPPED - 1,
 				      GFP_KERNEL);
 	else
 		minor = -ENOSPC;
@@ -423,8 +433,8 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
 	/* Reserve a new minor number for the new device. */
 	mutex_lock(&binderfs_minors_mutex);
 	minor = ida_alloc_max(&binderfs_minors,
-			      use_reserve ? BINDERFS_MAX_MINOR :
-					    BINDERFS_MAX_MINOR_CAPPED,
+			      use_reserve ? BINDERFS_MAX_MINOR - 1 :
+					    BINDERFS_MAX_MINOR_CAPPED - 1,
 			      GFP_KERNEL);
 	mutex_unlock(&binderfs_minors_mutex);
 	if (minor < 0) {
@@ -581,6 +591,39 @@ out:
 	return dentry;
 }
 
+static int binder_features_show(struct seq_file *m, void *unused)
+{
+	bool *feature = m->private;
+
+	seq_printf(m, "%d\n", *feature);
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(binder_features);
+
+static int init_binder_features(struct super_block *sb)
+{
+	struct dentry *dentry, *dir;
+
+	dir = binderfs_create_dir(sb->s_root, "features");
+	if (IS_ERR(dir))
+		return PTR_ERR(dir);
+
+	dentry = binderfs_create_file(dir, "oneway_spam_detection",
+				      &binder_features_fops,
+				      &binder_features.oneway_spam_detection);
+	if (IS_ERR(dentry))
+		return PTR_ERR(dentry);
+
+	dentry = binderfs_create_file(dir, "freeze_notification",
+				      &binder_features_fops,
+				      &binder_features.freeze_notification);
+	if (IS_ERR(dentry))
+		return PTR_ERR(dentry);
+
+	return 0;
+}
+
 static int init_binder_logs(struct super_block *sb)
 {
 	struct dentry *binder_logs_root_dir, *dentry, *proc_log_dir;
@@ -693,6 +736,10 @@ static int binderfs_fill_super(struct super_block *sb, struct fs_context *fc)
 		if (*name == ',')
 			name++;
 	}
+
+	ret = init_binder_features(sb);
+	if (ret)
+		return ret;
 
 	if (info->mount_opts.stats_mode == binderfs_stats_mode_global)
 		return init_binder_logs(sb);

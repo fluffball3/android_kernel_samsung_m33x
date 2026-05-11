@@ -390,10 +390,8 @@ static int fs_path_ensure_buf(struct fs_path *p, int len)
 	if (p->buf_len >= len)
 		return 0;
 
-	if (len > PATH_MAX) {
-		WARN_ON(1);
-		return -ENOMEM;
-	}
+	if (WARN_ON(len > PATH_MAX))
+		return -ENAMETOOLONG;
 
 	path_len = p->end - p->start;
 	old_buf_len = p->buf_len;
@@ -685,7 +683,12 @@ static int begin_cmd(struct send_ctx *sctx, int cmd)
 	if (WARN_ON(!sctx->send_buf))
 		return -EINVAL;
 
-	BUG_ON(sctx->send_size);
+	if (unlikely(sctx->send_size != 0)) {
+		btrfs_err(sctx->send_root->fs_info,
+			  "send: command header buffer not empty cmd %d offset %llu",
+			  cmd, sctx->send_off);
+		return -EINVAL;
+	}
 
 	sctx->send_size += sizeof(*hdr);
 	hdr = (struct btrfs_cmd_header *)sctx->send_buf;
@@ -7204,7 +7207,7 @@ static int flush_delalloc_roots(struct send_ctx *sctx)
 	int i;
 
 	if (root) {
-		ret = btrfs_start_delalloc_snapshot(root);
+		ret = btrfs_start_delalloc_snapshot(root, false);
 		if (ret)
 			return ret;
 		btrfs_wait_ordered_extents(root, U64_MAX, 0, U64_MAX);
@@ -7212,7 +7215,7 @@ static int flush_delalloc_roots(struct send_ctx *sctx)
 
 	for (i = 0; i < sctx->clone_roots_cnt; i++) {
 		root = sctx->clone_roots[i].root;
-		ret = btrfs_start_delalloc_snapshot(root);
+		ret = btrfs_start_delalloc_snapshot(root, false);
 		if (ret)
 			return ret;
 		btrfs_wait_ordered_extents(root, U64_MAX, 0, U64_MAX);

@@ -1924,6 +1924,7 @@ spinlock_t *__pmd_trans_huge_lock(pmd_t *pmd, struct vm_area_struct *vma)
 	spin_unlock(ptl);
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(__pmd_trans_huge_lock);
 
 /*
  * Returns true if a given pud maps a thp, false otherwise.
@@ -2258,7 +2259,7 @@ void __split_huge_pmd(struct vm_area_struct *vma, pmd_t *pmd,
 	VM_BUG_ON(freeze && !page);
 	if (page) {
 		VM_WARN_ON_ONCE(!PageLocked(page));
-		if (page != pmd_page(*pmd))
+		if (is_pmd_migration_entry(*pmd) || page != pmd_page(*pmd))
 			goto out;
 	}
 
