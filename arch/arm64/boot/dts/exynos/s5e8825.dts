@@ -4499,6 +4499,8 @@
 		sysreg_g3d = <0x10220000>;
 		interrupts = <0x00 0x107 0x04 0x00 0x108 0x04 0x00 0x106 0x04>;
 		interrupt-names = "JOB", "MMU", "GPU";
+		clock-names = "gpu_clock";
+		clocks = <0x02 0x2bc>;
 		g3d_cmu_cal_id = <0xb040008>;
 		power-domains = <0xa1>;
 		g3d_genpd_name = "pd-g3d";
@@ -11589,6 +11591,7 @@
 		};
 
 		mali@10300000 {
+			clocks = <0x00>;
 			power-domains = <0x00>;
 		};
 

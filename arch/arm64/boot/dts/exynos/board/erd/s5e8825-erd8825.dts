@@ -733,7 +733,7 @@
 
 			direct_dm {
 				compatible = "samsung,direct-dm";
-				version = <0x01>;
+				version = <0x02>;
 				shm_rgn_index = <0x0c>;
 				hw_iocc = <0x00>;
 				info_desc_rgn_cached = <0x00>;
