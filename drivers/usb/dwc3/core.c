@@ -1790,6 +1790,7 @@ assert_reset:
 
 static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 {
+	unsigned long flags;
 	u32 reg;
 
 	switch (dwc->current_dr_role) {
@@ -1848,8 +1849,9 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 
 static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 {
-	int		ret;
-	u32		reg;
+	unsigned long flags;
+	int ret;
+	u32 reg;
 
 	switch (dwc->current_dr_role) {
 	case DWC3_GCTL_PRTCAP_DEVICE:

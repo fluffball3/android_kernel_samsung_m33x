@@ -26,7 +26,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/scatterlist.h>
 #include <linux/videodev2.h>
-#include <linux/videodev2_exynos_camera.h>
+#include "../../include/videodev2_exynos_camera.h"
 #include <linux/v4l2-mediabus.h>
 #include <linux/bug.h>
 #include <linux/syscalls.h>
