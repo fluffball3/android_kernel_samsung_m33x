@@ -431,7 +431,7 @@ static int xhci_abort_cmd_ring(struct xhci_hcd *xhci, unsigned long flags)
 	 * and try to recover a -ETIMEDOUT with a host controller reset.
 	 */
 	ret = xhci_handshake_check_state(xhci, &xhci->op_regs->cmd_ring,
-			CMD_RING_RUNNING, 0, 5 * 1000 * 1000,
+			CMD_RING_RUNNING, 0, 5 * 100 * 1000,
 			XHCI_STATE_REMOVING);
 	if (ret < 0) {
 		xhci_err(xhci, "Abort failed to stop command ring: %d\n", ret);
@@ -1082,7 +1082,7 @@ static int xhci_invalidate_cancelled_tds(struct xhci_virt_ep *ep)
 			    td->cancel_status != TD_CLEARING_CACHE_DEFERRED)
 				continue;
 			xhci_warn(xhci, "Failed to clear cancelled cached URB %p, mark clear anyway\n",
-				  td->urb);
+				 td->urb);
 			td_to_noop(xhci, ring, td, false);
 			td->cancel_status = TD_CLEARED;
 		}
@@ -1533,7 +1533,7 @@ cleanup:
 			 __func__);
 		xhci_invalidate_cancelled_tds(ep);
 	} else {
-		/* Restart any rings with pending URBs */
+	/* Restart any rings with pending URBs */
 		xhci_dbg(ep->xhci, "%s: All TDs cleared, ring doorbell\n", __func__);
 		ring_doorbell_for_active_rings(xhci, slot_id, ep_index);
 	}

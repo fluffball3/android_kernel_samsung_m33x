@@ -359,9 +359,6 @@ static ip_video_probe_t is_video_probe_fns[] = {
 	is_m3p_video_probe,
 	is_m4p_video_probe,
 	is_m5p_video_probe,
-
-	/* YUVPP */
-	is_ypp_video_probe,
 };
 
 #endif

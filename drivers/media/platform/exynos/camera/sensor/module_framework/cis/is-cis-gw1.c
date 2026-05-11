@@ -831,7 +831,7 @@ int sensor_gw1_cis_stream_on(struct v4l2_subdev *subdev)
 
 	I2C_MUTEX_LOCK(cis->i2c_lock);
 
-#ifdef SENSOR_GW1_DEBUG_INFO
+#if SENSOR_GW1_DEBUG_INFO
 	{
 	u16 pll;
 	is_sensor_read16(client, 0x0300, &pll);

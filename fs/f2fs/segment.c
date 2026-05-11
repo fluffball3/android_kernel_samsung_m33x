@@ -2774,6 +2774,7 @@ static void get_atssr_segment(struct f2fs_sb_info *sbi, int type,
 		new_curseg(sbi, type, true);
 	}
 	stat_inc_seg_type(sbi, curseg);
+	sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
 }
 
 static void __f2fs_init_atgc_curseg(struct f2fs_sb_info *sbi)
@@ -2947,6 +2948,7 @@ void f2fs_allocate_segment_for_resize(struct f2fs_sb_info *sbi, int type,
 		new_curseg(sbi, type, true);
 
 	stat_inc_seg_type(sbi, curseg);
+	sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
 
 	locate_dirty_segment(sbi, segno);
 unlock:
@@ -2979,6 +2981,7 @@ alloc:
 	old_segno = curseg->segno;
 	new_curseg(sbi, type, true);
 	stat_inc_seg_type(sbi, curseg);
+	sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
 	locate_dirty_segment(sbi, old_segno);
 }
 
@@ -3459,6 +3462,7 @@ void f2fs_allocate_data_block(struct f2fs_sb_info *sbi, struct page *page,
 			else
 				change_curseg(sbi, type);
 			stat_inc_seg_type(sbi, curseg);
+			sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
 		}
 	}
 	/*

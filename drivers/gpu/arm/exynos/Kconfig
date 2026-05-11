@@ -250,3 +250,10 @@ config MALI_EXYNOS_GPU_MEM_DUMP
     default n
     help
       Choose this option to enable checking GPU_MEM in the Mali tTRx DDK.
+
+config MALI_EXYNOS_DISABLE_CORE_AFFINITY
+    bool "Disable core affinity to little core"
+    default y if SOC_S5E8825
+    default n
+    help
+      Choose this option to disable core affinity to little core on Papaya

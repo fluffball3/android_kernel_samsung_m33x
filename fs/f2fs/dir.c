@@ -454,7 +454,7 @@ start_find_entry:
 
 out:
 #if IS_ENABLED(CONFIG_UNICODE)
-	if (f2fs_should_fallback_to_linear(dir) &&
+	if (!sb_no_casefold_compat_fallback(dir->i_sb) &&
 		IS_CASEFOLDED(dir) && !de && use_hash) {
 		use_hash = false;
 		goto start_find_entry;

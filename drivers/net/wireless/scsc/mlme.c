@@ -4994,6 +4994,8 @@ int slsi_mlme_set_country(struct slsi_dev *sdev, char *alpha2)
 			fapi_append_data(req, &append_byte, 1);
 			append_byte = sdev->regdb.country[country_index].collection->reg_rule[i]->max_eirp & 0xFF;
 			fapi_append_data(req, &append_byte, 1);
+			if (sdev->regdb.country[country_index].collection->reg_rule[i]->flags & SLSI_REGULATORY_DUP_RULE)
+				sdev->regdb.country[country_index].collection->reg_rule[i]->flags |= SLSI_REGULATORY_FW_DUP_RULE;
 			append_byte = sdev->regdb.country[country_index].collection->reg_rule[i]->flags & 0xFF;
 			fapi_append_data(req, &append_byte, 1);
 		}

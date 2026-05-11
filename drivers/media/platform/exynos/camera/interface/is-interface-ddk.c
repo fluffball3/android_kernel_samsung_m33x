@@ -463,8 +463,6 @@ int __nocfi is_lib_isp_chain_create(struct is_hw_ip *hw_ip,
 			err_lib("ext1 chain_create fail (%d)", hw_ip->id);
 			return -EINVAL;
 		}
-		msinfo_lib("ext1 chain_create done [reg_base:0x%lx][b_offset:0x%x]\n",
-				instance_id, hw_ip, base_addr, 0x0);
 	}
 
 	if (hw_ip->regs[REG_EXT2]) {
@@ -474,8 +472,6 @@ int __nocfi is_lib_isp_chain_create(struct is_hw_ip *hw_ip,
 			err_lib("ext2 chain_create fail (%d)", hw_ip->id);
 			return -EINVAL;
 		}
-		msinfo_lib("ext2 chain_create done [reg_base:0x%lx][b_offset:0x%x]\n",
-				instance_id, hw_ip, base_addr, 0x0);
 	}
 
 	if (hw_ip->regs[REG_EXT3]) {
@@ -485,8 +481,6 @@ int __nocfi is_lib_isp_chain_create(struct is_hw_ip *hw_ip,
 			err_lib("ext3 chain_create fail (%d)", hw_ip->id);
 			return -EINVAL;
 		}
-		msinfo_lib("ext3 chain_create done [reg_base:0x%lx][b_offset:0x%x]\n",
-				instance_id, hw_ip, base_addr, 0x0);
 	}
 
 	if (hw_ip->regs[REG_EXT4]) {
@@ -496,8 +490,6 @@ int __nocfi is_lib_isp_chain_create(struct is_hw_ip *hw_ip,
 			err_lib("ext4 chain_create fail (%d)", hw_ip->id);
 			return -EINVAL;
 		}
-		msinfo_lib("ext4 chain_create done [reg_base:0x%lx][b_offset:0x%x]\n",
-				instance_id, hw_ip, base_addr, 0x0);
 	}
 
 	base_addr    = (ulong)hw_ip->regs[REG_SETA];
@@ -521,9 +513,6 @@ int __nocfi is_lib_isp_chain_create(struct is_hw_ip *hw_ip,
 		err_lib("set_system_config fail (%d)", hw_ip->id);
 		return -EINVAL;
 	}
-
-	msinfo_lib("chain_create done [reg_base:0x%lx][b_offset:0x%lx](%d)\n",
-		instance_id, hw_ip, base_addr, set_b_offset, DDK_OVERFLOW_RECOVERY);
 
 	return ret;
 }
